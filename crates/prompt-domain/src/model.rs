@@ -580,6 +580,17 @@ impl Prompt {
         Ok(())
     }
 
+    pub fn recover(
+        &mut self,
+        actor: Actor,
+        recovered_at: OffsetDateTime,
+    ) -> Result<(), DomainError> {
+        require_user_actor(actor)?;
+        self.status = PromptStatus::Inbox;
+        self.updated_at = recovered_at;
+        Ok(())
+    }
+
     pub fn add_compatibility(
         &mut self,
         compatibility: Compatibility,

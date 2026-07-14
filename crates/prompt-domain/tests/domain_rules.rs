@@ -155,3 +155,24 @@ fn user_can_archive_and_soft_delete_a_prompt_without_losing_its_current_version(
     assert_eq!(prompt.status(), prompt_domain::PromptStatus::Deleted);
     assert_eq!(prompt.current_version().number(), version);
 }
+
+#[test]
+fn recovering_a_soft_deleted_prompt_returns_it_to_the_inbox_without_rewriting_history() {
+    let mut prompt = Prompt::new_inbox(
+        valid_content("可恢复的提示词"),
+        manual_source(),
+        Actor::User,
+        datetime!(2026-07-15 00:00 UTC),
+    );
+    let version = prompt.current_version().number();
+    prompt
+        .soft_delete(Actor::User, datetime!(2026-07-15 00:01 UTC))
+        .unwrap();
+
+    prompt
+        .recover(Actor::User, datetime!(2026-07-15 00:02 UTC))
+        .expect("a user may recover a soft-deleted prompt");
+
+    assert_eq!(prompt.status(), prompt_domain::PromptStatus::Inbox);
+    assert_eq!(prompt.current_version().number(), version);
+}
