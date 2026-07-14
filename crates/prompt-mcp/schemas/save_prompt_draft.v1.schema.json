@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prompt-hub.local/schemas/v1/save_prompt_draft",
+  "x-prompt-hub-operation": "inbox_write",
+  "$defs": {
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "body", "source"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "body": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "kind", "required"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "kind": { "enum": ["text", "number", "boolean"] },
+              "description": { "type": "string" },
+              "default_value": { "type": ["string", "null"] },
+              "required": { "type": "boolean" }
+            }
+          }
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "name"],
+          "properties": {
+            "kind": { "const": "mcp" },
+            "name": { "type": "string", "minLength": 1 },
+            "location": { "type": "string" }
+          }
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["draft_id", "status"],
+      "properties": {
+        "draft_id": { "type": "string", "format": "uuid" },
+        "status": { "const": "inbox" }
+      }
+    }
+  }
+}

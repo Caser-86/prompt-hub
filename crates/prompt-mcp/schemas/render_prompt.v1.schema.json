@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prompt-hub.local/schemas/v1/render_prompt",
+  "x-prompt-hub-operation": "read_only",
+  "$defs": {
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "variables"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "variables": {
+          "type": "object",
+          "additionalProperties": { "type": ["string", "number", "boolean"] }
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "missing_variables"],
+      "properties": {
+        "text": { "type": "string" },
+        "missing_variables": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

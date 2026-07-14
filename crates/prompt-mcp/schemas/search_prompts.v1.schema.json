@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prompt-hub.local/schemas/v1/search_prompts",
+  "x-prompt-hub-operation": "read_only",
+  "$defs": {
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "query": { "type": "string", "default": "" },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": { "enum": ["inbox", "published", "archived", "deleted"] },
+            "effectiveness": { "enum": ["unverified", "effective", "ineffective", "needs_retest"] },
+            "source_kind": { "enum": ["manual", "file_import", "web_url", "ai_generated", "mcp"] },
+            "category": { "type": "string", "minLength": 1 },
+            "tags": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+            "tool": { "type": "string", "minLength": 1 },
+            "model": { "type": "string", "minLength": 1 },
+            "minimum_rating": { "type": "integer", "minimum": 1, "maximum": 5 },
+            "updated_after": { "type": "string", "format": "date-time" },
+            "updated_before": { "type": "string", "format": "date-time" }
+          }
+        },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 },
+        "offset": { "type": "integer", "minimum": 0, "default": 0 }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "hits"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "hits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "title", "snippet", "status", "effectiveness", "updated_at"],
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "title": { "type": "string" },
+              "snippet": { "type": "string" },
+              "status": { "enum": ["inbox", "published", "archived", "deleted"] },
+              "effectiveness": { "enum": ["unverified", "effective", "ineffective", "needs_retest"] },
+              "rating": { "type": ["integer", "null"], "minimum": 1, "maximum": 5 },
+              "updated_at": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

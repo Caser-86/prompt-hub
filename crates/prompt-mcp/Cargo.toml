@@ -1,0 +1,12 @@
+[package]
+name = "prompt-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+
+[dev-dependencies]
+jsonschema = "0.47.0"

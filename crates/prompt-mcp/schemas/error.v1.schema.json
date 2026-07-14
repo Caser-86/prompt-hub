@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prompt-hub.local/schemas/v1/error",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "message"],
+  "properties": {
+    "code": {
+      "enum": [
+        "invalid_argument",
+        "not_found",
+        "variable_validation_failed",
+        "permission_denied",
+        "database_locked",
+        "database_unavailable",
+        "internal"
+      ]
+    },
+    "message": { "type": "string", "minLength": 1 },
+    "details": { "type": "object" }
+  }
+}
