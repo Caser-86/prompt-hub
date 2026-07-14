@@ -145,3 +145,21 @@ fn persists_soft_deletion_with_its_recovery_timestamp() {
         .unwrap();
     assert_eq!(deleted_at_in_store, Some(deleted_at.unix_timestamp()));
 }
+
+#[test]
+fn lists_prompts_by_most_recent_update_for_the_library() {
+    let database = Database::open_in_memory().unwrap();
+    let mut repository = database.into_repository();
+    let older = prompt("较早提示词");
+    let mut newer = prompt("较新提示词");
+    repository.save(&older, AuditAction::Created).unwrap();
+    repository.save(&newer, AuditAction::Created).unwrap();
+    newer
+        .archive(Actor::User, datetime!(2026-07-15 00:01 UTC))
+        .unwrap();
+    repository.save(&newer, AuditAction::Archived).unwrap();
+
+    let prompts = repository.list().unwrap();
+
+    assert_eq!(prompts, vec![newer, older]);
+}

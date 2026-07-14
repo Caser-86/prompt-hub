@@ -93,6 +93,19 @@ impl PromptRepository {
             .transpose()
     }
 
+    pub fn list(&self) -> Result<Vec<Prompt>, StoreError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT entity_json FROM prompts ORDER BY updated_at DESC, id ASC")?;
+        let serialized = statement.query_map([], |row| row.get::<_, String>(0))?;
+        serialized
+            .map(|value| {
+                let value = value?;
+                serde_json::from_str(&value).map_err(StoreError::from)
+            })
+            .collect()
+    }
+
     pub fn version_count(&self, id: PromptId) -> Result<u32, StoreError> {
         let count = self.connection.query_row(
             "SELECT COUNT(*) FROM prompt_versions WHERE prompt_id = ?1",
