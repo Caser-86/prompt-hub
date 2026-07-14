@@ -1,0 +1,17 @@
+node_modules/
+target/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.log
+*.tsbuildinfo
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example
+apps/desktop/src-tauri/gen/
+apps/desktop/vite.config.js
+apps/desktop/vite.config.d.ts

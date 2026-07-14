@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Prompt Hub">
+  <rect width="512" height="512" rx="112" fill="#17211a"/>
+  <path d="M136 128h136c76 0 124 42 124 108s-48 108-124 108h-56v56h-80V128Zm80 72v72h50c32 0 50-12 50-36s-18-36-50-36h-50Z" fill="#edf0e7"/>
+  <circle cx="368" cy="368" r="40" fill="#d4f75e"/>
+</svg>
