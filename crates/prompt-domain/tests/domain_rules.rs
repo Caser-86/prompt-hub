@@ -133,3 +133,25 @@ fn public_enum_values_have_stable_snake_case_wire_names() {
         "\"ai_generated\""
     );
 }
+
+#[test]
+fn user_can_archive_and_soft_delete_a_prompt_without_losing_its_current_version() {
+    let mut prompt = Prompt::new_inbox(
+        valid_content("保留可恢复的提示词"),
+        manual_source(),
+        Actor::User,
+        datetime!(2026-07-15 00:00 UTC),
+    );
+    let version = prompt.current_version().number();
+
+    prompt
+        .archive(Actor::User, datetime!(2026-07-15 00:01 UTC))
+        .expect("a user may archive a prompt");
+    assert_eq!(prompt.status(), prompt_domain::PromptStatus::Archived);
+
+    prompt
+        .soft_delete(Actor::User, datetime!(2026-07-15 00:02 UTC))
+        .expect("a user may soft-delete an archived prompt");
+    assert_eq!(prompt.status(), prompt_domain::PromptStatus::Deleted);
+    assert_eq!(prompt.current_version().number(), version);
+}

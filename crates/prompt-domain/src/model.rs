@@ -534,6 +534,28 @@ impl Prompt {
         Ok(&self.current_version)
     }
 
+    pub fn archive(
+        &mut self,
+        actor: Actor,
+        archived_at: OffsetDateTime,
+    ) -> Result<(), DomainError> {
+        require_user_actor(actor)?;
+        self.status = PromptStatus::Archived;
+        self.updated_at = archived_at;
+        Ok(())
+    }
+
+    pub fn soft_delete(
+        &mut self,
+        actor: Actor,
+        deleted_at: OffsetDateTime,
+    ) -> Result<(), DomainError> {
+        require_user_actor(actor)?;
+        self.status = PromptStatus::Deleted;
+        self.updated_at = deleted_at;
+        Ok(())
+    }
+
     pub fn add_compatibility(
         &mut self,
         compatibility: Compatibility,

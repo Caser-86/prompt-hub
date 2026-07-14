@@ -162,7 +162,8 @@ fn update_prompt(
              effectiveness = ?3,
              current_version = ?4,
              entity_json = ?5,
-             updated_at = ?6
+             updated_at = ?6,
+             deleted_at = CASE WHEN ?2 = 'deleted' THEN ?6 ELSE NULL END
          WHERE id = ?1",
         params![
             prompt_id,

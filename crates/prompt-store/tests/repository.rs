@@ -120,3 +120,28 @@ fn persists_publication_state_without_creating_a_duplicate_version() {
     assert_eq!(loaded, prompt);
     assert_eq!(repository.version_count(prompt.id()).unwrap(), 1);
 }
+
+#[test]
+fn persists_soft_deletion_with_its_recovery_timestamp() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("soft-delete.db");
+    let database = Database::open(&path).unwrap();
+    let mut repository = database.into_repository();
+    let mut prompt = prompt("待删除");
+    repository.save(&prompt, AuditAction::Created).unwrap();
+
+    let deleted_at = datetime!(2026-07-15 00:03 UTC);
+    prompt.soft_delete(Actor::User, deleted_at).unwrap();
+    repository.save(&prompt, AuditAction::Deleted).unwrap();
+
+    drop(repository);
+    let raw = Connection::open(&path).unwrap();
+    let deleted_at_in_store: Option<i64> = raw
+        .query_row(
+            "SELECT deleted_at FROM prompts WHERE id = ?1",
+            [prompt.id().value().to_string()],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(deleted_at_in_store, Some(deleted_at.unix_timestamp()));
+}
