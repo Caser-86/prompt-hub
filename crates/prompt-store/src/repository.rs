@@ -1,7 +1,10 @@
-use prompt_domain::{AuditAction, Prompt, PromptId, PromptVersion};
+use prompt_domain::{
+    Actor, AuditAction, Prompt, PromptContent, PromptId, PromptVersion, PromptVersionId,
+};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::Serialize;
 use thiserror::Error;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::search::refresh_search_index;
@@ -104,6 +107,33 @@ impl PromptRepository {
                 serde_json::from_str(&value).map_err(StoreError::from)
             })
             .collect()
+    }
+
+    pub fn history(&self, id: PromptId) -> Result<Vec<PromptVersion>, StoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT version_id, version_number, content_json, actor, created_at
+             FROM prompt_versions WHERE prompt_id = ?1 ORDER BY version_number ASC",
+        )?;
+        let rows = statement.query_map([id.value().to_string()], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, u32>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, i64>(4)?,
+            ))
+        })?;
+        rows.map(|row| {
+            let (version_id, number, content, actor, created_at) = row?;
+            let version_id = PromptVersionId::from_uuid(Uuid::parse_str(&version_id)?);
+            let content: PromptContent = serde_json::from_str(&content)?;
+            let actor: Actor = serde_json::from_value(serde_json::Value::String(actor))?;
+            let created_at = OffsetDateTime::from_unix_timestamp(created_at)
+                .map_err(|error| StoreError::Clock(error.to_string()))?;
+            PromptVersion::from_snapshot(version_id, number, content, actor, created_at)
+                .map_err(|error| StoreError::Domain(error.to_string()))
+        })
+        .collect()
     }
 
     pub fn version_count(&self, id: PromptId) -> Result<u32, StoreError> {
@@ -296,6 +326,8 @@ pub enum StoreError {
     InvalidUuid(#[from] uuid::Error),
     #[error("system clock is before the Unix epoch: {0}")]
     Clock(String),
+    #[error("stored domain snapshot is invalid: {0}")]
+    Domain(String),
     #[error("pre-migration backup failed integrity check: {0}")]
     BackupIntegrity(String),
     #[error("wire enum did not serialize to a string")]

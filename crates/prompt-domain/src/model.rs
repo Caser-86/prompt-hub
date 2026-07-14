@@ -48,6 +48,11 @@ impl PromptVersionId {
     pub const fn value(self) -> Uuid {
         self.0
     }
+
+    #[must_use]
+    pub const fn from_uuid(value: Uuid) -> Self {
+        Self(value)
+    }
 }
 
 impl Default for PromptVersionId {
@@ -430,6 +435,25 @@ impl PromptVersion {
         }
     }
 
+    pub fn from_snapshot(
+        id: PromptVersionId,
+        number: u32,
+        content: PromptContent,
+        actor: Actor,
+        created_at: OffsetDateTime,
+    ) -> Result<Self, DomainError> {
+        if number == 0 {
+            return Err(DomainError::VersionNumberRequired);
+        }
+        Ok(Self {
+            id,
+            number,
+            content,
+            actor,
+            created_at,
+        })
+    }
+
     #[must_use]
     pub const fn number(&self) -> u32 {
         self.number
@@ -659,6 +683,8 @@ pub enum DomainError {
     DuplicateVariableName(String),
     #[error("rating must be between 1 and 5")]
     RatingOutOfRange,
+    #[error("version number must be greater than zero")]
+    VersionNumberRequired,
 }
 
 fn required_text(value: impl Into<String>, error: DomainError) -> Result<String, DomainError> {

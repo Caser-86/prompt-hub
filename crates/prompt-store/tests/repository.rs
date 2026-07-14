@@ -163,3 +163,34 @@ fn lists_prompts_by_most_recent_update_for_the_library() {
 
     assert_eq!(prompts, vec![newer, older]);
 }
+
+#[test]
+fn returns_immutable_version_history_in_ascending_order() {
+    let database = Database::open_in_memory().unwrap();
+    let mut repository = database.into_repository();
+    let mut prompt = prompt("第一版");
+    repository.save(&prompt, AuditAction::Created).unwrap();
+    prompt
+        .revise(
+            PromptContent::new(
+                "代码审查助手",
+                "第二版",
+                None,
+                Some("开发".to_owned()),
+                vec!["代码审查".to_owned()],
+            )
+            .unwrap(),
+            Actor::User,
+            datetime!(2026-07-15 00:01 UTC),
+        )
+        .unwrap();
+    repository.save(&prompt, AuditAction::Revised).unwrap();
+
+    let history = repository.history(prompt.id()).unwrap();
+
+    assert_eq!(history.len(), 2);
+    assert_eq!(history[0].number(), 1);
+    assert_eq!(history[0].content().body(), "第一版");
+    assert_eq!(history[1].number(), 2);
+    assert_eq!(history[1].content().body(), "第二版");
+}
