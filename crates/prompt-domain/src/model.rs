@@ -18,6 +18,11 @@ impl PromptId {
     }
 
     #[must_use]
+    pub const fn from_uuid(value: Uuid) -> Self {
+        Self(value)
+    }
+
+    #[must_use]
     pub const fn value(self) -> Uuid {
         self.0
     }
@@ -331,6 +336,31 @@ impl Compatibility {
             confirmed_at,
         })
     }
+
+    #[must_use]
+    pub fn tool(&self) -> &str {
+        &self.tool
+    }
+
+    #[must_use]
+    pub fn model(&self) -> Option<&str> {
+        self.model.as_deref()
+    }
+
+    #[must_use]
+    pub const fn status(&self) -> CompatibilityStatus {
+        self.status
+    }
+
+    #[must_use]
+    pub fn notes(&self) -> Option<&str> {
+        self.notes.as_deref()
+    }
+
+    #[must_use]
+    pub const fn confirmed_at(&self) -> Option<OffsetDateTime> {
+        self.confirmed_at
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -433,6 +463,8 @@ pub struct Prompt {
     effectiveness: EffectivenessStatus,
     current_version: PromptVersion,
     sources: Vec<PromptSource>,
+    compatibilities: Vec<Compatibility>,
+    validations: Vec<ValidationRecord>,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
 }
@@ -451,6 +483,8 @@ impl Prompt {
             effectiveness: EffectivenessStatus::Unverified,
             current_version: PromptVersion::new(1, content, actor, created_at),
             sources: vec![source],
+            compatibilities: Vec::new(),
+            validations: Vec::new(),
             created_at,
             updated_at: created_at,
         }
@@ -500,6 +534,34 @@ impl Prompt {
         Ok(&self.current_version)
     }
 
+    pub fn add_compatibility(
+        &mut self,
+        compatibility: Compatibility,
+        actor: Actor,
+        updated_at: OffsetDateTime,
+    ) -> Result<(), DomainError> {
+        require_user_actor(actor)?;
+        self.compatibilities.retain(|current| {
+            current.tool != compatibility.tool || current.model != compatibility.model
+        });
+        self.compatibilities.push(compatibility);
+        self.updated_at = updated_at;
+        Ok(())
+    }
+
+    pub fn record_validation(
+        &mut self,
+        validation: ValidationRecord,
+        actor: Actor,
+        updated_at: OffsetDateTime,
+    ) -> Result<(), DomainError> {
+        require_user_actor(actor)?;
+        self.effectiveness = validation.status;
+        self.validations.push(validation);
+        self.updated_at = updated_at;
+        Ok(())
+    }
+
     #[must_use]
     pub const fn id(&self) -> PromptId {
         self.id
@@ -538,6 +600,16 @@ impl Prompt {
     #[must_use]
     pub fn sources(&self) -> &[PromptSource] {
         &self.sources
+    }
+
+    #[must_use]
+    pub fn compatibilities(&self) -> &[Compatibility] {
+        &self.compatibilities
+    }
+
+    #[must_use]
+    pub fn validations(&self) -> &[ValidationRecord] {
+        &self.validations
     }
 }
 

@@ -1,0 +1,32 @@
+[
+  {
+    "title": "代码审查专家",
+    "body": "检查当前代码，定位潜在缺陷并给出可验证证据。",
+    "category": "开发",
+    "tags": ["代码审查", "质量"],
+    "tool": "Codex",
+    "model": "gpt-5.6-sol",
+    "effectiveness": "effective",
+    "rating": 5
+  },
+  {
+    "title": "代码审查旧版",
+    "body": "检查当前代码，定位潜在缺陷并给出未验证结论。",
+    "category": "开发",
+    "tags": ["代码审查", "质量"],
+    "tool": "Codex",
+    "model": "gpt-5.6-sol",
+    "effectiveness": "ineffective",
+    "rating": 2
+  },
+  {
+    "title": "旅行计划助手",
+    "body": "根据目的地、预算和日期制定详细行程。",
+    "category": "生活",
+    "tags": ["旅行"],
+    "tool": "ChatGPT",
+    "model": "gpt-5.6-terra",
+    "effectiveness": "unverified",
+    "rating": null
+  }
+]

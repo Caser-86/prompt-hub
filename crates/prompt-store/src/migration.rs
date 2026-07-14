@@ -7,9 +7,10 @@ use rusqlite::Connection;
 use crate::{PromptRepository, StoreError};
 
 const INITIAL_SCHEMA: &str = include_str!("../migrations/0001_initial.sql");
-const MIGRATIONS: &[(u32, &str)] = &[(1, INITIAL_SCHEMA)];
+const SEARCH_SCHEMA: &str = include_str!("../migrations/0002_search.sql");
+const MIGRATIONS: &[(u32, &str)] = &[(1, INITIAL_SCHEMA), (2, SEARCH_SCHEMA)];
 
-pub const LATEST_SCHEMA_VERSION: u32 = 1;
+pub const LATEST_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Default)]
 pub struct MigrationReport {

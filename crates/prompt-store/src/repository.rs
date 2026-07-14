@@ -4,8 +4,10 @@ use serde::Serialize;
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::search::refresh_search_index;
+
 pub struct PromptRepository {
-    connection: Connection,
+    pub(crate) connection: Connection,
 }
 
 impl PromptRepository {
@@ -59,6 +61,9 @@ impl PromptRepository {
             }
         }
 
+        sync_current_metadata(&transaction, prompt_id.as_str(), prompt)?;
+        refresh_search_index(&transaction, prompt_id.as_str(), prompt.current_version())?;
+
         transaction.execute(
             "INSERT INTO audit_events(id, prompt_id, action, actor, occurred_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -96,6 +101,54 @@ impl PromptRepository {
         )?;
         Ok(count)
     }
+}
+
+fn sync_current_metadata(
+    transaction: &Transaction<'_>,
+    prompt_id: &str,
+    prompt: &Prompt,
+) -> Result<(), StoreError> {
+    transaction.execute(
+        "DELETE FROM compatibilities WHERE prompt_id = ?1",
+        [prompt_id],
+    )?;
+    for compatibility in prompt.compatibilities() {
+        transaction.execute(
+            "INSERT INTO compatibilities(
+                prompt_id, tool, model, status, notes, confirmed_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                prompt_id,
+                compatibility.tool(),
+                compatibility.model(),
+                wire_value(&compatibility.status())?,
+                compatibility.notes(),
+                compatibility
+                    .confirmed_at()
+                    .map(|value| value.unix_timestamp()),
+            ],
+        )?;
+    }
+
+    transaction.execute(
+        "DELETE FROM validation_records WHERE prompt_id = ?1",
+        [prompt_id],
+    )?;
+    for validation in prompt.validations() {
+        transaction.execute(
+            "INSERT INTO validation_records(
+                prompt_id, status, rating, notes, validated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                prompt_id,
+                wire_value(&validation.status)?,
+                validation.rating,
+                validation.notes,
+                validation.validated_at.unix_timestamp(),
+            ],
+        )?;
+    }
+    Ok(())
 }
 
 fn update_prompt(
@@ -225,6 +278,8 @@ pub enum StoreError {
     Io(#[from] std::io::Error),
     #[error("stored prompt could not be serialized: {0}")]
     Serialization(#[from] serde_json::Error),
+    #[error("stored UUID is invalid: {0}")]
+    InvalidUuid(#[from] uuid::Error),
     #[error("system clock is before the Unix epoch: {0}")]
     Clock(String),
     #[error("pre-migration backup failed integrity check: {0}")]
