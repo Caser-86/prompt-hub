@@ -38,6 +38,11 @@ impl PromptVersionId {
     pub fn new() -> Self {
         Self(Uuid::now_v7())
     }
+
+    #[must_use]
+    pub const fn value(self) -> Uuid {
+        self.0
+    }
 }
 
 impl Default for PromptVersionId {
@@ -129,6 +134,26 @@ impl PromptVariable {
     pub fn name(&self) -> &str {
         &self.name
     }
+
+    #[must_use]
+    pub const fn kind(&self) -> VariableKind {
+        self.kind
+    }
+
+    #[must_use]
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
+    }
+
+    #[must_use]
+    pub fn default_value(&self) -> Option<&str> {
+        self.default_value.as_deref()
+    }
+
+    #[must_use]
+    pub const fn required(&self) -> bool {
+        self.required
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -197,6 +222,11 @@ impl PromptContent {
     }
 
     #[must_use]
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
+    }
+
+    #[must_use]
     pub fn category(&self) -> Option<&str> {
         self.category.as_deref()
     }
@@ -249,6 +279,26 @@ impl PromptSource {
     #[must_use]
     pub const fn kind(&self) -> SourceKind {
         self.kind
+    }
+
+    #[must_use]
+    pub const fn id(&self) -> Uuid {
+        self.id
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    #[must_use]
+    pub fn location(&self) -> Option<&str> {
+        self.location.as_deref()
+    }
+
+    #[must_use]
+    pub const fn collected_at(&self) -> OffsetDateTime {
+        self.collected_at
     }
 }
 
@@ -359,6 +409,21 @@ impl PromptVersion {
     pub const fn content(&self) -> &PromptContent {
         &self.content
     }
+
+    #[must_use]
+    pub const fn id(&self) -> PromptVersionId {
+        self.id
+    }
+
+    #[must_use]
+    pub const fn actor(&self) -> Actor {
+        self.actor
+    }
+
+    #[must_use]
+    pub const fn created_at(&self) -> OffsetDateTime {
+        self.created_at
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -448,6 +513,21 @@ impl Prompt {
     #[must_use]
     pub const fn status(&self) -> PromptStatus {
         self.status
+    }
+
+    #[must_use]
+    pub const fn effectiveness(&self) -> EffectivenessStatus {
+        self.effectiveness
+    }
+
+    #[must_use]
+    pub const fn created_at(&self) -> OffsetDateTime {
+        self.created_at
+    }
+
+    #[must_use]
+    pub const fn updated_at(&self) -> OffsetDateTime {
+        self.updated_at
     }
 
     #[must_use]

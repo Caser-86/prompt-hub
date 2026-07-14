@@ -1,0 +1,122 @@
+use prompt_domain::{
+    Actor, AuditAction, EffectivenessStatus, Prompt, PromptContent, PromptSource, SourceKind,
+};
+use prompt_store::{Database, StoreError};
+use rusqlite::Connection;
+use tempfile::tempdir;
+use time::macros::datetime;
+
+fn prompt(body: &str) -> Prompt {
+    Prompt::new_inbox(
+        PromptContent::new(
+            "代码审查助手",
+            body,
+            Some("检查代码并给出证据".to_owned()),
+            Some("开发".to_owned()),
+            vec!["代码审查".to_owned()],
+        )
+        .unwrap(),
+        PromptSource::new(
+            SourceKind::Manual,
+            "手动录入",
+            None,
+            datetime!(2026-07-15 00:00 UTC),
+        )
+        .unwrap(),
+        Actor::User,
+        datetime!(2026-07-15 00:00 UTC),
+    )
+}
+
+#[test]
+fn saves_and_loads_a_prompt_with_its_provenance() {
+    let database = Database::open_in_memory().unwrap();
+    let mut repository = database.into_repository();
+    let prompt = prompt("检查当前变更");
+
+    repository
+        .save(&prompt, AuditAction::Created)
+        .expect("new prompt should save");
+    let loaded = repository
+        .get(prompt.id())
+        .expect("query should succeed")
+        .expect("prompt should exist");
+
+    assert_eq!(loaded, prompt);
+    assert_eq!(loaded.sources().len(), 1);
+}
+
+#[test]
+fn rolls_back_version_and_current_pointer_when_audit_insert_fails() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("rollback.db");
+    let database = Database::open(&path).unwrap();
+    let mut repository = database.into_repository();
+    let mut prompt = prompt("第一版");
+    repository.save(&prompt, AuditAction::Created).unwrap();
+    drop(repository);
+
+    let raw = Connection::open(&path).unwrap();
+    raw.execute_batch(
+        "CREATE TRIGGER reject_audit
+         BEFORE INSERT ON audit_events
+         BEGIN
+           SELECT RAISE(ABORT, 'injected audit failure');
+         END;",
+    )
+    .unwrap();
+    drop(raw);
+
+    prompt
+        .revise(
+            PromptContent::new(
+                "代码审查助手",
+                "第二版",
+                None,
+                Some("开发".to_owned()),
+                vec!["代码审查".to_owned()],
+            )
+            .unwrap(),
+            Actor::User,
+            datetime!(2026-07-15 00:01 UTC),
+        )
+        .unwrap();
+
+    let database = Database::open(&path).unwrap();
+    let mut repository = database.into_repository();
+    let error = repository
+        .save(&prompt, AuditAction::Revised)
+        .expect_err("injected audit failure should abort the transaction");
+    assert!(matches!(error, StoreError::Sqlite(_)));
+    drop(repository);
+
+    let raw = Connection::open(&path).unwrap();
+    let version_count: i64 = raw
+        .query_row("SELECT COUNT(*) FROM prompt_versions", [], |row| row.get(0))
+        .unwrap();
+    let current_number: i64 = raw
+        .query_row("SELECT current_version FROM prompts", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(version_count, 1);
+    assert_eq!(current_number, 1);
+}
+
+#[test]
+fn persists_publication_state_without_creating_a_duplicate_version() {
+    let database = Database::open_in_memory().unwrap();
+    let mut repository = database.into_repository();
+    let mut prompt = prompt("待发布");
+    repository.save(&prompt, AuditAction::Created).unwrap();
+
+    prompt
+        .publish(
+            EffectivenessStatus::Unverified,
+            datetime!(2026-07-15 00:01 UTC),
+        )
+        .unwrap();
+    repository.save(&prompt, AuditAction::Published).unwrap();
+
+    let loaded = repository.get(prompt.id()).unwrap().unwrap();
+    assert_eq!(loaded, prompt);
+    assert_eq!(repository.version_count(prompt.id()).unwrap(), 1);
+}

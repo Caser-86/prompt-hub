@@ -1,0 +1,236 @@
+use prompt_domain::{AuditAction, Prompt, PromptId, PromptVersion};
+use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use serde::Serialize;
+use thiserror::Error;
+use uuid::Uuid;
+
+pub struct PromptRepository {
+    connection: Connection,
+}
+
+impl PromptRepository {
+    pub(crate) const fn new(connection: Connection) -> Self {
+        Self { connection }
+    }
+
+    pub fn save(&mut self, prompt: &Prompt, action: AuditAction) -> Result<(), StoreError> {
+        let prompt_id = prompt.id().value().to_string();
+        let transaction = self.connection.transaction()?;
+        let stored_version = transaction
+            .query_row(
+                "SELECT current_version FROM prompts WHERE id = ?1",
+                [&prompt_id],
+                |row| row.get::<_, u32>(0),
+            )
+            .optional()?;
+        let incoming_version = prompt.current_version().number();
+
+        match stored_version {
+            None => {
+                transaction.execute(
+                    "INSERT INTO prompts(
+                        id, status, effectiveness, current_version, entity_json, created_at, updated_at
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    params![
+                        prompt_id,
+                        wire_value(&prompt.status())?,
+                        wire_value(&prompt.effectiveness())?,
+                        incoming_version,
+                        serde_json::to_string(prompt)?,
+                        prompt.created_at().unix_timestamp(),
+                        prompt.updated_at().unix_timestamp(),
+                    ],
+                )?;
+                insert_version(&transaction, prompt_id.as_str(), prompt.current_version())?;
+                insert_sources(&transaction, prompt_id.as_str(), prompt)?;
+            }
+            Some(version) if incoming_version == version => {
+                update_prompt(&transaction, prompt_id.as_str(), prompt)?;
+            }
+            Some(version) if incoming_version == version + 1 => {
+                insert_version(&transaction, prompt_id.as_str(), prompt.current_version())?;
+                update_prompt(&transaction, prompt_id.as_str(), prompt)?;
+            }
+            Some(version) => {
+                return Err(StoreError::VersionConflict {
+                    stored: version,
+                    incoming: incoming_version,
+                });
+            }
+        }
+
+        transaction.execute(
+            "INSERT INTO audit_events(id, prompt_id, action, actor, occurred_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                Uuid::now_v7().to_string(),
+                prompt_id,
+                wire_value(&action)?,
+                wire_value(&prompt.current_version().actor())?,
+                prompt.updated_at().unix_timestamp(),
+            ],
+        )?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn get(&self, id: PromptId) -> Result<Option<Prompt>, StoreError> {
+        let serialized = self
+            .connection
+            .query_row(
+                "SELECT entity_json FROM prompts WHERE id = ?1",
+                [id.value().to_string()],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        serialized
+            .map(|value| serde_json::from_str(&value).map_err(StoreError::from))
+            .transpose()
+    }
+
+    pub fn version_count(&self, id: PromptId) -> Result<u32, StoreError> {
+        let count = self.connection.query_row(
+            "SELECT COUNT(*) FROM prompt_versions WHERE prompt_id = ?1",
+            [id.value().to_string()],
+            |row| row.get(0),
+        )?;
+        Ok(count)
+    }
+}
+
+fn update_prompt(
+    transaction: &Transaction<'_>,
+    prompt_id: &str,
+    prompt: &Prompt,
+) -> Result<(), StoreError> {
+    transaction.execute(
+        "UPDATE prompts
+         SET status = ?2,
+             effectiveness = ?3,
+             current_version = ?4,
+             entity_json = ?5,
+             updated_at = ?6
+         WHERE id = ?1",
+        params![
+            prompt_id,
+            wire_value(&prompt.status())?,
+            wire_value(&prompt.effectiveness())?,
+            prompt.current_version().number(),
+            serde_json::to_string(prompt)?,
+            prompt.updated_at().unix_timestamp(),
+        ],
+    )?;
+    Ok(())
+}
+
+fn insert_version(
+    transaction: &Transaction<'_>,
+    prompt_id: &str,
+    version: &PromptVersion,
+) -> Result<(), StoreError> {
+    let content = version.content();
+    transaction.execute(
+        "INSERT INTO prompt_versions(
+            prompt_id, version_number, version_id, title, body, description,
+            content_json, actor, created_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            prompt_id,
+            version.number(),
+            version.id().value().to_string(),
+            content.title(),
+            content.body(),
+            content.description(),
+            serde_json::to_string(content)?,
+            wire_value(&version.actor())?,
+            version.created_at().unix_timestamp(),
+        ],
+    )?;
+
+    if let Some(category) = content.category() {
+        transaction.execute(
+            "INSERT INTO categories(name) VALUES (?1) ON CONFLICT(name) DO NOTHING",
+            [category],
+        )?;
+        transaction.execute(
+            "INSERT INTO prompt_version_categories(prompt_id, version_number, category_id)
+             SELECT ?1, ?2, id FROM categories WHERE name = ?3",
+            params![prompt_id, version.number(), category],
+        )?;
+    }
+
+    for tag in content.tags() {
+        transaction.execute(
+            "INSERT INTO tags(name) VALUES (?1) ON CONFLICT(name) DO NOTHING",
+            [tag],
+        )?;
+        transaction.execute(
+            "INSERT INTO prompt_version_tags(prompt_id, version_number, tag_id)
+             SELECT ?1, ?2, id FROM tags WHERE name = ?3",
+            params![prompt_id, version.number(), tag],
+        )?;
+    }
+
+    for variable in content.variables() {
+        transaction.execute(
+            "INSERT INTO prompt_version_variables(
+                prompt_id, version_number, name, definition_json
+             ) VALUES (?1, ?2, ?3, ?4)",
+            params![
+                prompt_id,
+                version.number(),
+                variable.name(),
+                serde_json::to_string(variable)?,
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+fn insert_sources(
+    transaction: &Transaction<'_>,
+    prompt_id: &str,
+    prompt: &Prompt,
+) -> Result<(), StoreError> {
+    for source in prompt.sources() {
+        transaction.execute(
+            "INSERT INTO prompt_sources(
+                id, prompt_id, kind, name, location, collected_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                source.id().to_string(),
+                prompt_id,
+                wire_value(&source.kind())?,
+                source.name(),
+                source.location(),
+                source.collected_at().unix_timestamp(),
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+fn wire_value(value: &impl Serialize) -> Result<String, StoreError> {
+    match serde_json::to_value(value)? {
+        serde_json::Value::String(value) => Ok(value),
+        _ => Err(StoreError::WireValue),
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum StoreError {
+    #[error("SQLite operation failed: {0}")]
+    Sqlite(#[from] rusqlite::Error),
+    #[error("database file operation failed: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("stored prompt could not be serialized: {0}")]
+    Serialization(#[from] serde_json::Error),
+    #[error("system clock is before the Unix epoch: {0}")]
+    Clock(String),
+    #[error("pre-migration backup failed integrity check: {0}")]
+    BackupIntegrity(String),
+    #[error("wire enum did not serialize to a string")]
+    WireValue,
+    #[error("prompt version conflict: stored {stored}, incoming {incoming}")]
+    VersionConflict { stored: u32, incoming: u32 },
+}
