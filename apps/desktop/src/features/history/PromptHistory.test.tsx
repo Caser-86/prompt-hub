@@ -1,10 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { PromptHistory } from "./PromptHistory";
 
 describe("PromptHistory", () => {
-  it("compares two immutable versions and restores only after confirmation", () => {
+  it("compares two immutable versions and restores only after confirmation", async () => {
     const restoreVersion = vi.fn().mockResolvedValue(undefined);
     render(
       <PromptHistory
@@ -21,6 +21,7 @@ describe("PromptHistory", () => {
     fireEvent.click(screen.getByRole("button", { name: "恢复版本 1" }));
     expect(restoreVersion).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "确认恢复版本 1" }));
-    expect(restoreVersion).toHaveBeenCalledWith(1);
+    await waitFor(() => expect(restoreVersion).toHaveBeenCalledWith(1));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 });
