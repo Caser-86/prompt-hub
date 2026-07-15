@@ -109,6 +109,23 @@ fn corrupt_backup_is_rejected_before_a_restore_can_start() {
 }
 
 #[test]
+fn failed_restore_keeps_an_existing_database_unchanged() {
+    let directory = tempdir().unwrap();
+    let corrupt = directory.path().join("corrupt.db");
+    std::fs::write(&corrupt, b"not a sqlite database").unwrap();
+    let target = directory.path().join("target.db");
+    database_with_marker(&target, "keep-this-value");
+
+    assert!(restore_backup(&corrupt, &target).is_err());
+
+    let connection = Connection::open(&target).unwrap();
+    let value: String = connection
+        .query_row("SELECT value FROM marker", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(value, "keep-this-value");
+}
+
+#[test]
 fn restores_an_open_repository_from_a_verified_backup() {
     let directory = tempdir().unwrap();
     let path = directory.path().join("library.db");
