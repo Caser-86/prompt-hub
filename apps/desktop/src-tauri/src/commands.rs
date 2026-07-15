@@ -184,6 +184,38 @@ pub fn create_manual_prompt_draft(
     service.create_manual_draft(draft, OffsetDateTime::now_utc())
 }
 
+#[tauri::command]
+pub fn publish_prompt(service: State<'_, PromptService>, id: PromptId) -> Result<Prompt, String> {
+    service.publish(id, OffsetDateTime::now_utc())
+}
+
+#[tauri::command]
+pub fn revise_prompt(
+    service: State<'_, PromptService>,
+    id: PromptId,
+    draft: ManualPromptDraft,
+) -> Result<Prompt, String> {
+    service.revise(id, draft, OffsetDateTime::now_utc())
+}
+
+#[tauri::command]
+pub fn archive_prompt(service: State<'_, PromptService>, id: PromptId) -> Result<Prompt, String> {
+    service.archive(id, OffsetDateTime::now_utc())
+}
+
+#[tauri::command]
+pub fn soft_delete_prompt(
+    service: State<'_, PromptService>,
+    id: PromptId,
+) -> Result<Prompt, String> {
+    service.soft_delete(id, OffsetDateTime::now_utc())
+}
+
+#[tauri::command]
+pub fn recover_prompt(service: State<'_, PromptService>, id: PromptId) -> Result<Prompt, String> {
+    service.recover(id, OffsetDateTime::now_utc())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApplicationStatus {

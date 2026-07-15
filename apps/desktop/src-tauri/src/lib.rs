@@ -14,7 +14,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_application_status,
             commands::list_prompts,
-            commands::create_manual_prompt_draft
+            commands::create_manual_prompt_draft,
+            commands::publish_prompt,
+            commands::revise_prompt,
+            commands::archive_prompt,
+            commands::soft_delete_prompt,
+            commands::recover_prompt
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Prompt Hub desktop application");
