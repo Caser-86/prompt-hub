@@ -318,38 +318,157 @@ impl PromptService {
         url: String,
         created_at: OffsetDateTime,
     ) -> Result<FileImportOutcome, String> {
-        let fetched = fetch_url(&url, UrlPolicy::default()).map_err(|error| error.to_string())?;
+        let job_id = self
+            .repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?
+            .start_import_job("web_url", &url, None, created_at)
+            .map_err(|error| error.to_string())?
+            .id()
+            .to_owned();
+        let fetched = match fetch_url(&url, UrlPolicy::default()) {
+            Ok(fetched) => fetched,
+            Err(error) => {
+                let error = error.to_string();
+                self.record_url_import_item(
+                    &job_id,
+                    &url,
+                    None,
+                    None,
+                    "failed",
+                    &[],
+                    Some(&error),
+                    None,
+                    created_at,
+                )?;
+                self.finish_import_job(&job_id, "failed", 0, 0, 1, created_at)?;
+                return Err(error);
+            }
+        };
         let fingerprint = normalized_body_fingerprint(&fetched.text);
-        if self.list()?.into_iter().any(|prompt| {
+        let canonical_url = fetched.canonical_url;
+        let title = fetched.title.unwrap_or_else(|| "网页导入提示词".to_owned());
+        let warnings = fetched.warnings;
+        let existing = match self.list() {
+            Ok(prompts) => prompts,
+            Err(error) => {
+                self.record_url_import_item(
+                    &job_id,
+                    &canonical_url,
+                    Some(&fingerprint),
+                    Some(&title),
+                    "failed",
+                    &warnings,
+                    Some(&error),
+                    None,
+                    created_at,
+                )?;
+                self.finish_import_job(&job_id, "completed_with_errors", 0, 0, 1, created_at)?;
+                return Err(error);
+            }
+        };
+        if existing.into_iter().any(|prompt| {
             normalized_body_fingerprint(prompt.current_version().content().body()) == fingerprint
         }) {
+            self.record_url_import_item(
+                &job_id,
+                &canonical_url,
+                Some(&fingerprint),
+                Some(&title),
+                "duplicate",
+                &warnings,
+                None,
+                None,
+                created_at,
+            )?;
+            self.finish_import_job(&job_id, "completed", 0, 1, 0, created_at)?;
             return Ok(FileImportOutcome {
                 drafts: Vec::new(),
                 skipped_duplicates: 1,
                 failed: 0,
             });
         }
-        let content = PromptContent::new(
-            fetched.title.unwrap_or_else(|| "网页导入提示词".to_owned()),
+        let content = match PromptContent::new(
+            title.clone(),
             fetched.text,
-            if fetched.warnings.is_empty() {
+            if warnings.is_empty() {
                 None
             } else {
-                Some(fetched.warnings.join("；"))
+                Some(warnings.join("；"))
             },
             None,
             Vec::new(),
-        )
-        .map_err(|error| error.to_string())?;
-        let source = PromptSource::new(
+        ) {
+            Ok(content) => content,
+            Err(error) => {
+                let error = error.to_string();
+                self.record_url_import_item(
+                    &job_id,
+                    &canonical_url,
+                    Some(&fingerprint),
+                    Some(&title),
+                    "failed",
+                    &warnings,
+                    Some(&error),
+                    None,
+                    created_at,
+                )?;
+                self.finish_import_job(&job_id, "completed_with_errors", 0, 0, 1, created_at)?;
+                return Err(error);
+            }
+        };
+        let source = match PromptSource::new(
             SourceKind::WebUrl,
             "网页导入",
-            Some(fetched.canonical_url),
+            Some(canonical_url.clone()),
             fetched.retrieved_at,
-        )
-        .map_err(|error| error.to_string())?;
+        ) {
+            Ok(source) => source,
+            Err(error) => {
+                let error = error.to_string();
+                self.record_url_import_item(
+                    &job_id,
+                    &canonical_url,
+                    Some(&fingerprint),
+                    Some(&title),
+                    "failed",
+                    &warnings,
+                    Some(&error),
+                    None,
+                    created_at,
+                )?;
+                self.finish_import_job(&job_id, "completed_with_errors", 0, 0, 1, created_at)?;
+                return Err(error);
+            }
+        };
         let prompt = Prompt::new_inbox(content, source, Actor::User, created_at);
-        self.save(&prompt, AuditAction::Created)?;
+        if let Err(error) = self.save(&prompt, AuditAction::Created) {
+            self.record_url_import_item(
+                &job_id,
+                &canonical_url,
+                Some(&fingerprint),
+                Some(prompt.current_version().content().title()),
+                "failed",
+                &warnings,
+                Some(&error),
+                None,
+                created_at,
+            )?;
+            self.finish_import_job(&job_id, "completed_with_errors", 0, 0, 1, created_at)?;
+            return Err(error);
+        }
+        self.record_url_import_item(
+            &job_id,
+            &canonical_url,
+            Some(&fingerprint),
+            Some(prompt.current_version().content().title()),
+            "imported",
+            &warnings,
+            None,
+            Some(prompt.id()),
+            created_at,
+        )?;
+        self.finish_import_job(&job_id, "completed", 1, 0, 0, created_at)?;
         Ok(FileImportOutcome {
             drafts: vec![prompt],
             skipped_duplicates: 0,
@@ -498,6 +617,37 @@ impl PromptService {
                 warnings_json: &serde_json::to_string(&candidate.warnings)
                     .map_err(|error| error.to_string())?,
                 error_message: error.as_deref(),
+                prompt_id,
+                recorded_at,
+            })
+            .map_err(|error| error.to_string())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn record_url_import_item(
+        &self,
+        job_id: &str,
+        source_path: &str,
+        body_fingerprint: Option<&str>,
+        title: Option<&str>,
+        outcome: &str,
+        warnings: &[String],
+        error_message: Option<&str>,
+        prompt_id: Option<PromptId>,
+        recorded_at: OffsetDateTime,
+    ) -> Result<(), String> {
+        self.repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?
+            .record_import_job_item(prompt_store::ImportJobItemRecord {
+                job_id,
+                source_path,
+                body_fingerprint,
+                title,
+                outcome,
+                warnings_json: &serde_json::to_string(warnings)
+                    .map_err(|error| error.to_string())?,
+                error_message,
                 prompt_id,
                 recorded_at,
             })
@@ -1205,5 +1355,26 @@ mod backup_service_tests {
         assert!(preview.target_exists);
         assert_eq!(preview.backup_schema_version, LATEST_SCHEMA_VERSION);
         assert!(preview.backup_byte_len > 0);
+    }
+
+    #[test]
+    fn url_import_failures_are_recorded_as_import_jobs() {
+        let directory = tempfile::tempdir().unwrap();
+        let database =
+            prompt_store::Database::open(directory.path().join("prompt-hub.db")).unwrap();
+        let service = PromptService::new(database.into_repository());
+        let created_at = OffsetDateTime::now_utc();
+
+        assert!(
+            service
+                .import_url_to_inbox("file:///not-a-web-page".to_owned(), created_at)
+                .is_err()
+        );
+
+        let jobs = service.recent_import_jobs().unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].source_kind(), "web_url");
+        assert_eq!(jobs[0].status(), "failed");
+        assert_eq!(jobs[0].source_path(), Some("file:///not-a-web-page"));
     }
 }
