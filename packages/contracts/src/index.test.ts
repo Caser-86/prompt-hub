@@ -32,4 +32,22 @@ describe("desktop command client", () => {
     await expect(client.listPrompts()).resolves.toEqual([]);
     expect(calls).toEqual(["list_prompts"]);
   });
+
+  it("creates manual drafts through the approved command boundary", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      return { id: "draft-1" };
+    });
+    const draft = {
+      title: "代码审查",
+      body: "审查当前变更",
+      description: null,
+      category: "开发",
+      tags: ["审查"],
+    };
+
+    await expect(client.createManualPromptDraft(draft)).resolves.toEqual({ id: "draft-1" });
+    expect(calls).toEqual([{ command: "create_manual_prompt_draft", args: { draft } }]);
+  });
 });

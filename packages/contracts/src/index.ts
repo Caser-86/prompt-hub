@@ -6,9 +6,18 @@ export type ApplicationStatus = {
 
 export type CommandInvoker = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
+export type ManualPromptDraft = {
+  title: string;
+  body: string;
+  description: string | null;
+  category: string | null;
+  tags: string[];
+};
+
 export type DesktopCommandClient = {
   getApplicationStatus: () => Promise<ApplicationStatus>;
   listPrompts: () => Promise<unknown[]>;
+  createManualPromptDraft: (draft: ManualPromptDraft) => Promise<unknown>;
 };
 
 export function createDesktopCommandClient(invoke: CommandInvoker): DesktopCommandClient {
@@ -26,6 +35,9 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
         throw new Error("list_prompts returned an invalid response");
       }
       return result;
+    },
+    createManualPromptDraft(draft) {
+      return invoke("create_manual_prompt_draft", { draft });
     },
   };
 }
