@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use prompt_domain::{
@@ -11,7 +12,8 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 use prompt_store::{
-    LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage, SearchQuery,
+    BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage,
+    SearchQuery, create_backup, preview_restore,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
@@ -109,6 +111,30 @@ fn parse_optional_timestamp(value: Option<String>) -> Result<Option<OffsetDateTi
 
 pub struct PromptService {
     repository: Mutex<PromptRepository>,
+}
+
+pub struct BackupService {
+    database_path: PathBuf,
+}
+
+impl BackupService {
+    #[must_use]
+    pub const fn new(database_path: PathBuf) -> Self {
+        Self { database_path }
+    }
+
+    fn create_manual_backup(&self) -> Result<BackupInfo, String> {
+        BackupInfo::from_store(
+            create_backup(&self.database_path, BackupDestination::Manual)
+                .map_err(|error| error.to_string())?,
+        )
+    }
+
+    fn preview_restore(&self, path: PathBuf) -> Result<BackupRestorePreview, String> {
+        Ok(BackupRestorePreview::from_store(
+            preview_restore(&path, &self.database_path).map_err(|error| error.to_string())?,
+        ))
+    }
 }
 
 impl PromptService {
@@ -494,11 +520,81 @@ pub struct ApplicationStatus {
     offline_capable: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupInfo {
+    path: String,
+    byte_len: u64,
+    schema_version: u32,
+}
+
+impl BackupInfo {
+    fn from_store(backup: prompt_store::BackupMetadata) -> Result<Self, String> {
+        Ok(Self {
+            path: backup.path().to_string_lossy().into_owned(),
+            byte_len: backup.byte_len(),
+            schema_version: backup.schema_version(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupRestorePreview {
+    target_exists: bool,
+    backup_schema_version: u32,
+    backup_byte_len: u64,
+}
+
+impl BackupRestorePreview {
+    const fn from_store(preview: prompt_store::RestorePreview) -> Self {
+        Self {
+            target_exists: preview.target_exists(),
+            backup_schema_version: preview.backup_schema_version(),
+            backup_byte_len: preview.backup_byte_len(),
+        }
+    }
+}
+
 #[tauri::command]
 pub fn get_application_status() -> ApplicationStatus {
     ApplicationStatus {
         app_version: env!("CARGO_PKG_VERSION"),
         database_schema_version: LATEST_SCHEMA_VERSION,
         offline_capable: true,
+    }
+}
+
+#[tauri::command]
+pub fn create_manual_backup(service: State<'_, BackupService>) -> Result<BackupInfo, String> {
+    service.create_manual_backup()
+}
+
+#[tauri::command]
+pub fn preview_backup_restore(
+    service: State<'_, BackupService>,
+    path: String,
+) -> Result<BackupRestorePreview, String> {
+    service.preview_restore(PathBuf::from(path))
+}
+
+#[cfg(test)]
+mod backup_service_tests {
+    use super::*;
+
+    #[test]
+    fn desktop_backup_service_creates_and_previews_a_verified_backup() {
+        let directory = tempfile::tempdir().unwrap();
+        let database_path = directory.path().join("prompt-hub.db");
+        let database = prompt_store::Database::open(&database_path).unwrap();
+        drop(database);
+        let service = BackupService::new(database_path);
+
+        let backup = service.create_manual_backup().unwrap();
+        let preview = service.preview_restore(PathBuf::from(backup.path)).unwrap();
+
+        assert!(preview.target_exists);
+        assert_eq!(preview.backup_schema_version, LATEST_SCHEMA_VERSION);
+        assert!(preview.backup_byte_len > 0);
     }
 }

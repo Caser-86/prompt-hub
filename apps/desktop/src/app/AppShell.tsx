@@ -8,6 +8,7 @@ import { PromptHistory } from "../features/history/PromptHistory";
 import { PromptLibrary } from "../features/library/PromptLibrary";
 import { PromptLifecycleActions } from "../features/library/PromptLifecycleActions";
 import { PromptSearch } from "../features/search/PromptSearch";
+import { SettingsPage } from "../features/settings/SettingsPage";
 import { desktopCommands } from "../services/desktop";
 import { navigationItems, type AppRoute } from "./navigation";
 import type { PromptHistoryItem, PromptListItem } from "@prompt-hub/contracts";
@@ -132,6 +133,12 @@ export function AppShell() {
             )
           ) : activeRoute === "search" ? (
             <PromptSearch searchPrompts={desktopCommands.searchPrompts} />
+          ) : activeRoute === "settings" ? (
+            <SettingsPage
+              createBackup={desktopCommands.createManualBackup}
+              getApplicationStatus={desktopCommands.getApplicationStatus}
+              previewRestore={desktopCommands.previewBackupRestore}
+            />
           ) : (
             <section aria-label={`${navigationItems.find((item) => item.id === activeRoute)?.label}内容`} className="empty-state">
               <h2>{navigationItems.find((item) => item.id === activeRoute)?.label}</h2>

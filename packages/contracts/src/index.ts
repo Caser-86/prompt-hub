@@ -4,6 +4,9 @@ export type ApplicationStatus = {
   offlineCapable: boolean;
 };
 
+export type BackupInfo = { path: string; byteLen: number; schemaVersion: number };
+export type BackupRestorePreview = { targetExists: boolean; backupSchemaVersion: number; backupByteLen: number };
+
 export type CommandInvoker = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
 export type ManualPromptDraft = {
@@ -84,6 +87,8 @@ export type PromptValidationDraft = {
 
 export type DesktopCommandClient = {
   getApplicationStatus: () => Promise<ApplicationStatus>;
+  createManualBackup: () => Promise<BackupInfo>;
+  previewBackupRestore: (path: string) => Promise<BackupRestorePreview>;
   listPrompts: () => Promise<PromptListItem[]>;
   promptHistory: (id: string) => Promise<PromptHistoryItem[]>;
   restorePromptVersion: (id: string, versionNumber: number) => Promise<unknown>;
@@ -108,6 +113,16 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       if (!isApplicationStatus(result)) {
         throw new Error("get_application_status returned an invalid response");
       }
+      return result;
+    },
+    async createManualBackup() {
+      const result = await invoke("create_manual_backup");
+      if (!isBackupInfo(result)) throw new Error("create_manual_backup returned an invalid response");
+      return result;
+    },
+    async previewBackupRestore(path) {
+      const result = await invoke("preview_backup_restore", { path });
+      if (!isBackupRestorePreview(result)) throw new Error("preview_backup_restore returned an invalid response");
       return result;
     },
     async listPrompts() {
@@ -225,4 +240,16 @@ function isApplicationStatus(value: unknown): value is ApplicationStatus {
     typeof status.databaseSchemaVersion === "number" &&
     typeof status.offlineCapable === "boolean"
   );
+}
+
+function isBackupInfo(value: unknown): value is BackupInfo {
+  if (typeof value !== "object" || value === null) return false;
+  const item = value as Record<string, unknown>;
+  return typeof item.path === "string" && typeof item.byteLen === "number" && typeof item.schemaVersion === "number";
+}
+
+function isBackupRestorePreview(value: unknown): value is BackupRestorePreview {
+  if (typeof value !== "object" || value === null) return false;
+  const item = value as Record<string, unknown>;
+  return typeof item.targetExists === "boolean" && typeof item.backupSchemaVersion === "number" && typeof item.backupByteLen === "number";
 }

@@ -19,3 +19,6 @@ tauri = { version = "2.11.5", features = [] }
 prompt-store = { path = "../../../crates/prompt-store" }
 prompt-domain = { path = "../../../crates/prompt-domain" }
 time.workspace = true
+
+[dev-dependencies]
+tempfile = "3.23.0"

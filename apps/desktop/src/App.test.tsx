@@ -12,6 +12,9 @@ const desktopMock = vi.hoisted(() => ({
   softDeletePrompt: vi.fn(),
   recoverPrompt: vi.fn(),
   searchPrompts: vi.fn(),
+  createManualBackup: vi.fn(),
+  previewBackupRestore: vi.fn(),
+  getApplicationStatus: vi.fn(),
 }));
 vi.mock("./services/desktop", () => ({
   desktopCommands: desktopMock,
@@ -23,6 +26,7 @@ describe("App", () => {
   beforeEach(() => {
     desktopMock.listPrompts.mockImplementation(() => new Promise<never[]>(() => undefined));
     desktopMock.promptHistory.mockResolvedValue([]);
+    desktopMock.getApplicationStatus.mockResolvedValue({ appVersion: "0.1.0", databaseSchemaVersion: 2, offlineCapable: true });
   });
   it("provides accessible primary navigation and a command palette", () => {
     render(<App />);
@@ -83,5 +87,13 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("link", { name: "搜索" }));
     expect(screen.getByRole("heading", { name: "搜索提示词" })).toBeVisible();
+  });
+
+  it("opens local backup, diagnostics, and onboarding guidance from settings", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("link", { name: "设置" }));
+    expect(screen.getByRole("heading", { name: "备份与恢复" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "诊断信息" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "开始使用" })).toBeVisible();
   });
 });

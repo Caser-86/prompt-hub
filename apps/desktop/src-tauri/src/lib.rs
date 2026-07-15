@@ -7,12 +7,16 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             let data_directory = app.path().app_data_dir()?;
-            let database = prompt_store::Database::open(data_directory.join("prompt-hub.db"))?;
+            let database_path = data_directory.join("prompt-hub.db");
+            let database = prompt_store::Database::open(&database_path)?;
             app.manage(commands::PromptService::new(database.into_repository()));
+            app.manage(commands::BackupService::new(database_path));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_application_status,
+            commands::create_manual_backup,
+            commands::preview_backup_restore,
             commands::list_prompts,
             commands::prompt_history,
             commands::restore_prompt_version,

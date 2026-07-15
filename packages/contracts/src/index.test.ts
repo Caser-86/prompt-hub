@@ -166,4 +166,22 @@ describe("desktop command client", () => {
       { command: "recover_prompt", args: { id: "prompt-1" } },
     ]);
   });
+
+  it("creates and previews local backups only through the service boundary", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      return command === "create_manual_backup"
+        ? { path: "C:/data/backups/manual.db", byteLen: 512, schemaVersion: 2 }
+        : { targetExists: true, backupSchemaVersion: 2, backupByteLen: 512 };
+    });
+
+    await expect(client.createManualBackup()).resolves.toMatchObject({ schemaVersion: 2 });
+    await expect(client.previewBackupRestore("C:/data/backups/manual.db")).resolves.toMatchObject({ targetExists: true });
+
+    expect(calls).toEqual([
+      { command: "create_manual_backup", args: undefined },
+      { command: "preview_backup_restore", args: { path: "C:/data/backups/manual.db" } },
+    ]);
+  });
 });
