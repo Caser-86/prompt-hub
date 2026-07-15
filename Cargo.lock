@@ -3082,7 +3082,12 @@ name = "prompt-mcp"
 version = "0.1.0"
 dependencies = [
  "jsonschema",
+ "prompt-domain",
+ "prompt-store",
  "serde_json",
+ "tempfile",
+ "time",
+ "uuid",
 ]
 
 [[package]]
