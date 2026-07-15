@@ -26,6 +26,8 @@ export function PromptEditor({ saveDraft, onSaved }: PromptEditorProps) {
     )));
   }
 
+  const preview = renderPreview(body, variables);
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await saveDraft({
@@ -84,11 +86,55 @@ export function PromptEditor({ saveDraft, onSaved }: PromptEditorProps) {
                 value={variable.defaultValue ?? ""}
               />
             </label>
+            <label>
+              <input
+                checked={variable.required}
+                onChange={(event) => updateVariable(index, { required: event.target.checked })}
+                type="checkbox"
+              />
+              变量必填
+            </label>
           </div>
         ))}
         <button onClick={addVariable} type="button">添加变量</button>
       </fieldset>
+      <section aria-label="渲染预览">
+        <h2>渲染预览</h2>
+        {preview.missingRequired.length > 0 ? (
+          <p role="alert">缺少必填变量：{preview.missingRequired.join("、")}</p>
+        ) : null}
+        {preview.unresolved.length > 0 ? (
+          <p>未替换变量：{preview.unresolved.join("、")}</p>
+        ) : null}
+        <pre>{preview.body}</pre>
+      </section>
       <button type="submit">保存到收件箱</button>
     </form>
   );
+}
+
+function renderPreview(body: string, variables: PromptVariableDraft[]) {
+  const variablesByName = new Map(
+    variables.filter((variable) => variable.name.trim()).map((variable) => [variable.name.trim(), variable]),
+  );
+  const unresolved = new Set<string>();
+  const missingRequired = new Set<string>();
+  const rendered = body.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (placeholder, rawName: string) => {
+    const name = rawName.trim();
+    const variable = variablesByName.get(name);
+    if (!variable || !variable.defaultValue?.trim()) {
+      unresolved.add(name);
+      if (variable?.required) {
+        missingRequired.add(name);
+      }
+      return placeholder;
+    }
+    return variable.defaultValue;
+  });
+
+  return {
+    body: rendered,
+    missingRequired: [...missingRequired],
+    unresolved: [...unresolved],
+  };
 }

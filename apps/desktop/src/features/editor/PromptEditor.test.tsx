@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { PromptEditor } from "./PromptEditor";
@@ -45,5 +45,17 @@ describe("PromptEditor", () => {
         },
       ],
     }));
+  });
+
+  it("renders a safe preview and identifies required variables without a value", () => {
+    render(<PromptEditor saveDraft={vi.fn().mockResolvedValue(undefined)} />);
+
+    fireEvent.change(screen.getByLabelText("正文"), { target: { value: "审查 {{language}} 的变更" } });
+    fireEvent.click(screen.getByRole("button", { name: "添加变量" }));
+    fireEvent.change(screen.getByLabelText("变量名称"), { target: { value: "language" } });
+    fireEvent.click(screen.getByLabelText("变量必填"));
+
+    expect(screen.getByText("缺少必填变量：language")).toBeVisible();
+    expect(within(screen.getByLabelText("渲染预览")).getByText("审查 {{language}} 的变更")).toBeVisible();
   });
 });
