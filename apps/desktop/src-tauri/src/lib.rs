@@ -30,6 +30,7 @@ pub fn run() {
             commands::search_prompts,
             commands::create_manual_prompt_draft,
             commands::generate_ai_draft,
+            commands::optimize_ai_prompt,
             commands::test_ai_connection,
             commands::import_file_to_inbox,
             commands::import_folder_to_inbox,

@@ -5,6 +5,50 @@ use prompt_store::{Database, SearchQuery};
 use time::macros::datetime;
 
 #[test]
+fn optimization_creates_an_inbox_draft_without_changing_the_published_prompt() {
+    let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
+    let original = service
+        .create_manual_draft(
+            ManualPromptDraft {
+                title: "原提示词".to_owned(),
+                body: "原正文".to_owned(),
+                description: None,
+                category: Some("开发".to_owned()),
+                tags: vec![],
+                variables: vec![],
+            },
+            datetime!(2026-07-15 00:00 UTC),
+        )
+        .unwrap();
+    service
+        .publish(original.id(), datetime!(2026-07-15 00:01 UTC))
+        .unwrap();
+
+    let optimized = service
+        .create_ai_optimization_draft(
+            original.id(),
+            "优化后的标题".to_owned(),
+            "优化后的正文".to_owned(),
+            "gpt-test".to_owned(),
+            datetime!(2026-07-15 00:02 UTC),
+        )
+        .unwrap();
+
+    assert!(optimized.is_inbox());
+    assert_eq!(optimized.sources()[0].name(), "AI 优化");
+    assert_eq!(
+        service
+            .list()
+            .unwrap()
+            .into_iter()
+            .find(|prompt| prompt.id() == original.id())
+            .unwrap()
+            .status(),
+        prompt_domain::PromptStatus::Published
+    );
+}
+
+#[test]
 fn file_import_creates_reviewable_inbox_drafts_without_publishing() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("review.md");

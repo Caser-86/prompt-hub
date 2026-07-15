@@ -319,6 +319,94 @@ impl PromptService {
             .map_err(|error| error.to_string())
     }
 
+    pub fn create_ai_optimization_draft(
+        &self,
+        original_id: PromptId,
+        title: String,
+        body: String,
+        model: String,
+        generated_at: OffsetDateTime,
+    ) -> Result<Prompt, String> {
+        let original = self
+            .repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?
+            .get(original_id)
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "prompt was not found".to_owned())?;
+        let content = PromptContent::new(
+            title,
+            body,
+            Some(format!(
+                "AI 优化；模型：{}；原提示词：{}",
+                model,
+                original.id().value()
+            )),
+            original
+                .current_version()
+                .content()
+                .category()
+                .map(str::to_owned),
+            original.current_version().content().tags().to_vec(),
+        )
+        .map_err(|error| error.to_string())?;
+        let source = PromptSource::new(
+            SourceKind::AiGenerated,
+            "AI 优化",
+            Some(format!(
+                "原提示词：{}；模型：{}",
+                original.id().value(),
+                model
+            )),
+            generated_at,
+        )
+        .map_err(|error| error.to_string())?;
+        let prompt = Prompt::new_inbox(content, source, Actor::User, generated_at);
+        self.save(&prompt, AuditAction::Created)?;
+        Ok(prompt)
+    }
+
+    pub fn optimize_ai_prompt(
+        &self,
+        original_id: PromptId,
+        request: AiGenerationRequestInput,
+        generated_at: OffsetDateTime,
+    ) -> Result<Prompt, String> {
+        let original_body = self
+            .repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?
+            .get(original_id)
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "prompt was not found".to_owned())?
+            .current_version()
+            .content()
+            .body()
+            .to_owned();
+        let provider = OpenAiCompatibleProvider::new(request.endpoint, Duration::from_secs(45))
+            .map_err(|error| error.to_string())?;
+        let credentials = SystemCredentialAdapter::new("Prompt Hub", "default")
+            .map_err(|error| error.to_string())?;
+        let draft = DraftGenerator::new(provider, credentials)
+            .generate(
+                &request.provider_id,
+                GenerationRequest {
+                    instruction: request.instruction,
+                    input_summary: original_body,
+                    model: request.model,
+                },
+                generated_at,
+            )
+            .map_err(|error| error.to_string())?;
+        self.create_ai_optimization_draft(
+            original_id,
+            draft.title().to_owned(),
+            draft.body().to_owned(),
+            draft.model().to_owned(),
+            generated_at,
+        )
+    }
+
     pub fn import_file_to_inbox(
         &self,
         path: PathBuf,
@@ -1142,6 +1230,15 @@ pub fn generate_ai_draft(
     request: AiGenerationRequestInput,
 ) -> Result<Prompt, String> {
     service.create_ai_draft(request, OffsetDateTime::now_utc())
+}
+
+#[tauri::command]
+pub fn optimize_ai_prompt(
+    service: State<'_, PromptService>,
+    id: PromptId,
+    request: AiGenerationRequestInput,
+) -> Result<Prompt, String> {
+    service.optimize_ai_prompt(id, request, OffsetDateTime::now_utc())
 }
 
 #[tauri::command]
