@@ -143,6 +143,16 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "搜索提示词" })).toBeVisible();
   });
 
+  it("uses page headers and grouped panels on secondary workspace routes", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("link", { name: "搜索" }));
+    expect(screen.getByRole("heading", { name: "搜索提示词" }).closest("header")).toHaveClass("page-header");
+
+    fireEvent.click(screen.getByRole("link", { name: "收件箱" }));
+    expect(screen.getByLabelText("导入操作")).toHaveClass("import-panel");
+  });
+
   it("shows the import and review inbox from navigation", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("link", { name: "收件箱" }));

@@ -86,7 +86,12 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
 
   return (
     <section aria-labelledby="search-title">
-      <h1 id="search-title">搜索提示词</h1>
+      <header className="page-header">
+        <p className="eyebrow">LOCAL SEARCH</p>
+        <h1 id="search-title">搜索提示词</h1>
+        <p>从标题、标签、来源与兼容性记录中快速定位可复用的提示词。</p>
+      </header>
+      <div className="filter-panel surface-card">
       <label>
         搜索提示词
         <input
@@ -137,11 +142,12 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
         </select>
       </label>
       <button onClick={saveView} type="button">保存当前视图</button>
+      </div>
       {isLoading ? <p role="status">正在搜索本地提示词库…</p> : null}
       {hasError ? <p role="alert">搜索失败，请重试。</p> : null}
       {page?.total === 0 ? <p>没有匹配的提示词。</p> : null}
       {page?.hits.length ? (
-        <ol aria-label="搜索结果">
+        <ol aria-label="搜索结果" className="search-results">
           {page.hits.map((hit) => (
             <li key={hit.id}>
               <h2>{hit.title}</h2>
