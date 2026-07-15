@@ -18,6 +18,14 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
   const [hasError, setError] = useState(false);
   const [effectiveness, setEffectiveness] = useState("");
   const [minimumRating, setMinimumRating] = useState("");
+  const [status, setStatus] = useState("");
+  const [sourceKind, setSourceKind] = useState("");
+  const [category, setCategory] = useState("");
+  const [tagText, setTagText] = useState("");
+  const [tool, setTool] = useState("");
+  const [model, setModel] = useState("");
+  const [updatedAfter, setUpdatedAfter] = useState("");
+  const [updatedBefore, setUpdatedBefore] = useState("");
   const [offset, setOffset] = useState(0);
   const generation = useRef(0);
 
@@ -27,6 +35,14 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
     const filters: PromptSearchFilters = {
       ...(effectiveness ? { effectiveness: effectiveness as PromptSearchFilters["effectiveness"] } : {}),
       ...(minimumRating ? { minimumRating: Number(minimumRating) } : {}),
+      ...(status ? { status: status as PromptSearchFilters["status"] } : {}),
+      ...(sourceKind ? { sourceKind: sourceKind as PromptSearchFilters["sourceKind"] } : {}),
+      ...(category ? { category } : {}),
+      ...(tagText ? { tags: tagText.split(",").map((tag) => tag.trim()).filter(Boolean) } : {}),
+      ...(tool ? { tool } : {}),
+      ...(model ? { model } : {}),
+      ...(updatedAfter ? { updatedAfter: `${updatedAfter}T00:00:00Z` } : {}),
+      ...(updatedBefore ? { updatedBefore: `${updatedBefore}T23:59:59Z` } : {}),
     };
     if (!trimmedQuery) {
       setPage(null);
@@ -57,10 +73,10 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
         });
     }, 250);
     return () => window.clearTimeout(timeout);
-  }, [effectiveness, minimumRating, offset, query, searchPrompts]);
+  }, [category, effectiveness, minimumRating, model, offset, query, searchPrompts, sourceKind, status, tagText, tool, updatedAfter, updatedBefore]);
 
   const resetPage = () => setOffset(0);
-  const saveView = () => window.localStorage.setItem("prompt-hub.search-view", JSON.stringify({ query, effectiveness, minimumRating }));
+  const saveView = () => window.localStorage.setItem("prompt-hub.search-view", JSON.stringify({ query, effectiveness, minimumRating, status, sourceKind, category, tagText, tool, model, updatedAfter, updatedBefore }));
 
   return (
     <section aria-labelledby="search-title">
@@ -77,6 +93,18 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
           value={query}
         />
       </label>
+      <label>生命周期<select onChange={(event) => { setStatus(event.target.value); resetPage(); }} value={status}>
+        <option value="">全部</option><option value="inbox">收件箱</option><option value="published">已发布</option><option value="archived">已归档</option><option value="deleted">已删除</option>
+      </select></label>
+      <label>来源类型<select onChange={(event) => { setSourceKind(event.target.value); resetPage(); }} value={sourceKind}>
+        <option value="">全部</option><option value="manual">手动录入</option><option value="file_import">文件导入</option><option value="web_url">网页链接</option><option value="ai_generated">AI 生成</option><option value="mcp">MCP</option>
+      </select></label>
+      <label>分类<input onChange={(event) => { setCategory(event.target.value); resetPage(); }} value={category} /></label>
+      <label>标签<input onChange={(event) => { setTagText(event.target.value); resetPage(); }} placeholder="多个标签用逗号分隔" value={tagText} /></label>
+      <label>适用工具<input onChange={(event) => { setTool(event.target.value); resetPage(); }} value={tool} /></label>
+      <label>适用模型<input onChange={(event) => { setModel(event.target.value); resetPage(); }} value={model} /></label>
+      <label>更新开始日期<input onChange={(event) => { setUpdatedAfter(event.target.value); resetPage(); }} type="date" value={updatedAfter} /></label>
+      <label>更新结束日期<input onChange={(event) => { setUpdatedBefore(event.target.value); resetPage(); }} type="date" value={updatedBefore} /></label>
       <label>
         有效性筛选
         <select onChange={(event) => { setEffectiveness(event.target.value); resetPage(); }} value={effectiveness}>

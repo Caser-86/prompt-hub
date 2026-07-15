@@ -74,4 +74,26 @@ describe("PromptSearch", () => {
     expect(window.localStorage.getItem("prompt-hub.search-view")).toContain("审查");
     vi.useRealTimers();
   });
+
+  it("passes lifecycle, provenance, metadata, and time filters to local search", async () => {
+    vi.useFakeTimers();
+    const searchPrompts = vi.fn().mockResolvedValue({ hits: [], total: 0 });
+    render(<PromptSearch searchPrompts={searchPrompts} />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "搜索提示词" }), { target: { value: "审查" } });
+    fireEvent.change(screen.getByLabelText("生命周期"), { target: { value: "published" } });
+    fireEvent.change(screen.getByLabelText("来源类型"), { target: { value: "manual" } });
+    fireEvent.change(screen.getByLabelText("分类"), { target: { value: "开发" } });
+    fireEvent.change(screen.getByLabelText("标签"), { target: { value: "审查,安全" } });
+    fireEvent.change(screen.getByLabelText("适用工具"), { target: { value: "Codex" } });
+    fireEvent.change(screen.getByLabelText("适用模型"), { target: { value: "gpt-5" } });
+    fireEvent.change(screen.getByLabelText("更新开始日期"), { target: { value: "2026-07-01" } });
+    fireEvent.change(screen.getByLabelText("更新结束日期"), { target: { value: "2026-07-15" } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(250); });
+
+    expect(searchPrompts).toHaveBeenLastCalledWith("审查", 20, 0, {
+      status: "published", sourceKind: "manual", category: "开发", tags: ["审查", "安全"],
+      tool: "Codex", model: "gpt-5", updatedAfter: "2026-07-01T00:00:00Z", updatedBefore: "2026-07-15T23:59:59Z",
+    });
+    vi.useRealTimers();
+  });
 });
