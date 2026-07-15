@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { PromptListItem } from "@prompt-hub/contracts";
 
 import { filterAndSortPrompts, formatLibraryUpdatedAt, type PromptLibraryFilter } from "./libraryView";
+import "./prompt-library.css";
 
 type PromptLibraryProps = {
   loadPrompts: () => Promise<PromptListItem[]>;

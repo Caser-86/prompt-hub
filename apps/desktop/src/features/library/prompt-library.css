@@ -1,0 +1,203 @@
+.prompt-library {
+  display: grid;
+  gap: 1rem;
+}
+
+.library-toolbar {
+  margin-bottom: 0;
+}
+
+.library-quick-filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.library-filter-options,
+.prompt-list-primary,
+.prompt-list-meta,
+.prompt-list-actions,
+.prompt-list-tags {
+  display: flex;
+  align-items: center;
+}
+
+.library-filter-options,
+.prompt-list-tags {
+  flex-wrap: wrap;
+}
+
+.library-filter-options {
+  gap: 0.35rem;
+}
+
+.library-filter-button {
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--border, #dce0eb);
+  border-radius: 0.55rem;
+  background: transparent;
+  color: var(--muted, #6f7d95);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.library-filter-button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent, #6657ff) 42%, transparent);
+  background: color-mix(in srgb, var(--accent, #6657ff) 12%, transparent);
+  color: var(--accent, #6657ff);
+}
+
+.library-result-count {
+  margin: 0;
+  color: var(--muted, #6f7d95);
+  font-size: 0.84rem;
+  white-space: nowrap;
+}
+
+.prompt-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.prompt-list-item {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1.35fr) minmax(20rem, 1fr) auto;
+  align-items: center;
+  min-height: 3.75rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.8rem;
+}
+
+.prompt-list-primary,
+.prompt-list-meta {
+  min-width: 0;
+  gap: 0.55rem;
+}
+
+.prompt-list-title {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-list-title strong {
+  font-size: 0.94rem;
+}
+
+.prompt-list-tags {
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.prompt-list-tags span {
+  max-width: 7rem;
+  overflow: hidden;
+  padding: 0.18rem 0.42rem;
+  border-radius: 0.35rem;
+  background: var(--chip-bg, #f0efff);
+  color: var(--accent, #6657ff);
+  font-size: 0.72rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-list-meta {
+  gap: 0.6rem;
+  color: var(--muted, #6f7d95);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.prompt-list-meta > span:not(.status-pill),
+.prompt-list-meta time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prompt-list-meta .status-pill {
+  flex: 0 0 auto;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+}
+
+.prompt-list-actions {
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-left: 0.75rem;
+}
+
+.prompt-list-actions label {
+  display: grid;
+  place-items: center;
+  width: 1.85rem;
+  height: 1.85rem;
+}
+
+.prompt-list-actions input {
+  width: 1rem;
+  height: 1rem;
+}
+
+.prompt-list-actions button {
+  display: grid;
+  place-items: center;
+  width: 1.85rem;
+  min-height: 1.85rem;
+  padding: 0;
+  border: 1px solid var(--border, #dce0eb);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--muted, #6f7d95);
+  font-size: 1.05rem;
+}
+
+@media (max-width: 900px) {
+  .prompt-list-item {
+    grid-template-columns: minmax(12rem, 1fr) auto;
+  }
+
+  .prompt-list-meta {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding-top: 0.35rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .library-quick-filters {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .prompt-list-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .prompt-list-primary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .prompt-list-meta {
+    flex-wrap: wrap;
+    gap: 0.35rem 0.55rem;
+    white-space: normal;
+  }
+}
