@@ -255,7 +255,7 @@ describe("desktop command client", () => {
       calls.push({ command, args });
       return command === "create_manual_backup"
         ? { path: "C:/data/backups/manual.db", byteLen: 512, schemaVersion: 2 }
-        : { targetExists: true, backupSchemaVersion: 2, backupByteLen: 512 };
+        : { targetExists: true, backupSchemaVersion: 2, backupByteLen: 512, promptCount: 2 };
     });
 
     await expect(client.createManualBackup()).resolves.toMatchObject({ schemaVersion: 2 });
