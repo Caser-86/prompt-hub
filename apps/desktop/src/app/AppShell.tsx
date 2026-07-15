@@ -5,6 +5,7 @@ import { NotificationRegion } from "../components/NotificationRegion";
 import { PromptEditor } from "../features/editor/PromptEditor";
 import { PromptMetadataEditor } from "../features/editor/PromptMetadataEditor";
 import { PromptHistory } from "../features/history/PromptHistory";
+import { AiOptimizationReview } from "../features/ai/AiOptimizationReview";
 import { PromptLibrary } from "../features/library/PromptLibrary";
 import { PromptLifecycleActions } from "../features/library/PromptLifecycleActions";
 import { PromptSearch } from "../features/search/PromptSearch";
@@ -115,13 +116,27 @@ export function AppShell() {
                   softDelete={() => desktopCommands.softDeletePrompt(selectedPrompt.id)}
                 />
                 {history ? (
-                  <PromptHistory
-                    history={history}
-                    restoreVersion={(versionNumber) => desktopCommands.restorePromptVersion(
-                      selectedPrompt.id,
-                      versionNumber,
-                    )}
-                  />
+                  <>
+                    <PromptHistory
+                      history={history}
+                      restoreVersion={(versionNumber) => desktopCommands.restorePromptVersion(
+                        selectedPrompt.id,
+                        versionNumber,
+                      )}
+                    />
+                    <AiOptimizationReview
+                      body={history.at(-1)?.body ?? ""}
+                      promptId={selectedPrompt.id}
+                      optimize={async (id, instruction) => {
+                        const stored = JSON.parse(localStorage.getItem("prompt-hub.ai.draft-settings") ?? "{}") as { endpoint?: string; model?: string };
+                        const result = await desktopCommands.optimizeAiPrompt(id, {
+                          endpoint: stored.endpoint ?? "https://api.openai.com", providerId: "openai-compatible",
+                          instruction, inputSummary: "", model: stored.model ?? "",
+                        }) as { current_version?: { content?: { body?: string } } };
+                        return { body: result.current_version?.content?.body };
+                      }}
+                    />
+                  </>
                 ) : <p>正在加载版本历史…</p>}
               </section>
             ) : isEditorOpen ? (
