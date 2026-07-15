@@ -27,6 +27,7 @@ export type ImportJobSummary = {
   failed: number;
 };
 export type McpSetupInfo = { databasePath: string; databaseAvailable: boolean; configuration: string };
+export type DiagnosticsStatus = { databaseAvailable: boolean; searchIndexConsistent: boolean; mcpDatabaseAvailable: boolean };
 
 export type CommandInvoker = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -113,6 +114,7 @@ export type PromptValidationDraft = {
 
 export type DesktopCommandClient = {
   getApplicationStatus: () => Promise<ApplicationStatus>;
+  getDiagnosticsStatus: () => Promise<DiagnosticsStatus>;
   createManualBackup: () => Promise<BackupInfo>;
   previewBackupRestore: (path: string) => Promise<BackupRestorePreview>;
   restoreBackup: (path: string) => Promise<BackupInfo>;
@@ -153,6 +155,11 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       if (!isApplicationStatus(result)) {
         throw new Error("get_application_status returned an invalid response");
       }
+      return result;
+    },
+    async getDiagnosticsStatus() {
+      const result = await invoke("get_diagnostics_status");
+      if (!isDiagnosticsStatus(result)) throw new Error("get_diagnostics_status returned an invalid response");
       return result;
     },
     async createManualBackup() {
@@ -354,6 +361,14 @@ function isApplicationStatus(value: unknown): value is ApplicationStatus {
     typeof status.databaseSchemaVersion === "number" &&
     typeof status.offlineCapable === "boolean"
   );
+}
+
+function isDiagnosticsStatus(value: unknown): value is DiagnosticsStatus {
+  if (typeof value !== "object" || value === null) return false;
+  const status = value as Record<string, unknown>;
+  return typeof status.databaseAvailable === "boolean"
+    && typeof status.searchIndexConsistent === "boolean"
+    && typeof status.mcpDatabaseAvailable === "boolean";
 }
 
 function isBackupInfo(value: unknown): value is BackupInfo {

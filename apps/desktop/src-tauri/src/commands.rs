@@ -1271,6 +1271,14 @@ pub struct ApplicationStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DiagnosticsStatus {
+    database_available: bool,
+    search_index_consistent: bool,
+    mcp_database_available: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AiCredentialStatus {
     configured: bool,
 }
@@ -1317,6 +1325,25 @@ pub fn get_application_status() -> ApplicationStatus {
         app_version: env!("CARGO_PKG_VERSION"),
         database_schema_version: LATEST_SCHEMA_VERSION,
         offline_capable: true,
+    }
+}
+
+#[tauri::command]
+pub fn get_diagnostics_status(
+    prompts: State<'_, PromptService>,
+    backups: State<'_, BackupService>,
+) -> DiagnosticsStatus {
+    let search_index_consistent = prompts
+        .repository
+        .lock()
+        .ok()
+        .and_then(|repository| repository.search_index_is_consistent().ok())
+        .unwrap_or(false);
+    let database_available = prompt_store::Database::open(&backups.database_path).is_ok();
+    DiagnosticsStatus {
+        database_available,
+        search_index_consistent,
+        mcp_database_available: database_available,
     }
 }
 

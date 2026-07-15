@@ -22,6 +22,17 @@ describe("desktop command client", () => {
     expect(calls).toEqual(["get_application_status"]);
   });
 
+  it("reads redacted local diagnostics through the approved command boundary", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      return { databaseAvailable: true, searchIndexConsistent: true, mcpDatabaseAvailable: true };
+    });
+
+    await expect(client.getDiagnosticsStatus()).resolves.toEqual({ databaseAvailable: true, searchIndexConsistent: true, mcpDatabaseAvailable: true });
+    expect(calls).toEqual([{ command: "get_diagnostics_status", args: undefined }]);
+  });
+
   it("uses the service-only list command for prompt library reads", async () => {
     const calls: string[] = [];
     const client = createDesktopCommandClient(async (command) => {

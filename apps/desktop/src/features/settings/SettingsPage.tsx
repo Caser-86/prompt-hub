@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AiGenerationRequest, ApplicationStatus, ImportJobSummary } from "@prompt-hub/contracts";
+import type { AiGenerationRequest, ApplicationStatus, DiagnosticsStatus, ImportJobSummary } from "@prompt-hub/contracts";
 
 import { DiagnosticsPanel } from "../diagnostics/DiagnosticsPanel";
 import { OnboardingGuide } from "../onboarding/OnboardingGuide";
@@ -9,13 +9,14 @@ import { McpSettings } from "./McpSettings";
 import { AiDraftGenerator } from "../ai/AiDraftGenerator";
 
 export function SettingsPage({
-  createBackup, previewRestore, restoreBackup, pruneLocalBackups, getApplicationStatus, getAiCredentialStatus, saveAiCredential, recentImportJobs, generateAiDraft, getMcpSetup,
+  createBackup, previewRestore, restoreBackup, pruneLocalBackups, getApplicationStatus, getDiagnosticsStatus, getAiCredentialStatus, saveAiCredential, recentImportJobs, generateAiDraft, getMcpSetup,
 }: {
   createBackup: () => Promise<BackupInfo>;
   previewRestore: (path: string) => Promise<RestorePreviewInfo>;
   restoreBackup: (path: string) => Promise<BackupInfo>;
   pruneLocalBackups: (retain: number) => Promise<number>;
   getApplicationStatus: () => Promise<ApplicationStatus>;
+  getDiagnosticsStatus: () => Promise<DiagnosticsStatus>;
   getAiCredentialStatus: (providerId: string) => Promise<{ configured: boolean }>;
   saveAiCredential: (providerId: string, secret: string) => Promise<{ configured: boolean }>;
   recentImportJobs: () => Promise<ImportJobSummary[]>;
@@ -24,7 +25,9 @@ export function SettingsPage({
 }) {
   const [status, setStatus] = useState<ApplicationStatus | null>(null);
   const [importJobs, setImportJobs] = useState<ImportJobSummary[] | null>(null);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsStatus | null>(null);
   useEffect(() => { void getApplicationStatus().then(setStatus).catch(() => setStatus(null)); }, [getApplicationStatus]);
   useEffect(() => { void recentImportJobs().then(setImportJobs).catch(() => setImportJobs([])); }, [recentImportJobs]);
-  return <><BackupSettings createBackup={createBackup} previewRestore={previewRestore} restoreBackup={restoreBackup} pruneBackups={pruneLocalBackups} /><AiSettings getStatus={getAiCredentialStatus} saveCredential={saveAiCredential} /><AiDraftGenerator generateDraft={generateAiDraft} /><McpSettings getSetup={getMcpSetup} /><DiagnosticsPanel importJobs={importJobs} status={status} /><OnboardingGuide /></>;
+  useEffect(() => { void getDiagnosticsStatus().then(setDiagnostics).catch(() => setDiagnostics(null)); }, [getDiagnosticsStatus]);
+  return <><BackupSettings createBackup={createBackup} previewRestore={previewRestore} restoreBackup={restoreBackup} pruneBackups={pruneLocalBackups} /><AiSettings getStatus={getAiCredentialStatus} saveCredential={saveAiCredential} /><AiDraftGenerator generateDraft={generateAiDraft} /><McpSettings getSetup={getMcpSetup} /><DiagnosticsPanel diagnostics={diagnostics} importJobs={importJobs} status={status} /><OnboardingGuide /></>;
 }

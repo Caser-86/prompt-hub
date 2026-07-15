@@ -28,6 +28,7 @@ const desktopMock = vi.hoisted(() => ({
   generateAiDraft: vi.fn(),
   getMcpSetup: vi.fn(),
   getApplicationStatus: vi.fn(),
+  getDiagnosticsStatus: vi.fn(),
 }));
 vi.mock("./services/desktop", () => ({
   desktopCommands: desktopMock,
@@ -38,6 +39,7 @@ import { App } from "./App";
 describe("App", () => {
   beforeEach(() => {
     desktopMock.listPrompts.mockImplementation(() => new Promise<never[]>(() => undefined));
+    desktopMock.getDiagnosticsStatus.mockResolvedValue({ databaseAvailable: true, searchIndexConsistent: true, mcpDatabaseAvailable: true });
     desktopMock.promptHistory.mockResolvedValue([]);
     desktopMock.getApplicationStatus.mockResolvedValue({ appVersion: "0.1.0", databaseSchemaVersion: 2, offlineCapable: true });
     desktopMock.getAiCredentialStatus.mockResolvedValue({ configured: false });
