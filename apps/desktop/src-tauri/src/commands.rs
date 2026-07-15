@@ -1582,6 +1582,7 @@ pub struct BackupRestorePreview {
     target_exists: bool,
     backup_schema_version: u32,
     backup_byte_len: u64,
+    prompt_count: u64,
 }
 
 impl BackupRestorePreview {
@@ -1590,6 +1591,7 @@ impl BackupRestorePreview {
             target_exists: preview.target_exists(),
             backup_schema_version: preview.backup_schema_version(),
             backup_byte_len: preview.backup_byte_len(),
+            prompt_count: preview.prompt_count(),
         }
     }
 }

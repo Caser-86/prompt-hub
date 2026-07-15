@@ -25,7 +25,7 @@ describe("BackupSettings", () => {
   });
 
   it("shows a read-only restore preview before a destructive restore", async () => {
-    const previewRestore = vi.fn().mockResolvedValue({ targetExists: true, backupSchemaVersion: 2, backupByteLen: 512 });
+    const previewRestore = vi.fn().mockResolvedValue({ targetExists: true, backupSchemaVersion: 2, backupByteLen: 512, promptCount: 2 });
     render(<BackupSettings createBackup={vi.fn()} previewRestore={previewRestore} pruneBackups={vi.fn()} restoreBackup={vi.fn()} />);
 
     fireEvent.change(screen.getByLabelText("备份文件路径"), { target: { value: "C:/data/backup.db" } });
@@ -33,6 +33,7 @@ describe("BackupSettings", () => {
 
     await waitFor(() => expect(previewRestore).toHaveBeenCalledWith("C:/data/backup.db"));
     expect(screen.getByText(/恢复会替换现有数据库/)).toBeInTheDocument();
+    expect(screen.getByText(/包含 2 条提示词/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "确认恢复备份" })).toBeInTheDocument();
   });
 

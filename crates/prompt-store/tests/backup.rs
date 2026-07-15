@@ -49,12 +49,18 @@ fn restore_preview_is_read_only_and_reports_backup_contents() {
     let directory = tempdir().unwrap();
     let source = directory.path().join("library.db");
     database_with_marker(&source, "original");
+    let connection = Connection::open(&source).unwrap();
+    connection
+        .execute_batch("CREATE TABLE prompts(id TEXT PRIMARY KEY) STRICT; INSERT INTO prompts VALUES ('one'); INSERT INTO prompts VALUES ('two');")
+        .unwrap();
+    drop(connection);
     let backup = create_backup(&source, BackupDestination::Manual).unwrap();
 
     let preview = preview_restore(backup.path(), &source).unwrap();
 
     assert!(preview.target_exists());
     assert_eq!(preview.backup_schema_version(), 0);
+    assert_eq!(preview.prompt_count(), 2);
     let connection = Connection::open(&source).unwrap();
     let value: String = connection
         .query_row("SELECT value FROM marker", [], |row| row.get(0))

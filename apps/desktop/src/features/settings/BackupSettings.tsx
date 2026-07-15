@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 export type BackupInfo = { path: string; byteLen: number; schemaVersion: number };
-export type RestorePreviewInfo = { targetExists: boolean; backupSchemaVersion: number; backupByteLen: number };
+export type RestorePreviewInfo = { targetExists: boolean; backupSchemaVersion: number; backupByteLen: number; promptCount: number };
 
 export function BackupSettings({
   createBackup,
@@ -49,7 +49,7 @@ export function BackupSettings({
     {backup ? <p role="status">备份已完成并通过完整性校验：{backup.path}（架构版本 {backup.schemaVersion}）</p> : null}
     <label>备份文件路径<input onChange={(event) => setPath(event.target.value)} value={path} /></label>
     <button disabled={!path} onClick={() => void inspectBackup()} type="button">检查恢复内容</button>
-    {preview ? <><p role="status">恢复会替换现有数据库；备份架构版本 {preview.backupSchemaVersion}，大小 {preview.backupByteLen} 字节。</p><button onClick={() => void restore()} type="button">确认恢复备份</button></> : null}
+    {preview ? <><p role="status">恢复会替换现有数据库；备份包含 {preview.promptCount} 条提示词，架构版本 {preview.backupSchemaVersion}，大小 {preview.backupByteLen} 字节。</p><button onClick={() => void restore()} type="button">确认恢复备份</button></> : null}
     {restored ? <p role="status">恢复完成。恢复前安全备份：{restored.path}</p> : null}
     <label>保留最近备份数<input min="0" onChange={(event) => setRetain(event.target.value)} type="number" value={retain} /></label>
     <button disabled={!/^\d+$/.test(retain)} onClick={() => void prune()} type="button">清理旧备份</button>

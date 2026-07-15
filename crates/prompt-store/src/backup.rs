@@ -57,6 +57,7 @@ pub struct RestorePreview {
     target_exists: bool,
     backup_schema_version: u32,
     backup_byte_len: u64,
+    prompt_count: u64,
 }
 
 impl RestorePreview {
@@ -71,6 +72,10 @@ impl RestorePreview {
     #[must_use]
     pub const fn backup_byte_len(&self) -> u64 {
         self.backup_byte_len
+    }
+    #[must_use]
+    pub const fn prompt_count(&self) -> u64 {
+        self.prompt_count
     }
 }
 
@@ -122,6 +127,7 @@ pub fn preview_restore(backup: &Path, target: &Path) -> Result<RestorePreview, S
         target_exists: target.exists(),
         backup_schema_version: metadata.0,
         backup_byte_len: metadata.1,
+        prompt_count: prompt_count(backup)?,
     })
 }
 
@@ -229,6 +235,20 @@ fn verified_database(path: &Path) -> Result<(u32, u64), StoreError> {
     }
     let schema_version = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
     Ok((schema_version, fs::metadata(path)?.len()))
+}
+
+fn prompt_count(path: &Path) -> Result<u64, StoreError> {
+    let connection = Connection::open(path)?;
+    let has_prompts: bool = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'prompts')",
+        [],
+        |row| row.get(0),
+    )?;
+    if !has_prompts {
+        return Ok(0);
+    }
+    let count: i64 = connection.query_row("SELECT COUNT(*) FROM prompts", [], |row| row.get(0))?;
+    u64::try_from(count).map_err(|error| StoreError::BackupIntegrity(error.to_string()))
 }
 
 fn timestamp() -> Result<u128, StoreError> {

@@ -5,7 +5,7 @@ export type ApplicationStatus = {
 };
 
 export type BackupInfo = { path: string; byteLen: number; schemaVersion: number };
-export type BackupRestorePreview = { targetExists: boolean; backupSchemaVersion: number; backupByteLen: number };
+export type BackupRestorePreview = { targetExists: boolean; backupSchemaVersion: number; backupByteLen: number; promptCount: number };
 export type ImportResult = { imported: number; skippedDuplicates: number; failed: number };
 export type AiCredentialStatus = { configured: boolean };
 export type AiConnectionRequest = { endpoint: string; providerId: string; model: string };
@@ -428,7 +428,7 @@ function isBackupInfo(value: unknown): value is BackupInfo {
 function isBackupRestorePreview(value: unknown): value is BackupRestorePreview {
   if (typeof value !== "object" || value === null) return false;
   const item = value as Record<string, unknown>;
-  return typeof item.targetExists === "boolean" && typeof item.backupSchemaVersion === "number" && typeof item.backupByteLen === "number";
+  return typeof item.targetExists === "boolean" && typeof item.backupSchemaVersion === "number" && typeof item.backupByteLen === "number" && typeof item.promptCount === "number";
 }
 
 function isAiCredentialStatus(value: unknown): value is AiCredentialStatus {
