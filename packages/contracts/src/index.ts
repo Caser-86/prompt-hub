@@ -8,6 +8,17 @@ export type BackupInfo = { path: string; byteLen: number; schemaVersion: number 
 export type BackupRestorePreview = { targetExists: boolean; backupSchemaVersion: number; backupByteLen: number };
 export type ImportResult = { imported: number; skippedDuplicates: number; failed: number };
 export type AiCredentialStatus = { configured: boolean };
+export type ImportJobSummary = {
+  id: string;
+  sourceKind: string;
+  sourcePath: string | null;
+  status: string;
+  startedAt: string;
+  completedAt: string | null;
+  imported: number;
+  skippedDuplicates: number;
+  failed: number;
+};
 
 export type CommandInvoker = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -114,6 +125,7 @@ export type DesktopCommandClient = {
   publishPrompt: (id: string) => Promise<unknown>;
   importFileToInbox: (path: string) => Promise<ImportResult>;
   importFolderToInbox: (path: string) => Promise<ImportResult>;
+  recentImportJobs: () => Promise<ImportJobSummary[]>;
   getAiCredentialStatus: (providerId: string) => Promise<AiCredentialStatus>;
   saveAiCredential: (providerId: string, secret: string) => Promise<AiCredentialStatus>;
 };
@@ -210,6 +222,13 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
         throw new Error("import_folder_to_inbox returned an invalid response");
       }
       return result as ImportResult;
+    },
+    async recentImportJobs() {
+      const result = await invoke("recent_import_jobs");
+      if (!Array.isArray(result) || !result.every(isImportJobSummary)) {
+        throw new Error("recent_import_jobs returned an invalid response");
+      }
+      return result;
     },
     async getAiCredentialStatus(providerId) {
       const result = await invoke("get_ai_credential_status", { providerId });
@@ -316,4 +335,15 @@ function isImportResult(value: unknown): value is ImportResult {
     && typeof (value as Record<string, unknown>).imported === "number"
     && typeof (value as Record<string, unknown>).skippedDuplicates === "number"
     && typeof (value as Record<string, unknown>).failed === "number";
+}
+
+function isImportJobSummary(value: unknown): value is ImportJobSummary {
+  if (typeof value !== "object" || value === null) return false;
+  const item = value as Record<string, unknown>;
+  return typeof item.id === "string" && typeof item.sourceKind === "string"
+    && (typeof item.sourcePath === "string" || item.sourcePath === null)
+    && typeof item.status === "string" && typeof item.startedAt === "string"
+    && (typeof item.completedAt === "string" || item.completedAt === null)
+    && typeof item.imported === "number" && typeof item.skippedDuplicates === "number"
+    && typeof item.failed === "number";
 }

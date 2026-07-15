@@ -412,6 +412,14 @@ impl PromptService {
             .map_err(|error| error.to_string())
     }
 
+    pub fn recent_import_jobs(&self) -> Result<Vec<prompt_store::ImportJob>, String> {
+        self.repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?
+            .recent_import_jobs(10)
+            .map_err(|error| error.to_string())
+    }
+
     pub fn history(&self, id: PromptId) -> Result<Vec<PromptVersion>, String> {
         self.repository
             .lock()
@@ -650,6 +658,44 @@ pub struct ImportResult {
     failed: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportJobSummary {
+    id: String,
+    source_kind: String,
+    source_path: Option<String>,
+    status: String,
+    started_at: String,
+    completed_at: Option<String>,
+    imported: usize,
+    skipped_duplicates: usize,
+    failed: usize,
+}
+
+impl ImportJobSummary {
+    fn from_store(job: prompt_store::ImportJob) -> Result<Self, String> {
+        let diagnostics: serde_json::Value =
+            serde_json::from_str(job.diagnostics_json()).unwrap_or_default();
+        let count = |key| {
+            diagnostics
+                .get(key)
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0) as usize
+        };
+        Ok(Self {
+            id: job.id().to_owned(),
+            source_kind: job.source_kind().to_owned(),
+            source_path: job.source_path().map(str::to_owned),
+            status: job.status().to_owned(),
+            started_at: format_timestamp(job.started_at())?,
+            completed_at: job.completed_at().map(format_timestamp).transpose()?,
+            imported: count("imported"),
+            skipped_duplicates: count("skippedDuplicates"),
+            failed: count("failed"),
+        })
+    }
+}
+
 impl PromptHistoryItem {
     fn from_version(version: PromptVersion) -> Result<Self, String> {
         Ok(Self {
@@ -774,6 +820,17 @@ pub fn import_folder_to_inbox(
         skipped_duplicates: outcome.skipped_duplicates,
         failed: outcome.failed,
     })
+}
+
+#[tauri::command]
+pub fn recent_import_jobs(
+    service: State<'_, PromptService>,
+) -> Result<Vec<ImportJobSummary>, String> {
+    service
+        .recent_import_jobs()?
+        .into_iter()
+        .map(ImportJobSummary::from_store)
+        .collect()
 }
 
 #[tauri::command]

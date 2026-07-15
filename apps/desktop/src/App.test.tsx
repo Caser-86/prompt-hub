@@ -5,6 +5,8 @@ const desktopMock = vi.hoisted(() => ({
   createManualPromptDraft: vi.fn(),
   publishPrompt: vi.fn(),
   importFileToInbox: vi.fn(),
+  importFolderToInbox: vi.fn(),
+  recentImportJobs: vi.fn(),
   listPrompts: vi.fn(),
   promptHistory: vi.fn(),
   restorePromptVersion: vi.fn(),
@@ -35,6 +37,7 @@ describe("App", () => {
     desktopMock.promptHistory.mockResolvedValue([]);
     desktopMock.getApplicationStatus.mockResolvedValue({ appVersion: "0.1.0", databaseSchemaVersion: 2, offlineCapable: true });
     desktopMock.getAiCredentialStatus.mockResolvedValue({ configured: false });
+    desktopMock.recentImportJobs.mockResolvedValue([]);
   });
   it("provides accessible primary navigation and a command palette", () => {
     render(<App />);

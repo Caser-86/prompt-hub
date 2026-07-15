@@ -35,12 +35,20 @@ impl ImportJob {
         &self.status
     }
     #[must_use]
+    pub fn source_kind(&self) -> &str {
+        &self.source_kind
+    }
+    #[must_use]
     pub fn source_path(&self) -> Option<&str> {
         self.source_path.as_deref()
     }
     #[must_use]
     pub const fn completed_at(&self) -> Option<OffsetDateTime> {
         self.completed_at
+    }
+    #[must_use]
+    pub const fn started_at(&self) -> OffsetDateTime {
+        self.started_at
     }
     #[must_use]
     pub fn diagnostics_json(&self) -> &str {
@@ -282,6 +290,44 @@ impl PromptRepository {
                 Ok(ImportJob { id: row.get(0)?, source_kind: row.get(1)?, source_path: row.get(2)?, status: row.get(3)?, started_at, completed_at, diagnostics_json: row.get(6)? })
             },
         ).optional().map_err(StoreError::from)
+    }
+
+    pub fn recent_import_jobs(&self, limit: u32) -> Result<Vec<ImportJob>, StoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT id, source_kind, source_path, status, started_at, completed_at, diagnostics_json
+             FROM import_jobs ORDER BY started_at DESC, id DESC LIMIT ?1",
+        )?;
+        let rows = statement.query_map([i64::from(limit)], |row| {
+            let started_at = OffsetDateTime::from_unix_timestamp(row.get(4)?).map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    4,
+                    rusqlite::types::Type::Integer,
+                    Box::new(error),
+                )
+            })?;
+            let completed_at = row
+                .get::<_, Option<i64>>(5)?
+                .map(OffsetDateTime::from_unix_timestamp)
+                .transpose()
+                .map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        5,
+                        rusqlite::types::Type::Integer,
+                        Box::new(error),
+                    )
+                })?;
+            Ok(ImportJob {
+                id: row.get(0)?,
+                source_kind: row.get(1)?,
+                source_path: row.get(2)?,
+                status: row.get(3)?,
+                started_at,
+                completed_at,
+                diagnostics_json: row.get(6)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::from)
     }
 }
 

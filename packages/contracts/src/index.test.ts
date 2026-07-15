@@ -202,4 +202,14 @@ describe("desktop command client", () => {
     await expect(client.importFolderToInbox("C:/提示词")).resolves.toEqual({ imported: 2, skippedDuplicates: 1, failed: 0 });
     expect(calls).toEqual([{ command: "import_folder_to_inbox", args: { path: "C:/提示词" } }]);
   });
+
+  it("reads redacted import job summaries through the approved command boundary", async () => {
+    const client = createDesktopCommandClient(async () => [{
+      id: "job-1", sourceKind: "folder_import", sourcePath: "C:/提示词", status: "completed",
+      startedAt: "2026-07-15T00:00:00Z", completedAt: "2026-07-15T00:01:00Z",
+      imported: 2, skippedDuplicates: 1, failed: 0,
+    }]);
+
+    await expect(client.recentImportJobs()).resolves.toHaveLength(1);
+  });
 });

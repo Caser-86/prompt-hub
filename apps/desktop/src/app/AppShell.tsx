@@ -145,6 +145,7 @@ export function AppShell() {
               getAiCredentialStatus={desktopCommands.getAiCredentialStatus}
               getApplicationStatus={desktopCommands.getApplicationStatus}
               previewRestore={desktopCommands.previewBackupRestore}
+              recentImportJobs={desktopCommands.recentImportJobs}
               restoreBackup={desktopCommands.restoreBackup}
               saveAiCredential={desktopCommands.saveAiCredential}
             />
