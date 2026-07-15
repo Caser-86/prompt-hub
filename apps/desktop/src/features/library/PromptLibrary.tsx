@@ -65,6 +65,9 @@ export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite, bat
               >{prompt.favorite ? "已收藏" : "收藏"}</button>
               <p>来源：{prompt.sourceNames.join("、") || "未记录"}</p>
               <p>{effectivenessLabel(prompt.effectiveness)}</p>
+              <p>适用工具：{prompt.applicableTools?.join("、") || "未记录"}</p>
+              <p>适用模型：{prompt.applicableModels?.join("、") || "未记录"}</p>
+              <p>评分：{prompt.rating ?? "未评分"}</p>
               <time dateTime={prompt.updatedAt}>更新于 {prompt.updatedAt}</time>
             </li>
           ))}

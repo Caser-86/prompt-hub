@@ -33,6 +33,9 @@ describe("PromptLibrary", () => {
             category: "开发",
             tags: ["审查"],
             sourceNames: ["手动录入"],
+            applicableTools: ["Codex"],
+            applicableModels: ["gpt-5"],
+            rating: 5,
             favorite: false,
             createdAt: "2026-07-15T00:00:00Z",
             updatedAt: "2026-07-15T00:01:00Z",
@@ -45,6 +48,9 @@ describe("PromptLibrary", () => {
     fireEvent.click(await screen.findByRole("button", { name: "打开提示词：代码审查" }));
     expect(screen.getByText("来源：手动录入")).toBeVisible();
     expect(screen.getByText("有效")).toBeVisible();
+    expect(screen.getByText("适用工具：Codex")).toBeVisible();
+    expect(screen.getByText("适用模型：gpt-5")).toBeVisible();
+    expect(screen.getByText("评分：5")).toBeVisible();
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "prompt-1" }));
   });
 

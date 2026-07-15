@@ -95,6 +95,10 @@ export function AppShell() {
                 <h2 id="prompt-details-title">{selectedPrompt.title}</h2>
                 <p>来源：{selectedPrompt.sourceNames.join("、") || "未记录"}</p>
                 <time dateTime={selectedPrompt.createdAt}>创建于 {selectedPrompt.createdAt}</time>
+                <time dateTime={selectedPrompt.updatedAt}>最后更新于 {selectedPrompt.updatedAt}</time>
+                <p>适用工具：{selectedPrompt.applicableTools?.join("、") || "未记录"}</p>
+                <p>适用模型：{selectedPrompt.applicableModels?.join("、") || "未记录"}</p>
+                <p>有效性：{selectedPrompt.effectiveness}；评分：{selectedPrompt.rating ?? "未评分"}</p>
                 <PromptMetadataEditor
                   promptId={selectedPrompt.id}
                   saveCompatibility={desktopCommands.recordPromptCompatibility}

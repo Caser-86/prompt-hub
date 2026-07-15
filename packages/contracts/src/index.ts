@@ -84,6 +84,9 @@ export type PromptListItem = {
   category: string | null;
   tags: string[];
   sourceNames: string[];
+  applicableTools?: string[];
+  applicableModels?: string[];
+  rating?: number | null;
   favorite: boolean;
   createdAt: string;
   updatedAt: string;
@@ -286,6 +289,9 @@ function isPromptListItem(value: unknown): value is PromptListItem {
     (typeof item.category === "string" || item.category === null) &&
     Array.isArray(item.tags) && item.tags.every((tag) => typeof tag === "string") &&
     Array.isArray(item.sourceNames) && item.sourceNames.every((name) => typeof name === "string") &&
+    (item.applicableTools === undefined || (Array.isArray(item.applicableTools) && item.applicableTools.every((tool) => typeof tool === "string"))) &&
+    (item.applicableModels === undefined || (Array.isArray(item.applicableModels) && item.applicableModels.every((model) => typeof model === "string"))) &&
+    (item.rating === undefined || item.rating === null || typeof item.rating === "number") &&
     typeof item.favorite === "boolean" &&
     typeof item.createdAt === "string" &&
     typeof item.updatedAt === "string"

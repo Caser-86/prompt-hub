@@ -763,6 +763,9 @@ pub struct PromptListItem {
     category: Option<String>,
     tags: Vec<String>,
     source_names: Vec<String>,
+    applicable_tools: Vec<String>,
+    applicable_models: Vec<String>,
+    rating: Option<u8>,
     favorite: bool,
     created_at: String,
     updated_at: String,
@@ -855,6 +858,20 @@ impl PromptListItem {
                 .iter()
                 .map(|source| source.name().to_owned())
                 .collect(),
+            applicable_tools: prompt
+                .compatibilities()
+                .iter()
+                .map(|compatibility| compatibility.tool().to_owned())
+                .collect(),
+            applicable_models: prompt
+                .compatibilities()
+                .iter()
+                .filter_map(|compatibility| compatibility.model().map(str::to_owned))
+                .collect(),
+            rating: prompt
+                .validations()
+                .last()
+                .and_then(|validation| validation.rating),
             favorite,
             created_at: format_timestamp(prompt.created_at())?,
             updated_at: format_timestamp(prompt.updated_at())?,
