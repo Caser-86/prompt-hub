@@ -2,6 +2,7 @@
 members = [
   "apps/desktop/src-tauri",
   "crates/prompt-domain",
+  "crates/prompt-ai",
   "crates/prompt-import",
   "crates/prompt-mcp",
   "crates/prompt-security",
