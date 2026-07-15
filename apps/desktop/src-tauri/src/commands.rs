@@ -296,6 +296,24 @@ pub struct PromptListItem {
     updated_at: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptHistoryItem {
+    number: u32,
+    body: String,
+    created_at: String,
+}
+
+impl PromptHistoryItem {
+    fn from_version(version: PromptVersion) -> Result<Self, String> {
+        Ok(Self {
+            number: version.number(),
+            body: version.content().body().to_owned(),
+            created_at: format_timestamp(version.created_at())?,
+        })
+    }
+}
+
 impl PromptListItem {
     fn from_prompt(prompt: Prompt) -> Result<Self, String> {
         let content = prompt.current_version().content();
@@ -336,8 +354,21 @@ pub fn list_prompts(service: State<'_, PromptService>) -> Result<Vec<PromptListI
 pub fn prompt_history(
     service: State<'_, PromptService>,
     id: PromptId,
-) -> Result<Vec<PromptVersion>, String> {
-    service.history(id)
+) -> Result<Vec<PromptHistoryItem>, String> {
+    service
+        .history(id)?
+        .into_iter()
+        .map(PromptHistoryItem::from_version)
+        .collect()
+}
+
+#[tauri::command]
+pub fn restore_prompt_version(
+    service: State<'_, PromptService>,
+    id: PromptId,
+    version_number: u32,
+) -> Result<Prompt, String> {
+    service.restore_version(id, version_number, OffsetDateTime::now_utc())
 }
 
 #[tauri::command]

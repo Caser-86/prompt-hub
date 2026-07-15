@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const desktopMock = vi.hoisted(() => ({
   createManualPromptDraft: vi.fn(),
   listPrompts: vi.fn(),
+  promptHistory: vi.fn(),
+  restorePromptVersion: vi.fn(),
   recordPromptCompatibility: vi.fn(),
   recordPromptValidation: vi.fn(),
 }));
@@ -16,6 +18,7 @@ import { App } from "./App";
 describe("App", () => {
   beforeEach(() => {
     desktopMock.listPrompts.mockImplementation(() => new Promise<never[]>(() => undefined));
+    desktopMock.promptHistory.mockResolvedValue([]);
   });
   it("provides accessible primary navigation and a command palette", () => {
     render(<App />);
@@ -60,9 +63,13 @@ describe("App", () => {
         updatedAt: "2026-07-15T00:01:00Z",
       },
     ]);
+    desktopMock.promptHistory.mockResolvedValueOnce([
+      { number: 1, body: "第一版", createdAt: "2026-07-15T00:00:00Z" },
+    ]);
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "打开提示词：代码审查" }));
     expect(screen.getByRole("form", { name: "提示词元数据" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "版本历史" })).toBeVisible();
   });
 });

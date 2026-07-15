@@ -50,6 +50,12 @@ export type PromptListItem = {
   updatedAt: string;
 };
 
+export type PromptHistoryItem = {
+  number: number;
+  body: string;
+  createdAt: string;
+};
+
 export type PromptCompatibilityDraft = {
   tool: string;
   model: string | null;
@@ -66,6 +72,8 @@ export type PromptValidationDraft = {
 export type DesktopCommandClient = {
   getApplicationStatus: () => Promise<ApplicationStatus>;
   listPrompts: () => Promise<PromptListItem[]>;
+  promptHistory: (id: string) => Promise<PromptHistoryItem[]>;
+  restorePromptVersion: (id: string, versionNumber: number) => Promise<unknown>;
   searchPrompts: (text: string, limit?: number, offset?: number) => Promise<PromptSearchPage>;
   recordPromptCompatibility: (id: string, metadata: PromptCompatibilityDraft) => Promise<unknown>;
   recordPromptValidation: (id: string, metadata: PromptValidationDraft) => Promise<unknown>;
@@ -87,6 +95,16 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
         throw new Error("list_prompts returned an invalid response");
       }
       return result;
+    },
+    async promptHistory(id) {
+      const result = await invoke("prompt_history", { id });
+      if (!Array.isArray(result) || !result.every(isPromptHistoryItem)) {
+        throw new Error("prompt_history returned an invalid response");
+      }
+      return result;
+    },
+    restorePromptVersion(id, versionNumber) {
+      return invoke("restore_prompt_version", { id, versionNumber });
     },
     async searchPrompts(text, limit = 20, offset = 0) {
       const result = await invoke("search_prompts", { text, limit, offset });
@@ -122,6 +140,18 @@ function isPromptListItem(value: unknown): value is PromptListItem {
     Array.isArray(item.sourceNames) && item.sourceNames.every((name) => typeof name === "string") &&
     typeof item.createdAt === "string" &&
     typeof item.updatedAt === "string"
+  );
+}
+
+function isPromptHistoryItem(value: unknown): value is PromptHistoryItem {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.number === "number" &&
+    typeof item.body === "string" &&
+    typeof item.createdAt === "string"
   );
 }
 

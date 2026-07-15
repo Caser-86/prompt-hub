@@ -110,4 +110,22 @@ describe("desktop command client", () => {
       { command: "record_prompt_validation", args: { id: "prompt-1", metadata: validation } },
     ]);
   });
+
+  it("loads immutable history and restores a version through approved commands", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      return command === "prompt_history"
+        ? [{ number: 1, body: "第一版", createdAt: "2026-07-15T00:00:00Z" }]
+        : { id: "prompt-1" };
+    });
+
+    await expect(client.promptHistory("prompt-1")).resolves.toHaveLength(1);
+    await client.restorePromptVersion("prompt-1", 1);
+
+    expect(calls).toEqual([
+      { command: "prompt_history", args: { id: "prompt-1" } },
+      { command: "restore_prompt_version", args: { id: "prompt-1", versionNumber: 1 } },
+    ]);
+  });
 });

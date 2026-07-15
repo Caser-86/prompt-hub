@@ -4,16 +4,18 @@ import { CommandPalette } from "../components/CommandPalette";
 import { NotificationRegion } from "../components/NotificationRegion";
 import { PromptEditor } from "../features/editor/PromptEditor";
 import { PromptMetadataEditor } from "../features/editor/PromptMetadataEditor";
+import { PromptHistory } from "../features/history/PromptHistory";
 import { PromptLibrary } from "../features/library/PromptLibrary";
 import { desktopCommands } from "../services/desktop";
 import { navigationItems, type AppRoute } from "./navigation";
-import type { PromptListItem } from "@prompt-hub/contracts";
+import type { PromptHistoryItem, PromptListItem } from "@prompt-hub/contracts";
 
 export function AppShell() {
   const [activeRoute, setActiveRoute] = useState<AppRoute>("library");
   const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [isEditorOpen, setEditorOpen] = useState(false);
   const [selectedPrompt, setSelectedPrompt] = useState<PromptListItem | null>(null);
+  const [history, setHistory] = useState<PromptHistoryItem[] | null>(null);
   const [libraryKey, setLibraryKey] = useState(0);
   const commandTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -36,6 +38,14 @@ export function AppShell() {
     window.addEventListener("keydown", handleKeyboardShortcut);
     return () => window.removeEventListener("keydown", handleKeyboardShortcut);
   }, []);
+
+  useEffect(() => {
+    if (!selectedPrompt) {
+      setHistory(null);
+      return;
+    }
+    void desktopCommands.promptHistory(selectedPrompt.id).then(setHistory).catch(() => setHistory([]));
+  }, [selectedPrompt]);
 
   return (
     <div className="app-shell">
@@ -86,6 +96,15 @@ export function AppShell() {
                   saveCompatibility={desktopCommands.recordPromptCompatibility}
                   saveValidation={desktopCommands.recordPromptValidation}
                 />
+                {history ? (
+                  <PromptHistory
+                    history={history}
+                    restoreVersion={(versionNumber) => desktopCommands.restorePromptVersion(
+                      selectedPrompt.id,
+                      versionNumber,
+                    )}
+                  />
+                ) : <p>正在加载版本历史…</p>}
               </section>
             ) : isEditorOpen ? (
               <PromptEditor
