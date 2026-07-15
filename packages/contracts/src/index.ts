@@ -8,6 +8,8 @@ export type BackupInfo = { path: string; byteLen: number; schemaVersion: number 
 export type BackupRestorePreview = { targetExists: boolean; backupSchemaVersion: number; backupByteLen: number };
 export type ImportResult = { imported: number; skippedDuplicates: number; failed: number };
 export type AiCredentialStatus = { configured: boolean };
+export type AiConnectionRequest = { endpoint: string; providerId: string; model: string };
+export type AiConnectionStatus = { connected: boolean };
 export type AiGenerationRequest = {
   endpoint: string;
   providerId: string;
@@ -146,6 +148,7 @@ export type DesktopCommandClient = {
   getMcpSetup: () => Promise<McpSetupInfo>;
   getAiCredentialStatus: (providerId: string) => Promise<AiCredentialStatus>;
   saveAiCredential: (providerId: string, secret: string) => Promise<AiCredentialStatus>;
+  testAiConnection: (request: AiConnectionRequest) => Promise<AiConnectionStatus>;
   generateAiDraft: (request: AiGenerationRequest) => Promise<unknown>;
 };
 
@@ -287,10 +290,19 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       if (!isAiCredentialStatus(result)) throw new Error("save_ai_credential returned an invalid response");
       return result;
     },
+    async testAiConnection(request) {
+      const result = await invoke("test_ai_connection", { request });
+      if (!isAiConnectionStatus(result)) throw new Error("test_ai_connection returned an invalid response");
+      return result;
+    },
     generateAiDraft(request) {
       return invoke("generate_ai_draft", { request });
     },
   };
+}
+
+function isAiConnectionStatus(value: unknown): value is AiConnectionStatus {
+  return typeof value === "object" && value !== null && (value as Record<string, unknown>).connected === true;
 }
 
 function isPromptListItem(value: unknown): value is PromptListItem {

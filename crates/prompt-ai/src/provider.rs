@@ -68,6 +68,32 @@ impl OpenAiCompatibleProvider {
             body: body.to_owned(),
         })
     }
+
+    pub fn test_connection(&self, credential: SecretString) -> Result<(), ProviderError> {
+        let response = self
+            .client
+            .get(format!("{}/v1/models", self.endpoint))
+            .bearer_auth(credential.expose_secret())
+            .send()
+            .map_err(|error| {
+                if error.is_timeout() {
+                    ProviderError::Timeout
+                } else {
+                    ProviderError::RequestFailed
+                }
+            })?;
+        Self::ensure_success(response.status().as_u16())
+    }
+
+    fn ensure_success(status: u16) -> Result<(), ProviderError> {
+        if status == 429 {
+            Err(ProviderError::RateLimited)
+        } else if (400..600).contains(&status) {
+            Err(ProviderError::RequestFailed)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl AiProvider for OpenAiCompatibleProvider {
@@ -89,12 +115,7 @@ impl AiProvider for OpenAiCompatibleProvider {
             }))
             .send()
             .map_err(|error| if error.is_timeout() { ProviderError::Timeout } else { ProviderError::RequestFailed })?;
-        if response.status().as_u16() == 429 {
-            return Err(ProviderError::RateLimited);
-        }
-        if response.status().is_client_error() || response.status().is_server_error() {
-            return Err(ProviderError::RequestFailed);
-        }
+        Self::ensure_success(response.status().as_u16())?;
         response
             .json::<Value>()
             .map_err(|_| ProviderError::InvalidResponse)
@@ -185,6 +206,15 @@ mod tests {
         assert!(matches!(
             OpenAiCompatibleProvider::new("http://insecure.example", Duration::from_secs(1)),
             Err(ProviderError::InvalidConfiguration)
+        ));
+        assert!(OpenAiCompatibleProvider::ensure_success(200).is_ok());
+        assert!(matches!(
+            OpenAiCompatibleProvider::ensure_success(429),
+            Err(ProviderError::RateLimited)
+        ));
+        assert!(matches!(
+            OpenAiCompatibleProvider::ensure_success(401),
+            Err(ProviderError::RequestFailed)
         ));
     }
 }

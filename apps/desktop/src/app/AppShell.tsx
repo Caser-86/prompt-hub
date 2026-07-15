@@ -155,6 +155,7 @@ export function AppShell() {
               rebuildSearchIndex={desktopCommands.rebuildSearchIndex}
               getMcpSetup={desktopCommands.getMcpSetup}
               generateAiDraft={desktopCommands.generateAiDraft}
+              testAiConnection={desktopCommands.testAiConnection}
               previewRestore={desktopCommands.previewBackupRestore}
               pruneLocalBackups={desktopCommands.pruneLocalBackups}
               recentImportJobs={desktopCommands.recentImportJobs}

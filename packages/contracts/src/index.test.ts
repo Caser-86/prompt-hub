@@ -40,6 +40,18 @@ describe("desktop command client", () => {
     expect(calls).toEqual([{ command: "rebuild_search_index", args: undefined }]);
   });
 
+  it("tests an AI connection without invoking draft generation", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      return { connected: true };
+    });
+    const request = { endpoint: "https://api.example.com", providerId: "openai-compatible", model: "gpt-test" };
+
+    await expect(client.testAiConnection(request)).resolves.toEqual({ connected: true });
+    expect(calls).toEqual([{ command: "test_ai_connection", args: { request } }]);
+  });
+
   it("uses the service-only list command for prompt library reads", async () => {
     const calls: string[] = [];
     const client = createDesktopCommandClient(async (command) => {

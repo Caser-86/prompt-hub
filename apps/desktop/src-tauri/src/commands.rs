@@ -57,6 +57,14 @@ pub struct AiGenerationRequestInput {
     pub model: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiConnectionRequestInput {
+    pub endpoint: String,
+    pub provider_id: String,
+    pub model: String,
+}
+
 impl ManualPromptVariable {
     fn into_domain(self) -> Result<PromptVariable, String> {
         PromptVariable::new(
@@ -295,6 +303,20 @@ impl PromptService {
         let prompt = Prompt::new_inbox(content, source, Actor::User, draft.generated_at());
         self.save(&prompt, AuditAction::Created)?;
         Ok(prompt)
+    }
+
+    pub fn test_ai_connection(&self, request: AiConnectionRequestInput) -> Result<(), String> {
+        let provider = OpenAiCompatibleProvider::new(request.endpoint, Duration::from_secs(15))
+            .map_err(|error| error.to_string())?;
+        let credentials = SystemCredentialAdapter::new("Prompt Hub", "default")
+            .map_err(|error| error.to_string())?;
+        let credential = credentials
+            .load(&request.provider_id)
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "AI credential is not configured".to_owned())?;
+        provider
+            .test_connection(credential)
+            .map_err(|error| error.to_string())
     }
 
     pub fn import_file_to_inbox(
@@ -1123,6 +1145,15 @@ pub fn generate_ai_draft(
 }
 
 #[tauri::command]
+pub fn test_ai_connection(
+    service: State<'_, PromptService>,
+    request: AiConnectionRequestInput,
+) -> Result<AiConnectionStatus, String> {
+    service.test_ai_connection(request)?;
+    Ok(AiConnectionStatus { connected: true })
+}
+
+#[tauri::command]
 pub fn import_file_to_inbox(
     service: State<'_, PromptService>,
     path: String,
@@ -1281,6 +1312,12 @@ pub struct DiagnosticsStatus {
 #[serde(rename_all = "camelCase")]
 pub struct AiCredentialStatus {
     configured: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiConnectionStatus {
+    connected: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
