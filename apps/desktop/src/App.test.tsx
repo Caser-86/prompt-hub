@@ -8,6 +8,9 @@ const desktopMock = vi.hoisted(() => ({
   restorePromptVersion: vi.fn(),
   recordPromptCompatibility: vi.fn(),
   recordPromptValidation: vi.fn(),
+  archivePrompt: vi.fn(),
+  softDeletePrompt: vi.fn(),
+  recoverPrompt: vi.fn(),
 }));
 vi.mock("./services/desktop", () => ({
   desktopCommands: desktopMock,
@@ -71,5 +74,6 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: "打开提示词：代码审查" }));
     expect(screen.getByRole("form", { name: "提示词元数据" })).toBeVisible();
     expect(await screen.findByRole("heading", { name: "版本历史" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "软删除提示词" })).toBeVisible();
   });
 });

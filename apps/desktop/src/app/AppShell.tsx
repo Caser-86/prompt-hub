@@ -6,6 +6,7 @@ import { PromptEditor } from "../features/editor/PromptEditor";
 import { PromptMetadataEditor } from "../features/editor/PromptMetadataEditor";
 import { PromptHistory } from "../features/history/PromptHistory";
 import { PromptLibrary } from "../features/library/PromptLibrary";
+import { PromptLifecycleActions } from "../features/library/PromptLifecycleActions";
 import { desktopCommands } from "../services/desktop";
 import { navigationItems, type AppRoute } from "./navigation";
 import type { PromptHistoryItem, PromptListItem } from "@prompt-hub/contracts";
@@ -95,6 +96,12 @@ export function AppShell() {
                   promptId={selectedPrompt.id}
                   saveCompatibility={desktopCommands.recordPromptCompatibility}
                   saveValidation={desktopCommands.recordPromptValidation}
+                />
+                <PromptLifecycleActions
+                  archive={() => desktopCommands.archivePrompt(selectedPrompt.id)}
+                  initialStatus={selectedPrompt.status}
+                  recover={() => desktopCommands.recoverPrompt(selectedPrompt.id)}
+                  softDelete={() => desktopCommands.softDeletePrompt(selectedPrompt.id)}
                 />
                 {history ? (
                   <PromptHistory

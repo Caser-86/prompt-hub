@@ -74,6 +74,9 @@ export type DesktopCommandClient = {
   listPrompts: () => Promise<PromptListItem[]>;
   promptHistory: (id: string) => Promise<PromptHistoryItem[]>;
   restorePromptVersion: (id: string, versionNumber: number) => Promise<unknown>;
+  archivePrompt: (id: string) => Promise<unknown>;
+  softDeletePrompt: (id: string) => Promise<unknown>;
+  recoverPrompt: (id: string) => Promise<unknown>;
   searchPrompts: (text: string, limit?: number, offset?: number) => Promise<PromptSearchPage>;
   recordPromptCompatibility: (id: string, metadata: PromptCompatibilityDraft) => Promise<unknown>;
   recordPromptValidation: (id: string, metadata: PromptValidationDraft) => Promise<unknown>;
@@ -105,6 +108,15 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
     },
     restorePromptVersion(id, versionNumber) {
       return invoke("restore_prompt_version", { id, versionNumber });
+    },
+    archivePrompt(id) {
+      return invoke("archive_prompt", { id });
+    },
+    softDeletePrompt(id) {
+      return invoke("soft_delete_prompt", { id });
+    },
+    recoverPrompt(id) {
+      return invoke("recover_prompt", { id });
     },
     async searchPrompts(text, limit = 20, offset = 0) {
       const result = await invoke("search_prompts", { text, limit, offset });

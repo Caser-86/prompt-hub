@@ -128,4 +128,22 @@ describe("desktop command client", () => {
       { command: "restore_prompt_version", args: { id: "prompt-1", versionNumber: 1 } },
     ]);
   });
+
+  it("uses service commands for archive, soft delete, and recovery", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      return { id: "prompt-1" };
+    });
+
+    await client.archivePrompt("prompt-1");
+    await client.softDeletePrompt("prompt-1");
+    await client.recoverPrompt("prompt-1");
+
+    expect(calls).toEqual([
+      { command: "archive_prompt", args: { id: "prompt-1" } },
+      { command: "soft_delete_prompt", args: { id: "prompt-1" } },
+      { command: "recover_prompt", args: { id: "prompt-1" } },
+    ]);
+  });
 });
