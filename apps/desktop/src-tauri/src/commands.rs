@@ -137,6 +137,13 @@ impl BackupService {
             preview_restore(&path, &self.database_path).map_err(|error| error.to_string())?,
         ))
     }
+
+    fn create_pre_restore_backup(&self) -> Result<BackupInfo, String> {
+        BackupInfo::from_store(
+            create_backup(&self.database_path, BackupDestination::PreRestore)
+                .map_err(|error| error.to_string())?,
+        )
+    }
 }
 
 impl PromptService {
@@ -207,6 +214,14 @@ impl PromptService {
             .lock()
             .map_err(|_| "prompt repository is unavailable".to_owned())?
             .set_favorite(id, favorite, marked_at)
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn restore_from_backup(&self, path: PathBuf) -> Result<(), String> {
+        self.repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?
+            .restore_from_backup(&path)
             .map_err(|error| error.to_string())
     }
 
@@ -634,6 +649,19 @@ pub fn preview_backup_restore(
     path: String,
 ) -> Result<BackupRestorePreview, String> {
     service.preview_restore(PathBuf::from(path))
+}
+
+#[tauri::command]
+pub fn restore_backup(
+    prompts: State<'_, PromptService>,
+    backups: State<'_, BackupService>,
+    path: String,
+) -> Result<BackupInfo, String> {
+    preview_restore(&PathBuf::from(&path), &backups.database_path)
+        .map_err(|error| error.to_string())?;
+    let safety_backup = backups.create_pre_restore_backup()?;
+    prompts.restore_from_backup(PathBuf::from(path))?;
+    Ok(safety_backup)
 }
 
 #[cfg(test)]

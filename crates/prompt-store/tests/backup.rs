@@ -83,3 +83,25 @@ fn corrupt_backup_is_rejected_before_a_restore_can_start() {
     assert!(restore_backup(&corrupt, &target).is_err());
     assert!(!target.exists());
 }
+
+#[test]
+fn restores_an_open_repository_from_a_verified_backup() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("library.db");
+    database_with_marker(&path, "original");
+    let backup = create_backup(&path, BackupDestination::Manual).unwrap();
+    let database = prompt_store::Database::open(&path).unwrap();
+    let mut repository = database.into_repository();
+    let raw = Connection::open(&path).unwrap();
+    raw.execute("UPDATE marker SET value = 'changed'", [])
+        .unwrap();
+    drop(raw);
+
+    repository.restore_from_backup(backup.path()).unwrap();
+    drop(repository);
+    let restored = Connection::open(&path).unwrap();
+    let value: String = restored
+        .query_row("SELECT value FROM marker", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(value, "original");
+}

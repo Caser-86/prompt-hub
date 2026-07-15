@@ -140,6 +140,7 @@ export function AppShell() {
               createBackup={desktopCommands.createManualBackup}
               getApplicationStatus={desktopCommands.getApplicationStatus}
               previewRestore={desktopCommands.previewBackupRestore}
+              restoreBackup={desktopCommands.restoreBackup}
             />
           ) : (
             <section aria-label={`${navigationItems.find((item) => item.id === activeRoute)?.label}内容`} className="empty-state">

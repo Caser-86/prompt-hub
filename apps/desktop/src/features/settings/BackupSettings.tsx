@@ -6,14 +6,17 @@ export type RestorePreviewInfo = { targetExists: boolean; backupSchemaVersion: n
 export function BackupSettings({
   createBackup,
   previewRestore,
+  restoreBackup,
 }: {
   createBackup: () => Promise<BackupInfo>;
   previewRestore: (path: string) => Promise<RestorePreviewInfo>;
+  restoreBackup: (path: string) => Promise<BackupInfo>;
 }) {
   const [backup, setBackup] = useState<BackupInfo | null>(null);
   const [path, setPath] = useState("");
   const [preview, setPreview] = useState<RestorePreviewInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [restored, setRestored] = useState<BackupInfo | null>(null);
 
   const makeBackup = async () => {
     setError(null);
@@ -24,6 +27,10 @@ export function BackupSettings({
     setPreview(null);
     try { setPreview(await previewRestore(path)); } catch { setError("备份无法通过完整性校验，未执行恢复。"); }
   };
+  const restore = async () => {
+    setError(null);
+    try { setRestored(await restoreBackup(path)); } catch { setError("恢复失败；当前数据库保持不变，检查恢复前安全备份后再试。"); }
+  };
 
   return <section aria-labelledby="backup-settings-title">
     <h2 id="backup-settings-title">备份与恢复</h2>
@@ -32,7 +39,8 @@ export function BackupSettings({
     {backup ? <p role="status">备份已完成并通过完整性校验：{backup.path}（架构版本 {backup.schemaVersion}）</p> : null}
     <label>备份文件路径<input onChange={(event) => setPath(event.target.value)} value={path} /></label>
     <button disabled={!path} onClick={() => void inspectBackup()} type="button">检查恢复内容</button>
-    {preview ? <p role="status">恢复会替换现有数据库；备份架构版本 {preview.backupSchemaVersion}，大小 {preview.backupByteLen} 字节。</p> : null}
+    {preview ? <><p role="status">恢复会替换现有数据库；备份架构版本 {preview.backupSchemaVersion}，大小 {preview.backupByteLen} 字节。</p><button onClick={() => void restore()} type="button">确认恢复备份</button></> : null}
+    {restored ? <p role="status">恢复完成。恢复前安全备份：{restored.path}</p> : null}
     {error ? <p role="alert">{error}</p> : null}
   </section>;
 }

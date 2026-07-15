@@ -17,6 +17,7 @@ pub fn run() {
             commands::get_application_status,
             commands::create_manual_backup,
             commands::preview_backup_restore,
+            commands::restore_backup,
             commands::list_prompts,
             commands::prompt_history,
             commands::restore_prompt_version,

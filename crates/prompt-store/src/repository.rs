@@ -1,6 +1,7 @@
 use prompt_domain::{
     Actor, AuditAction, Prompt, PromptContent, PromptId, PromptVersion, PromptVersionId,
 };
+use rusqlite::backup::Backup;
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::Serialize;
 use thiserror::Error;
@@ -176,6 +177,13 @@ impl PromptRepository {
             )
             .optional()?;
         Ok(found.is_some())
+    }
+
+    pub fn restore_from_backup(&mut self, backup_path: &std::path::Path) -> Result<(), StoreError> {
+        let source = Connection::open(backup_path)?;
+        let backup = Backup::new(&source, &mut self.connection)?;
+        backup.run_to_completion(64, std::time::Duration::from_millis(5), None)?;
+        Ok(())
     }
 }
 
