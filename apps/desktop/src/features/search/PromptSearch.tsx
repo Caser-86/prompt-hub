@@ -3,7 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import type { PromptSearchFilters, PromptSearchPage } from "@prompt-hub/contracts";
 
 type PromptSearchProps = {
-  searchPrompts: (text: string, limit?: number, offset?: number) => Promise<PromptSearchPage>;
+  searchPrompts: (
+    text: string,
+    limit?: number,
+    offset?: number,
+    filters?: PromptSearchFilters,
+  ) => Promise<PromptSearchPage>;
 };
 
 export function PromptSearch({ searchPrompts }: PromptSearchProps) {
