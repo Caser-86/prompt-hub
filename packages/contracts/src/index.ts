@@ -113,6 +113,7 @@ export type DesktopCommandClient = {
   createManualPromptDraft: (draft: ManualPromptDraft) => Promise<unknown>;
   publishPrompt: (id: string) => Promise<unknown>;
   importFileToInbox: (path: string) => Promise<ImportResult>;
+  importFolderToInbox: (path: string) => Promise<ImportResult>;
   getAiCredentialStatus: (providerId: string) => Promise<AiCredentialStatus>;
   saveAiCredential: (providerId: string, secret: string) => Promise<AiCredentialStatus>;
 };
@@ -198,8 +199,15 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
     },
     async importFileToInbox(path) {
       const result = await invoke("import_file_to_inbox", { path });
-      if (typeof result !== "object" || result === null || typeof (result as Record<string, unknown>).imported !== "number" || typeof (result as Record<string, unknown>).skippedDuplicates !== "number") {
+      if (!isImportResult(result)) {
         throw new Error("import_file_to_inbox returned an invalid response");
+      }
+      return result as ImportResult;
+    },
+    async importFolderToInbox(path) {
+      const result = await invoke("import_folder_to_inbox", { path });
+      if (!isImportResult(result)) {
+        throw new Error("import_folder_to_inbox returned an invalid response");
       }
       return result as ImportResult;
     },
@@ -301,4 +309,10 @@ function isBackupRestorePreview(value: unknown): value is BackupRestorePreview {
 
 function isAiCredentialStatus(value: unknown): value is AiCredentialStatus {
   return typeof value === "object" && value !== null && typeof (value as Record<string, unknown>).configured === "boolean";
+}
+
+function isImportResult(value: unknown): value is ImportResult {
+  return typeof value === "object" && value !== null
+    && typeof (value as Record<string, unknown>).imported === "number"
+    && typeof (value as Record<string, unknown>).skippedDuplicates === "number";
 }

@@ -13,8 +13,7 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 use prompt_ai::{CredentialStore, SystemCredentialAdapter};
-use prompt_import::normalized_body_fingerprint;
-use prompt_import::parse_file;
+use prompt_import::{ImportCandidate, normalized_body_fingerprint, parse_file, scan_folder};
 use prompt_store::{
     BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage,
     SearchQuery, create_backup, preview_restore,
@@ -222,15 +221,35 @@ impl PromptService {
         created_at: OffsetDateTime,
     ) -> Result<FileImportOutcome, String> {
         let candidates = parse_file(&path).map_err(|error| error.to_string())?;
+        self.import_candidates_to_inbox(candidates, "文件导入", created_at)
+    }
+
+    pub fn import_folder_to_inbox(
+        &self,
+        path: PathBuf,
+        created_at: OffsetDateTime,
+    ) -> Result<FileImportOutcome, String> {
+        let candidates = scan_folder(&path).map_err(|error| error.to_string())?;
+        self.import_candidates_to_inbox(candidates, "文件夹导入", created_at)
+    }
+
+    fn import_candidates_to_inbox(
+        &self,
+        candidates: Vec<ImportCandidate>,
+        source_name: &str,
+        created_at: OffsetDateTime,
+    ) -> Result<FileImportOutcome, String> {
         let existing = self
             .list()?
             .into_iter()
             .map(|prompt| normalized_body_fingerprint(prompt.current_version().content().body()))
             .collect::<std::collections::HashSet<_>>();
+        let mut fingerprints = existing;
         let mut drafts = Vec::with_capacity(candidates.len());
         let mut skipped_duplicates = 0;
         for candidate in candidates {
-            if existing.contains(&normalized_body_fingerprint(&candidate.body)) {
+            let fingerprint = normalized_body_fingerprint(&candidate.body);
+            if !fingerprints.insert(fingerprint) {
                 skipped_duplicates += 1;
                 continue;
             }
@@ -239,7 +258,7 @@ impl PromptService {
                     .map_err(|error| error.to_string())?;
             let source = PromptSource::new(
                 SourceKind::FileImport,
-                "文件导入",
+                source_name,
                 Some(candidate.source_path),
                 created_at,
             )
@@ -605,6 +624,18 @@ pub fn import_file_to_inbox(
     path: String,
 ) -> Result<ImportResult, String> {
     let outcome = service.import_file_to_inbox(PathBuf::from(path), OffsetDateTime::now_utc())?;
+    Ok(ImportResult {
+        imported: outcome.drafts.len(),
+        skipped_duplicates: outcome.skipped_duplicates,
+    })
+}
+
+#[tauri::command]
+pub fn import_folder_to_inbox(
+    service: State<'_, PromptService>,
+    path: String,
+) -> Result<ImportResult, String> {
+    let outcome = service.import_folder_to_inbox(PathBuf::from(path), OffsetDateTime::now_utc())?;
     Ok(ImportResult {
         imported: outcome.drafts.len(),
         skipped_duplicates: outcome.skipped_duplicates,

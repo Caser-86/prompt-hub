@@ -32,6 +32,29 @@ fn file_import_creates_reviewable_inbox_drafts_without_publishing() {
 }
 
 #[test]
+fn folder_import_creates_reviewable_inbox_drafts_from_supported_files() {
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(directory.path().join("alpha.md"), "# Alpha\n第一条正文").unwrap();
+    std::fs::create_dir(directory.path().join("nested")).unwrap();
+    std::fs::write(
+        directory.path().join("nested").join("beta.txt"),
+        "第二条正文",
+    )
+    .unwrap();
+    let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
+
+    let outcome = service
+        .import_folder_to_inbox(
+            directory.path().to_path_buf(),
+            datetime!(2026-07-15 00:00 UTC),
+        )
+        .unwrap();
+
+    assert_eq!(outcome.drafts.len(), 2);
+    assert!(outcome.drafts.iter().all(prompt_domain::Prompt::is_inbox));
+}
+
+#[test]
 fn user_can_create_publish_edit_and_restore_a_prompt_through_the_service_boundary() {
     let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
     let created = service

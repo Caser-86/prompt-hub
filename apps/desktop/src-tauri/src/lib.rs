@@ -28,6 +28,7 @@ pub fn run() {
             commands::search_prompts,
             commands::create_manual_prompt_draft,
             commands::import_file_to_inbox,
+            commands::import_folder_to_inbox,
             commands::publish_prompt,
             commands::revise_prompt,
             commands::archive_prompt,
