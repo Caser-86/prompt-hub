@@ -13,22 +13,23 @@ type PromptSearchProps = {
 };
 
 export function PromptSearch({ searchPrompts }: PromptSearchProps) {
-  const [query, setQuery] = useState("");
+  const savedView = readSavedView();
+  const [query, setQuery] = useState(savedView.query);
   const [page, setPage] = useState<PromptSearchPage | null>(null);
   const [isLoading, setLoading] = useState(false);
   const [hasError, setError] = useState(false);
-  const [effectiveness, setEffectiveness] = useState("");
-  const [minimumRating, setMinimumRating] = useState("");
-  const [status, setStatus] = useState("");
-  const [sourceKind, setSourceKind] = useState("");
-  const [category, setCategory] = useState("");
-  const [tagText, setTagText] = useState("");
-  const [tool, setTool] = useState("");
-  const [model, setModel] = useState("");
-  const [updatedAfter, setUpdatedAfter] = useState("");
-  const [updatedBefore, setUpdatedBefore] = useState("");
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [sort, setSort] = useState<PromptSearchSort>("relevance");
+  const [effectiveness, setEffectiveness] = useState(savedView.effectiveness);
+  const [minimumRating, setMinimumRating] = useState(savedView.minimumRating);
+  const [status, setStatus] = useState(savedView.status);
+  const [sourceKind, setSourceKind] = useState(savedView.sourceKind);
+  const [category, setCategory] = useState(savedView.category);
+  const [tagText, setTagText] = useState(savedView.tagText);
+  const [tool, setTool] = useState(savedView.tool);
+  const [model, setModel] = useState(savedView.model);
+  const [updatedAfter, setUpdatedAfter] = useState(savedView.updatedAfter);
+  const [updatedBefore, setUpdatedBefore] = useState(savedView.updatedBefore);
+  const [favoritesOnly, setFavoritesOnly] = useState(savedView.favoritesOnly);
+  const [sort, setSort] = useState<PromptSearchSort>(savedView.sort);
   const [offset, setOffset] = useState(0);
   const generation = useRef(0);
 
@@ -81,7 +82,7 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
   }, [category, effectiveness, favoritesOnly, minimumRating, model, offset, query, searchPrompts, sort, sourceKind, status, tagText, tool, updatedAfter, updatedBefore]);
 
   const resetPage = () => setOffset(0);
-  const saveView = () => window.localStorage.setItem("prompt-hub.search-view", JSON.stringify({ query, effectiveness, minimumRating, status, sourceKind, category, tagText, tool, model, updatedAfter, updatedBefore, sort }));
+  const saveView = () => window.localStorage.setItem("prompt-hub.search-view", JSON.stringify({ query, effectiveness, minimumRating, status, sourceKind, category, tagText, tool, model, updatedAfter, updatedBefore, favoritesOnly, sort }));
 
   return (
     <section aria-labelledby="search-title">
@@ -158,4 +159,24 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
       </nav> : null}
     </section>
   );
+}
+
+type SavedSearchView = {
+  query: string; effectiveness: string; minimumRating: string; status: string; sourceKind: string;
+  category: string; tagText: string; tool: string; model: string; updatedAfter: string;
+  updatedBefore: string; favoritesOnly: boolean; sort: PromptSearchSort;
+};
+
+function readSavedView(): SavedSearchView {
+  const defaults: SavedSearchView = { query: "", effectiveness: "", minimumRating: "", status: "", sourceKind: "", category: "", tagText: "", tool: "", model: "", updatedAfter: "", updatedBefore: "", favoritesOnly: false, sort: "relevance" };
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem("prompt-hub.search-view") ?? "{}");
+    if (typeof value !== "object" || value === null) return defaults;
+    const view = value as Record<string, unknown>;
+    const text = (key: keyof SavedSearchView) => typeof view[key] === "string" ? view[key] : defaults[key] as string;
+    const sort = view.sort === "updated_at" || view.sort === "rating" || view.sort === "relevance" ? view.sort : defaults.sort;
+    return { query: text("query"), effectiveness: text("effectiveness"), minimumRating: text("minimumRating"), status: text("status"), sourceKind: text("sourceKind"), category: text("category"), tagText: text("tagText"), tool: text("tool"), model: text("model"), updatedAfter: text("updatedAfter"), updatedBefore: text("updatedBefore"), favoritesOnly: view.favoritesOnly === true, sort };
+  } catch {
+    return defaults;
+  }
 }

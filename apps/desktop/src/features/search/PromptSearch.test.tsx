@@ -1,11 +1,24 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PromptSearchPage } from "@prompt-hub/contracts";
 
 import { PromptSearch } from "./PromptSearch";
 
 describe("PromptSearch", () => {
+  beforeEach(() => window.localStorage.clear());
+
+  it("restores a saved local search view", () => {
+    window.localStorage.setItem("prompt-hub.search-view", JSON.stringify({ query: "代码审查", category: "开发", sort: "rating", favoritesOnly: true }));
+
+    render(<PromptSearch searchPrompts={vi.fn()} />);
+
+    expect(screen.getByRole("searchbox", { name: "搜索提示词" })).toHaveValue("代码审查");
+    expect(screen.getByLabelText("分类")).toHaveValue("开发");
+    expect(screen.getByLabelText("排序方式")).toHaveValue("rating");
+    expect(screen.getByLabelText("仅看收藏")).toBeChecked();
+  });
+
   it("debounces input and never displays a stale response", async () => {
     vi.useFakeTimers();
     const pending = new Map<string, (page: PromptSearchPage) => void>();
