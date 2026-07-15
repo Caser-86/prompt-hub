@@ -123,6 +123,7 @@ export type DesktopCommandClient = {
   archivePrompt: (id: string) => Promise<unknown>;
   batchArchivePrompts: (ids: string[]) => Promise<unknown>;
   softDeletePrompt: (id: string) => Promise<unknown>;
+  permanentlyDeletePrompt: (id: string) => Promise<BackupInfo>;
   recoverPrompt: (id: string) => Promise<unknown>;
   setPromptFavorite: (id: string, favorite: boolean) => Promise<unknown>;
   searchPrompts: (
@@ -201,6 +202,11 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
     },
     softDeletePrompt(id) {
       return invoke("soft_delete_prompt", { id });
+    },
+    async permanentlyDeletePrompt(id) {
+      const result = await invoke("permanently_delete_prompt", { id });
+      if (!isBackupInfo(result)) throw new Error("permanently_delete_prompt returned an invalid response");
+      return result;
     },
     recoverPrompt(id) {
       return invoke("recover_prompt", { id });

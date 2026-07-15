@@ -37,4 +37,17 @@ describe("PromptLifecycleActions", () => {
     await waitFor(() => expect(publish).toHaveBeenCalledOnce());
     expect(screen.getByText("当前状态：published")).toBeVisible();
   });
+
+  it("requires the full title before permanently clearing a deleted prompt", async () => {
+    const permanentlyDelete = vi.fn().mockResolvedValue({ path: "C:/backups/permanent-delete.db" });
+    render(<PromptLifecycleActions archive={vi.fn()} initialStatus="deleted" permanentlyDelete={permanentlyDelete} promptTitle="代码审查" publish={vi.fn()} recover={vi.fn()} softDelete={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "永久清除提示词" }));
+    expect(screen.getByRole("button", { name: "确认永久清除" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("输入提示词标题以确认"), { target: { value: "代码审查" } });
+    fireEvent.click(screen.getByRole("button", { name: "确认永久清除" }));
+
+    await waitFor(() => expect(permanentlyDelete).toHaveBeenCalledOnce());
+    expect(screen.getByRole("status")).toHaveTextContent("C:/backups/permanent-delete.db");
+  });
 });

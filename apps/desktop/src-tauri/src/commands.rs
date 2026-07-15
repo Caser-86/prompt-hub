@@ -733,6 +733,23 @@ impl PromptService {
             .map_err(|error| error.to_string())
     }
 
+    pub fn permanently_delete(
+        &self,
+        id: PromptId,
+        backups: &BackupService,
+    ) -> Result<BackupInfo, String> {
+        let backup = BackupInfo::from_store(
+            create_backup(&backups.database_path, BackupDestination::PermanentDelete)
+                .map_err(|error| error.to_string())?,
+        )?;
+        self.repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?
+            .permanently_delete(id)
+            .map_err(|error| error.to_string())?;
+        Ok(backup)
+    }
+
     pub fn publish(&self, id: PromptId, published_at: OffsetDateTime) -> Result<Prompt, String> {
         self.modify(id, |prompt| {
             prompt
@@ -1204,6 +1221,15 @@ pub fn soft_delete_prompt(
 }
 
 #[tauri::command]
+pub fn permanently_delete_prompt(
+    prompts: State<'_, PromptService>,
+    backups: State<'_, BackupService>,
+    id: PromptId,
+) -> Result<BackupInfo, String> {
+    prompts.permanently_delete(id, &backups)
+}
+
+#[tauri::command]
 pub fn recover_prompt(service: State<'_, PromptService>, id: PromptId) -> Result<Prompt, String> {
     service.recover(id, OffsetDateTime::now_utc())
 }
@@ -1376,5 +1402,43 @@ mod backup_service_tests {
         assert_eq!(jobs[0].source_kind(), "web_url");
         assert_eq!(jobs[0].status(), "failed");
         assert_eq!(jobs[0].source_path(), Some("file:///not-a-web-page"));
+    }
+
+    #[test]
+    fn permanent_deletion_creates_a_verified_safety_backup_before_removing_the_prompt() {
+        let directory = tempfile::tempdir().unwrap();
+        let database_path = directory.path().join("prompt-hub.db");
+        let database = prompt_store::Database::open(&database_path).unwrap();
+        let mut repository = database.into_repository();
+        let created_at = OffsetDateTime::now_utc();
+        let content = PromptContent::new(
+            "待永久清除",
+            "正文",
+            None,
+            Some("测试".to_owned()),
+            Vec::new(),
+        )
+        .unwrap();
+        let source = PromptSource::new(SourceKind::Manual, "测试", None, created_at).unwrap();
+        let mut prompt = Prompt::new_inbox(content, source, Actor::User, created_at);
+        repository.save(&prompt, AuditAction::Created).unwrap();
+        prompt.soft_delete(Actor::User, created_at).unwrap();
+        repository.save(&prompt, AuditAction::Deleted).unwrap();
+        let id = prompt.id();
+        let service = PromptService::new(repository);
+        let backups = BackupService::new(database_path);
+
+        let backup = service.permanently_delete(id, &backups).unwrap();
+
+        assert!(PathBuf::from(backup.path).exists());
+        assert!(
+            service
+                .repository
+                .lock()
+                .unwrap()
+                .get(id)
+                .unwrap()
+                .is_none()
+        );
     }
 }

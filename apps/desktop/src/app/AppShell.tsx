@@ -107,7 +107,10 @@ export function AppShell() {
                 <PromptLifecycleActions
                   archive={() => desktopCommands.archivePrompt(selectedPrompt.id)}
                   initialStatus={selectedPrompt.status}
+                  permanentlyDelete={() => desktopCommands.permanentlyDeletePrompt(selectedPrompt.id)}
+                  onPermanentlyDeleted={() => { setSelectedPrompt(null); setLibraryKey((key) => key + 1); }}
                   publish={() => desktopCommands.publishPrompt(selectedPrompt.id)}
+                  promptTitle={selectedPrompt.title}
                   recover={() => desktopCommands.recoverPrompt(selectedPrompt.id)}
                   softDelete={() => desktopCommands.softDeletePrompt(selectedPrompt.id)}
                 />

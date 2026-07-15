@@ -167,6 +167,17 @@ describe("desktop command client", () => {
     ]);
   });
 
+  it("uses the permanent deletion command with only the prompt id", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      return { path: "C:/data/backups/permanent-delete.db", byteLen: 512, schemaVersion: 4 };
+    });
+
+    await expect(client.permanentlyDeletePrompt("prompt-1")).resolves.toMatchObject({ schemaVersion: 4 });
+    expect(calls).toEqual([{ command: "permanently_delete_prompt", args: { id: "prompt-1" } }]);
+  });
+
   it("archives selected prompts through a dedicated batch command", async () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const client = createDesktopCommandClient(async (command, args) => { calls.push({ command, args }); return undefined; });
