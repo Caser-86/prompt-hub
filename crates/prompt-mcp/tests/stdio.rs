@@ -80,7 +80,7 @@ fn stdio_server_calls_read_tools_and_creates_only_an_inbox_draft() {
         .spawn()
         .unwrap();
     let request = format!(
-        "{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{{\"name\":\"get_prompt\",\"arguments\":{{\"id\":\"{}\"}}}}}}\n{{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{{\"name\":\"render_prompt\",\"arguments\":{{\"id\":\"{}\",\"variables\":{{\"language\":\"Rust\"}}}}}}}}\n{{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{{\"name\":\"save_prompt_draft\",\"arguments\":{{\"title\":\"MCP 草稿\",\"body\":\"只进入收件箱\",\"source\":{{\"kind\":\"mcp\",\"name\":\"Codex\"}}}}}}}}\n",
+        "{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{{\"name\":\"search_prompts\",\"arguments\":{{\"query\":\"代码\"}}}}}}\n{{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{{\"name\":\"get_prompt\",\"arguments\":{{\"id\":\"{}\"}}}}}}\n{{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{{\"name\":\"render_prompt\",\"arguments\":{{\"id\":\"{}\",\"variables\":{{\"language\":\"Rust\"}}}}}}}}\n{{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{{\"name\":\"save_prompt_draft\",\"arguments\":{{\"title\":\"MCP 草稿\",\"body\":\"只进入收件箱\",\"source\":{{\"kind\":\"mcp\",\"name\":\"Codex\"}}}}}}}}\n",
         prompt.id().value(),
         prompt.id().value(),
     );
@@ -101,16 +101,22 @@ fn stdio_server_calls_read_tools_and_creates_only_an_inbox_draft() {
         responses[0]["result"]["content"][0]["text"]
             .as_str()
             .unwrap()
-            .contains("代码审查"),
+            .contains("代码审查")
     );
     assert!(
         responses[1]["result"]["content"][0]["text"]
             .as_str()
             .unwrap()
-            .contains("Rust"),
+            .contains("代码审查"),
     );
     assert!(
         responses[2]["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Rust"),
+    );
+    assert!(
+        responses[3]["result"]["content"][0]["text"]
             .as_str()
             .unwrap()
             .contains("\"status\":\"inbox\""),
