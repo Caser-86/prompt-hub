@@ -5,8 +5,8 @@ use prompt_domain::{
     SourceKind,
 };
 use serde::Serialize;
-use time::OffsetDateTime;
 use tauri::State;
+use time::OffsetDateTime;
 
 use prompt_store::{LATEST_SCHEMA_VERSION, PromptRepository};
 
@@ -66,6 +66,33 @@ impl PromptService {
                 .publish(EffectivenessStatus::Unverified, published_at)
                 .map_err(|error| error.to_string())?;
             Ok(AuditAction::Published)
+        })
+    }
+
+    pub fn archive(&self, id: PromptId, archived_at: OffsetDateTime) -> Result<Prompt, String> {
+        self.modify(id, |prompt| {
+            prompt
+                .archive(Actor::User, archived_at)
+                .map_err(|error| error.to_string())?;
+            Ok(AuditAction::Archived)
+        })
+    }
+
+    pub fn soft_delete(&self, id: PromptId, deleted_at: OffsetDateTime) -> Result<Prompt, String> {
+        self.modify(id, |prompt| {
+            prompt
+                .soft_delete(Actor::User, deleted_at)
+                .map_err(|error| error.to_string())?;
+            Ok(AuditAction::Deleted)
+        })
+    }
+
+    pub fn recover(&self, id: PromptId, recovered_at: OffsetDateTime) -> Result<Prompt, String> {
+        self.modify(id, |prompt| {
+            prompt
+                .recover(Actor::User, recovered_at)
+                .map_err(|error| error.to_string())?;
+            Ok(AuditAction::Restored)
         })
     }
 

@@ -21,4 +21,15 @@ describe("desktop command client", () => {
     });
     expect(calls).toEqual(["get_application_status"]);
   });
+
+  it("uses the service-only list command for prompt library reads", async () => {
+    const calls: string[] = [];
+    const client = createDesktopCommandClient(async (command) => {
+      calls.push(command);
+      return [];
+    });
+
+    await expect(client.listPrompts()).resolves.toEqual([]);
+    expect(calls).toEqual(["list_prompts"]);
+  });
 });

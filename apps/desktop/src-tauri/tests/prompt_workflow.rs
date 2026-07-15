@@ -65,3 +65,42 @@ fn service_lists_prompts_for_the_library() {
 
     assert_eq!(service.list().unwrap(), vec![created]);
 }
+
+#[test]
+fn user_can_archive_soft_delete_and_recover_through_the_service_boundary() {
+    let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
+    let created = service
+        .create_manual_draft(
+            ManualPromptDraft {
+                title: "可恢复资产".to_owned(),
+                body: "保留正文".to_owned(),
+                description: None,
+                category: Some("开发".to_owned()),
+                tags: vec!["恢复".to_owned()],
+            },
+            datetime!(2026-07-15 00:00 UTC),
+        )
+        .unwrap();
+
+    assert_eq!(
+        service
+            .archive(created.id(), datetime!(2026-07-15 00:01 UTC))
+            .unwrap()
+            .status(),
+        prompt_domain::PromptStatus::Archived
+    );
+    assert_eq!(
+        service
+            .soft_delete(created.id(), datetime!(2026-07-15 00:02 UTC))
+            .unwrap()
+            .status(),
+        prompt_domain::PromptStatus::Deleted
+    );
+    assert_eq!(
+        service
+            .recover(created.id(), datetime!(2026-07-15 00:03 UTC))
+            .unwrap()
+            .status(),
+        prompt_domain::PromptStatus::Inbox
+    );
+}
