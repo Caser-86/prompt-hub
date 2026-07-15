@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const desktopMock = vi.hoisted(() => ({
   createManualPromptDraft: vi.fn(),
+  publishPrompt: vi.fn(),
   importFileToInbox: vi.fn(),
   listPrompts: vi.fn(),
   promptHistory: vi.fn(),

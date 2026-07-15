@@ -2,6 +2,7 @@ import { useState } from "react";
 
 type PromptLifecycleActionsProps = {
   initialStatus: string;
+  publish: () => Promise<unknown>;
   archive: () => Promise<unknown>;
   softDelete: () => Promise<unknown>;
   recover: () => Promise<unknown>;
@@ -9,6 +10,7 @@ type PromptLifecycleActionsProps = {
 
 export function PromptLifecycleActions({
   initialStatus,
+  publish,
   archive,
   softDelete,
   recover,
@@ -35,6 +37,7 @@ export function PromptLifecycleActions({
         <button onClick={() => void run(recover, "inbox")} type="button">恢复提示词</button>
       ) : (
         <>
+          {status === "inbox" ? <button onClick={() => void run(publish, "published")} type="button">发布提示词</button> : null}
           <button onClick={() => void run(archive, "archived")} type="button">归档提示词</button>
           <button onClick={() => setDeleteConfirmationOpen(true)} type="button">软删除提示词</button>
         </>

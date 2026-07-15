@@ -103,6 +103,7 @@ export function AppShell() {
                 <PromptLifecycleActions
                   archive={() => desktopCommands.archivePrompt(selectedPrompt.id)}
                   initialStatus={selectedPrompt.status}
+                  publish={() => desktopCommands.publishPrompt(selectedPrompt.id)}
                   recover={() => desktopCommands.recoverPrompt(selectedPrompt.id)}
                   softDelete={() => desktopCommands.softDeletePrompt(selectedPrompt.id)}
                 />

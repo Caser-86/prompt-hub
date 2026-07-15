@@ -111,6 +111,7 @@ export type DesktopCommandClient = {
   recordPromptCompatibility: (id: string, metadata: PromptCompatibilityDraft) => Promise<unknown>;
   recordPromptValidation: (id: string, metadata: PromptValidationDraft) => Promise<unknown>;
   createManualPromptDraft: (draft: ManualPromptDraft) => Promise<unknown>;
+  publishPrompt: (id: string) => Promise<unknown>;
   importFileToInbox: (path: string) => Promise<ImportResult>;
   getAiCredentialStatus: (providerId: string) => Promise<AiCredentialStatus>;
   saveAiCredential: (providerId: string, secret: string) => Promise<AiCredentialStatus>;
@@ -191,6 +192,9 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
     },
     createManualPromptDraft(draft) {
       return invoke("create_manual_prompt_draft", { draft });
+    },
+    publishPrompt(id) {
+      return invoke("publish_prompt", { id });
     },
     async importFileToInbox(path) {
       const result = await invoke("import_file_to_inbox", { path });
