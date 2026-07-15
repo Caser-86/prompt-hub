@@ -10,4 +10,4 @@ serde.workspace = true
 secrecy.workspace = true
 thiserror.workspace = true
 time.workspace = true
-
+prompt-security = { path = "../prompt-security" }
