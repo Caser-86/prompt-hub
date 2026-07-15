@@ -42,33 +42,44 @@ export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite, bat
 
   return (
     <section aria-labelledby="library-title" className="prompt-library">
-      <div className="feature-heading">
+      <div className="feature-heading library-toolbar">
         <div>
           <p className="eyebrow">LOCAL LIBRARY</p>
           <h1 id="library-title">提示词库</h1>
         </div>
-        <button onClick={onCreate} type="button">创建提示词</button>
+        <button className="button-primary" onClick={onCreate} type="button">创建提示词</button>
       </div>
-      {prompts?.length === 0 ? <p>还没有提示词资产</p> : null}
+      {prompts?.length === 0 ? (
+        <section aria-label="空提示词库" className="empty-library-state surface-card">
+          <span aria-hidden="true" className="empty-library-icon">＋</span>
+          <h2>从第一条提示词开始</h2>
+          <p>记录来源、适用模型和使用效果，让以后每一次搜索都有依据。</p>
+          <button className="button-primary" onClick={onCreate} type="button">创建第一条提示词</button>
+        </section>
+      ) : null}
       {prompts?.length ? (
-        <><ul aria-label="提示词列表">
+        <><ul aria-label="提示词列表" className="prompt-grid">
           {prompts.map((prompt) => (
-            <li key={prompt.id}>
-              <label><input aria-label={`选择提示词：${prompt.title}`} checked={selected.includes(prompt.id)} onChange={() => toggleSelected(prompt.id)} type="checkbox" /></label>
-              <button aria-label={`打开提示词：${prompt.title}`} onClick={() => onSelect?.(prompt)} type="button">
+            <li className="prompt-card surface-card" key={prompt.id}>
+              <div className="prompt-card-actions">
+                <label><input aria-label={`选择提示词：${prompt.title}`} checked={selected.includes(prompt.id)} onChange={() => toggleSelected(prompt.id)} type="checkbox" /></label>
+                <button
+                  aria-label={`${prompt.favorite ? "取消收藏" : "收藏"}提示词：${prompt.title}`}
+                  onClick={() => toggleFavorite(prompt)}
+                  type="button"
+                >{prompt.favorite ? "★" : "☆"}</button>
+              </div>
+              <button aria-label={`打开提示词：${prompt.title}`} className="prompt-card-title" onClick={() => onSelect?.(prompt)} type="button">
                 <strong>{prompt.title}</strong>
               </button>
-              <button
-                aria-label={`${prompt.favorite ? "取消收藏" : "收藏"}提示词：${prompt.title}`}
-                onClick={() => toggleFavorite(prompt)}
-                type="button"
-              >{prompt.favorite ? "已收藏" : "收藏"}</button>
-              <p>来源：{prompt.sourceNames.join("、") || "未记录"}</p>
-              <p>{effectivenessLabel(prompt.effectiveness)}</p>
-              <p>适用工具：{prompt.applicableTools?.join("、") || "未记录"}</p>
-              <p>适用模型：{prompt.applicableModels?.join("、") || "未记录"}</p>
-              <p>评分：{prompt.rating ?? "未评分"}</p>
-              <time dateTime={prompt.updatedAt}>更新于 {prompt.updatedAt}</time>
+              <div className="prompt-card-meta">
+                <p>来源：{prompt.sourceNames.join("、") || "未记录"}</p>
+                <p><span className={`status-pill status-${prompt.effectiveness}`}>{effectivenessLabel(prompt.effectiveness)}</span></p>
+                <p>适用工具：{prompt.applicableTools?.join("、") || "未记录"}</p>
+                <p>适用模型：{prompt.applicableModels?.join("、") || "未记录"}</p>
+                <p>评分：{prompt.rating ?? "未评分"}</p>
+                <time dateTime={prompt.updatedAt}>更新于 {prompt.updatedAt}</time>
+              </div>
             </li>
           ))}
         </ul>

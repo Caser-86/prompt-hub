@@ -103,7 +103,7 @@ export function AppShell() {
         <main className="app-content content-frame" id="main-content">
           {activeRoute === "library" ? (
             selectedPrompt ? (
-              <section aria-labelledby="prompt-details-title">
+              <section aria-labelledby="prompt-details-title" className="prompt-details-layout">
                 <button onClick={() => setSelectedPrompt(null)} type="button">返回提示词库</button>
                 <h2 id="prompt-details-title">{selectedPrompt.title}</h2>
                 <p>来源：{selectedPrompt.sourceNames.join("、") || "未记录"}</p>

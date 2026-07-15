@@ -8,15 +8,15 @@ describe("PromptLibrary", () => {
     render(<PromptLibrary loadPrompts={async () => []} />);
 
     expect(await screen.findByRole("heading", { name: "提示词库" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "创建提示词" })).toBeVisible();
-    expect(screen.getByText("还没有提示词资产")).toBeVisible();
+    expect(screen.getByRole("button", { name: "创建第一条提示词" })).toBeVisible();
+    expect(screen.getByLabelText("空提示词库")).toHaveClass("empty-library-state");
   });
 
   it("opens the editor from the creation entry point", async () => {
     const onCreate = vi.fn();
     render(<PromptLibrary loadPrompts={async () => []} onCreate={onCreate} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "创建提示词" }));
+    fireEvent.click(await screen.findByRole("button", { name: "创建第一条提示词" }));
     expect(onCreate).toHaveBeenCalledOnce();
   });
 
@@ -46,6 +46,8 @@ describe("PromptLibrary", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "打开提示词：代码审查" }));
+    expect(screen.getByRole("list", { name: "提示词列表" })).toHaveClass("prompt-grid");
+    expect(screen.getByRole("listitem")).toHaveClass("prompt-card");
     expect(screen.getByText("来源：手动录入")).toBeVisible();
     expect(screen.getByText("有效")).toBeVisible();
     expect(screen.getByText("适用工具：Codex")).toBeVisible();
