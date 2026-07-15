@@ -24,4 +24,22 @@ describe("PromptHistory", () => {
     await waitFor(() => expect(restoreVersion).toHaveBeenCalledWith(1));
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
+
+  it("shows an escaped line diff against the current version", () => {
+    render(
+      <PromptHistory
+        history={[
+          { number: 1, body: "保留行\n删除行\n<script>unsafe</script>", createdAt: "2026-07-15T00:00:00Z" },
+          { number: 2, body: "保留行\n新增行\n<script>unsafe</script>", createdAt: "2026-07-15T00:01:00Z" },
+        ]}
+        restoreVersion={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    const diff = screen.getByLabelText("版本正文差异");
+    expect(diff).toHaveTextContent("- 删除行");
+    expect(diff).toHaveTextContent("+ 新增行");
+    expect(diff).toHaveTextContent("<script>unsafe</script>");
+    expect(diff.querySelector("script")).toBeNull();
+  });
 });
