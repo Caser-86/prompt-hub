@@ -7,9 +7,12 @@ type PromptLibraryProps = {
 
 export function PromptLibrary({ loadPrompts, onCreate }: PromptLibraryProps) {
   const [prompts, setPrompts] = useState<unknown[] | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    void loadPrompts().then(setPrompts);
+    void loadPrompts()
+      .then(setPrompts)
+      .catch(() => setError(true));
   }, [loadPrompts]);
 
   return (
@@ -22,6 +25,7 @@ export function PromptLibrary({ loadPrompts, onCreate }: PromptLibraryProps) {
         <button onClick={onCreate} type="button">创建提示词</button>
       </div>
       {prompts?.length === 0 ? <p>还没有提示词资产</p> : null}
+      {error ? <p role="alert">无法读取本地提示词库，请重试。</p> : null}
     </section>
   );
 }

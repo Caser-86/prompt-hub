@@ -4,9 +4,10 @@ import type { ManualPromptDraft } from "@prompt-hub/contracts";
 
 type PromptEditorProps = {
   saveDraft: (draft: ManualPromptDraft) => Promise<unknown>;
+  onSaved?: () => void;
 };
 
-export function PromptEditor({ saveDraft }: PromptEditorProps) {
+export function PromptEditor({ saveDraft, onSaved }: PromptEditorProps) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [category, setCategory] = useState("");
@@ -20,6 +21,7 @@ export function PromptEditor({ saveDraft }: PromptEditorProps) {
       category: category || null,
       tags: [],
     });
+    onSaved?.();
   }
 
   return (

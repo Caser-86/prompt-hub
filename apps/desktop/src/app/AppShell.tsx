@@ -2,11 +2,16 @@ import { useEffect, useRef, useState } from "react";
 
 import { CommandPalette } from "../components/CommandPalette";
 import { NotificationRegion } from "../components/NotificationRegion";
+import { PromptEditor } from "../features/editor/PromptEditor";
+import { PromptLibrary } from "../features/library/PromptLibrary";
+import { desktopCommands } from "../services/desktop";
 import { navigationItems, type AppRoute } from "./navigation";
 
 export function AppShell() {
   const [activeRoute, setActiveRoute] = useState<AppRoute>("library");
   const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [isEditorOpen, setEditorOpen] = useState(false);
+  const [libraryKey, setLibraryKey] = useState(0);
   const commandTriggerRef = useRef<HTMLButtonElement>(null);
 
   const closeCommandPalette = () => {
@@ -66,10 +71,28 @@ export function AppShell() {
           <p className="eyebrow">PROMPT ASSET WORKSPACE</p>
           <h1>Prompt Hub</h1>
           <p>本地优先的提示词资产管理工具</p>
-          <section aria-label={`${navigationItems.find((item) => item.id === activeRoute)?.label}内容`} className="empty-state">
-            <h2>{navigationItems.find((item) => item.id === activeRoute)?.label}</h2>
-            <p>当前没有可显示的内容。</p>
-          </section>
+          {activeRoute === "library" ? (
+            isEditorOpen ? (
+              <PromptEditor
+                onSaved={() => {
+                  setEditorOpen(false);
+                  setLibraryKey((key) => key + 1);
+                }}
+                saveDraft={desktopCommands.createManualPromptDraft}
+              />
+            ) : (
+              <PromptLibrary
+                key={libraryKey}
+                loadPrompts={desktopCommands.listPrompts}
+                onCreate={() => setEditorOpen(true)}
+              />
+            )
+          ) : (
+            <section aria-label={`${navigationItems.find((item) => item.id === activeRoute)?.label}内容`} className="empty-state">
+              <h2>{navigationItems.find((item) => item.id === activeRoute)?.label}</h2>
+              <p>当前没有可显示的内容。</p>
+            </section>
+          )}
         </main>
       </div>
 
