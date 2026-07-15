@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 
 type PromptLibraryProps = {
   loadPrompts: () => Promise<unknown[]>;
+  onCreate?: () => void;
 };
 
-export function PromptLibrary({ loadPrompts }: PromptLibraryProps) {
+export function PromptLibrary({ loadPrompts, onCreate }: PromptLibraryProps) {
   const [prompts, setPrompts] = useState<unknown[] | null>(null);
 
   useEffect(() => {
@@ -18,7 +19,7 @@ export function PromptLibrary({ loadPrompts }: PromptLibraryProps) {
           <p className="eyebrow">LOCAL LIBRARY</p>
           <h1 id="library-title">提示词库</h1>
         </div>
-        <button type="button">创建提示词</button>
+        <button onClick={onCreate} type="button">创建提示词</button>
       </div>
       {prompts?.length === 0 ? <p>还没有提示词资产</p> : null}
     </section>
