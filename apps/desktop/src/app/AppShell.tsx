@@ -141,9 +141,11 @@ export function AppShell() {
           ) : activeRoute === "settings" ? (
             <SettingsPage
               createBackup={desktopCommands.createManualBackup}
+              getAiCredentialStatus={desktopCommands.getAiCredentialStatus}
               getApplicationStatus={desktopCommands.getApplicationStatus}
               previewRestore={desktopCommands.previewBackupRestore}
               restoreBackup={desktopCommands.restoreBackup}
+              saveAiCredential={desktopCommands.saveAiCredential}
             />
           ) : (
             <section aria-label={`${navigationItems.find((item) => item.id === activeRoute)?.label}内容`} className="empty-state">

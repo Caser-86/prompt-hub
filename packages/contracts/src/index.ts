@@ -7,6 +7,7 @@ export type ApplicationStatus = {
 export type BackupInfo = { path: string; byteLen: number; schemaVersion: number };
 export type BackupRestorePreview = { targetExists: boolean; backupSchemaVersion: number; backupByteLen: number };
 export type ImportResult = { imported: number; skippedDuplicates: number };
+export type AiCredentialStatus = { configured: boolean };
 
 export type CommandInvoker = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -111,6 +112,8 @@ export type DesktopCommandClient = {
   recordPromptValidation: (id: string, metadata: PromptValidationDraft) => Promise<unknown>;
   createManualPromptDraft: (draft: ManualPromptDraft) => Promise<unknown>;
   importFileToInbox: (path: string) => Promise<ImportResult>;
+  getAiCredentialStatus: (providerId: string) => Promise<AiCredentialStatus>;
+  saveAiCredential: (providerId: string, secret: string) => Promise<AiCredentialStatus>;
 };
 
 export function createDesktopCommandClient(invoke: CommandInvoker): DesktopCommandClient {
@@ -196,6 +199,16 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       }
       return result as ImportResult;
     },
+    async getAiCredentialStatus(providerId) {
+      const result = await invoke("get_ai_credential_status", { providerId });
+      if (!isAiCredentialStatus(result)) throw new Error("get_ai_credential_status returned an invalid response");
+      return result;
+    },
+    async saveAiCredential(providerId, secret) {
+      const result = await invoke("save_ai_credential", { providerId, secret });
+      if (!isAiCredentialStatus(result)) throw new Error("save_ai_credential returned an invalid response");
+      return result;
+    },
   };
 }
 
@@ -280,4 +293,8 @@ function isBackupRestorePreview(value: unknown): value is BackupRestorePreview {
   if (typeof value !== "object" || value === null) return false;
   const item = value as Record<string, unknown>;
   return typeof item.targetExists === "boolean" && typeof item.backupSchemaVersion === "number" && typeof item.backupByteLen === "number";
+}
+
+function isAiCredentialStatus(value: unknown): value is AiCredentialStatus {
+  return typeof value === "object" && value !== null && typeof (value as Record<string, unknown>).configured === "boolean";
 }
