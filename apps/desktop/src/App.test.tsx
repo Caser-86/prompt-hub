@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -49,6 +51,13 @@ describe("App", () => {
     desktopMock.recentImportJobs.mockResolvedValue([]);
     desktopMock.getMcpSetup.mockResolvedValue({ databasePath: "C:/data/prompt-hub.db", databaseAvailable: true, configuration: "{}" });
   });
+
+  it("loads the global application stylesheet from the React entry point", () => {
+    const entry = readFileSync(resolve(import.meta.dirname, "main.tsx"), "utf8");
+
+    expect(entry).toContain('import "./styles.css"');
+  });
+
   it("provides accessible primary navigation and a command palette", () => {
     render(<App />);
 

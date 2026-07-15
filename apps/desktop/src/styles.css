@@ -1,6 +1,15 @@
 :root {
-  color: #19231d;
-  background: #f3f5ef;
+  --canvas: #f7f6f2;
+  --surface: #fff;
+  --sidebar: #151922;
+  --ink: #202432;
+  --muted: #687083;
+  --line: #e4e5ea;
+  --accent: #635bff;
+  --accent-strong: #4d45e7;
+  --success: #16825d;
+  color: var(--ink);
+  background: var(--canvas);
   font-family: Inter, "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -34,8 +43,58 @@ a {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
-  outline: 3px solid #2d6a4f;
+  outline: 3px solid var(--accent);
   outline-offset: 3px;
+}
+
+.button-primary,
+.button-secondary {
+  border-radius: 0.65rem;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.7rem 1rem;
+}
+
+.button-primary {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0.5rem 1rem rgb(99 91 255 / 18%);
+  color: #fff;
+}
+
+.button-primary:hover {
+  background: var(--accent-strong);
+}
+
+.button-secondary {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.surface-card {
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--surface);
+  box-shadow: 0 0.25rem 0.9rem rgb(23 27 38 / 4%);
+}
+
+.field-stack {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .app-shell {
