@@ -19,6 +19,7 @@ import { PromptHistory } from "../features/history/PromptHistory";
 import { AiOptimizationReview } from "../features/ai/AiOptimizationReview";
 import { PromptLibrary } from "../features/library/PromptLibrary";
 import { PromptContentActions } from "../features/library/PromptContentActions";
+import { separatePromptProvenance } from "../features/library/promptContent";
 import { PromptLifecycleActions } from "../features/library/PromptLifecycleActions";
 import { PromptSearch } from "../features/search/PromptSearch";
 import { InboxImport } from "../features/inbox/InboxImport";
@@ -54,6 +55,15 @@ export function AppShell() {
   const [history, setHistory] = useState<PromptHistoryItem[] | null>(null);
   const [libraryKey, setLibraryKey] = useState(0);
   const commandTriggerRef = useRef<HTMLButtonElement>(null);
+  const promptContent = separatePromptProvenance(history?.at(-1)?.body ?? "");
+  const displayedSources = selectedPrompt
+    ? [
+      ...(selectedPrompt.sources ?? []),
+      ...(promptContent.provenance && !(selectedPrompt.sources ?? []).some((source) => source.location === promptContent.provenance?.location)
+        ? [{ kind: "reference", ...promptContent.provenance }]
+        : []),
+    ]
+    : [];
 
   const closeCommandPalette = () => {
     setCommandPaletteOpen(false);
@@ -144,13 +154,13 @@ export function AppShell() {
                     </div>
                   </div>
                   <section aria-label="提示词主操作" className="prompt-detail-actions">
-                    {history ? <PromptContentActions body={history.at(-1)?.body ?? ""} title={selectedPrompt.title} /> : <p>正在准备提示词操作…</p>}
+                    {history ? <PromptContentActions body={promptContent.body} title={selectedPrompt.title} /> : <p>正在准备提示词操作…</p>}
                   </section>
                 </header>
                 <div className="prompt-detail-main">
                   <article aria-label="提示词正文" className="prompt-detail-body surface-card">
                     <h3>提示词正文</h3>
-                    {history ? <pre>{history.at(-1)?.body ?? ""}</pre> : <p>正在加载提示词正文…</p>}
+                    {history ? <pre>{promptContent.body}</pre> : <p>正在加载提示词正文…</p>}
                   </article>
                   <div className="prompt-detail-aside">
                   <aside aria-label="提示词信息" className="prompt-detail-info surface-card">
@@ -162,7 +172,7 @@ export function AppShell() {
                     <DetailInfoRow icon={CalendarDaysIcon} label="创建时间"><time dateTime={selectedPrompt.createdAt}>{selectedPrompt.createdAt}</time></DetailInfoRow>
                     <DetailInfoRow icon={CalendarDaysIcon} label="更新时间"><time dateTime={selectedPrompt.updatedAt}>{selectedPrompt.updatedAt}</time></DetailInfoRow>
                     <DetailInfoRow icon={TagIcon} label="标签"><span className="detail-tags">{selectedPrompt.tags.length ? selectedPrompt.tags.map((tag) => <span className="detail-tag" key={tag}>{tag}</span>) : "未记录"}</span></DetailInfoRow>
-                    {selectedPrompt.sources?.length ? <details className="prompt-sources"><summary>完整来源</summary><ul>{selectedPrompt.sources.map((source) => <li key={`${source.kind}-${source.name}-${source.collectedAt}`}>{source.name} · {source.location ?? "无位置记录"} · <time dateTime={source.collectedAt}>{source.collectedAt}</time></li>)}</ul></details> : null}
+                    {displayedSources.length ? <details className="prompt-sources"><summary>完整来源</summary><ul>{displayedSources.map((source) => <li key={`${source.kind}-${source.name}-${source.collectedAt}`}>{source.name} · {source.location ?? "无位置记录"} · <time dateTime={source.collectedAt}>{source.collectedAt}</time></li>)}</ul></details> : null}
                     <PromptMetadataEditor
                       promptId={selectedPrompt.id}
                       saveCompatibility={desktopCommands.recordPromptCompatibility}
@@ -180,7 +190,7 @@ export function AppShell() {
                   <details className="prompt-ai-disclosure">
                     <summary><SparklesIcon aria-hidden="true" /> AI 优化</summary>
                     {history ? <AiOptimizationReview
-                      body={history.at(-1)?.body ?? ""}
+                      body={promptContent.body}
                       cancel={desktopCommands.cancelAiGeneration}
                       promptId={selectedPrompt.id}
                       optimize={async (id, instruction, taskId) => {

@@ -123,12 +123,23 @@ describe("App", () => {
       },
     ]);
     desktopMock.promptHistory.mockResolvedValueOnce([
-      { number: 1, body: "第一版", createdAt: "2026-07-15T00:00:00Z" },
+      {
+        number: 1,
+        body: [
+          "第一版",
+          "",
+          "参考来源： Google Prompt design strategies",
+          "https://ai.google.dev/gemini-api/docs/prompting-strategies",
+          "采集时间： 2026-07-16",
+        ].join("\n"),
+        createdAt: "2026-07-15T00:00:00Z",
+      },
     ]);
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "打开提示词：代码审查" }));
     expect(await screen.findByLabelText("提示词正文")).toHaveTextContent("第一版");
+    expect(screen.getByLabelText("提示词正文")).not.toHaveTextContent("参考来源： Google Prompt design strategies");
     expect(screen.getByLabelText("提示词主操作")).toContainElement(
       screen.getByRole("button", { name: "复制提示词正文" }),
     );
