@@ -25,6 +25,18 @@ pub struct ImportJob {
     diagnostics_json: String,
 }
 
+pub struct ImportJobItemRecord<'a> {
+    pub job_id: &'a str,
+    pub source_path: &'a str,
+    pub body_fingerprint: Option<&'a str>,
+    pub title: Option<&'a str>,
+    pub outcome: &'a str,
+    pub warnings_json: &'a str,
+    pub error_message: Option<&'a str>,
+    pub prompt_id: Option<PromptId>,
+    pub recorded_at: OffsetDateTime,
+}
+
 impl ImportJob {
     #[must_use]
     pub fn id(&self) -> &str {
@@ -246,20 +258,12 @@ impl PromptRepository {
 
     pub fn record_import_job_item(
         &mut self,
-        job_id: &str,
-        source_path: &str,
-        body_fingerprint: Option<&str>,
-        title: Option<&str>,
-        outcome: &str,
-        warnings_json: &str,
-        error_message: Option<&str>,
-        prompt_id: Option<PromptId>,
-        recorded_at: OffsetDateTime,
+        item: ImportJobItemRecord<'_>,
     ) -> Result<(), StoreError> {
         self.connection.execute(
             "INSERT INTO import_job_items(id, job_id, source_path, body_fingerprint, title, outcome, warnings_json, error_message, prompt_id, recorded_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            params![Uuid::now_v7().to_string(), job_id, source_path, body_fingerprint, title, outcome, warnings_json, error_message, prompt_id.map(|id| id.value().to_string()), recorded_at.unix_timestamp()],
+            params![Uuid::now_v7().to_string(), item.job_id, item.source_path, item.body_fingerprint, item.title, item.outcome, item.warnings_json, item.error_message, item.prompt_id.map(|id| id.value().to_string()), item.recorded_at.unix_timestamp()],
         )?;
         Ok(())
     }

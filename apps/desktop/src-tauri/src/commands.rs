@@ -489,17 +489,18 @@ impl PromptService {
         self.repository
             .lock()
             .map_err(|_| "prompt repository is unavailable".to_owned())?
-            .record_import_job_item(
+            .record_import_job_item(prompt_store::ImportJobItemRecord {
                 job_id,
-                &candidate.source_path,
-                Some(&normalized_body_fingerprint(&candidate.body)),
-                Some(&candidate.title),
+                source_path: &candidate.source_path,
+                body_fingerprint: Some(&normalized_body_fingerprint(&candidate.body)),
+                title: Some(&candidate.title),
                 outcome,
-                &serde_json::to_string(&candidate.warnings).map_err(|error| error.to_string())?,
-                error.as_deref(),
+                warnings_json: &serde_json::to_string(&candidate.warnings)
+                    .map_err(|error| error.to_string())?,
+                error_message: error.as_deref(),
                 prompt_id,
                 recorded_at,
-            )
+            })
             .map_err(|error| error.to_string())
     }
 

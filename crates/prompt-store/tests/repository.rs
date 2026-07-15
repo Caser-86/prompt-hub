@@ -1,7 +1,7 @@
 use prompt_domain::{
     Actor, AuditAction, EffectivenessStatus, Prompt, PromptContent, PromptSource, SourceKind,
 };
-use prompt_store::{Database, StoreError};
+use prompt_store::{Database, ImportJobItemRecord, StoreError};
 use rusqlite::Connection;
 use tempfile::tempdir;
 use time::macros::datetime;
@@ -229,17 +229,17 @@ fn persists_import_job_path_fingerprint_and_terminal_diagnostics() {
         .unwrap();
 
     repository
-        .record_import_job_item(
-            job.id(),
-            "C:/提示词/导入.md",
-            Some("body-fingerprint"),
-            Some("导入标题"),
-            "imported",
-            "[]",
-            None,
-            None,
-            started_at,
-        )
+        .record_import_job_item(ImportJobItemRecord {
+            job_id: job.id(),
+            source_path: "C:/提示词/导入.md",
+            body_fingerprint: Some("body-fingerprint"),
+            title: Some("导入标题"),
+            outcome: "imported",
+            warnings_json: "[]",
+            error_message: None,
+            prompt_id: None,
+            recorded_at: started_at,
+        })
         .unwrap();
     repository
         .finish_import_job(
