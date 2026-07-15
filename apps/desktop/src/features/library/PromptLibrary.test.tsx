@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { PromptLibrary } from "./PromptLibrary";
@@ -46,5 +46,18 @@ describe("PromptLibrary", () => {
     expect(screen.getByText("来源：手动录入")).toBeVisible();
     expect(screen.getByText("有效")).toBeVisible();
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "prompt-1" }));
+  });
+
+  it("confirms a recoverable batch archive for selected prompts", async () => {
+    const batchArchive = vi.fn().mockResolvedValue(undefined);
+    render(<PromptLibrary batchArchive={batchArchive} loadPrompts={async () => [{
+      id: "prompt-1", title: "代码审查", status: "published", effectiveness: "effective", category: "开发", tags: [], sourceNames: [], favorite: false,
+      createdAt: "2026-07-15T00:00:00Z", updatedAt: "2026-07-15T00:00:00Z",
+    }]} />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "选择提示词：代码审查" }));
+    fireEvent.click(screen.getByRole("button", { name: "批量归档 1 条提示词" }));
+    expect(screen.getByText("批量归档可在提示词详情中恢复。" )).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "确认归档" }));
+    await waitFor(() => expect(batchArchive).toHaveBeenCalledWith(["prompt-1"]));
   });
 });

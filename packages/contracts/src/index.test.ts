@@ -167,6 +167,13 @@ describe("desktop command client", () => {
     ]);
   });
 
+  it("archives selected prompts through a dedicated batch command", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => { calls.push({ command, args }); return undefined; });
+    await client.batchArchivePrompts(["prompt-1", "prompt-2"]);
+    expect(calls).toEqual([{ command: "batch_archive_prompts", args: { ids: ["prompt-1", "prompt-2"] } }]);
+  });
+
   it("creates and previews local backups only through the service boundary", async () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const client = createDesktopCommandClient(async (command, args) => {

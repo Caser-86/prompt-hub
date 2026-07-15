@@ -25,6 +25,7 @@ pub fn run() {
             commands::publish_prompt,
             commands::revise_prompt,
             commands::archive_prompt,
+            commands::batch_archive_prompts,
             commands::soft_delete_prompt,
             commands::recover_prompt,
             commands::set_prompt_favorite,

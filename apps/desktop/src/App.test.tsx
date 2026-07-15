@@ -9,6 +9,7 @@ const desktopMock = vi.hoisted(() => ({
   recordPromptCompatibility: vi.fn(),
   recordPromptValidation: vi.fn(),
   archivePrompt: vi.fn(),
+  batchArchivePrompts: vi.fn(),
   softDeletePrompt: vi.fn(),
   recoverPrompt: vi.fn(),
   setPromptFavorite: vi.fn(),

@@ -95,6 +95,7 @@ export type DesktopCommandClient = {
   promptHistory: (id: string) => Promise<PromptHistoryItem[]>;
   restorePromptVersion: (id: string, versionNumber: number) => Promise<unknown>;
   archivePrompt: (id: string) => Promise<unknown>;
+  batchArchivePrompts: (ids: string[]) => Promise<unknown>;
   softDeletePrompt: (id: string) => Promise<unknown>;
   recoverPrompt: (id: string) => Promise<unknown>;
   setPromptFavorite: (id: string, favorite: boolean) => Promise<unknown>;
@@ -147,6 +148,9 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
     },
     archivePrompt(id) {
       return invoke("archive_prompt", { id });
+    },
+    batchArchivePrompts(ids) {
+      return invoke("batch_archive_prompts", { ids });
     },
     softDeletePrompt(id) {
       return invoke("soft_delete_prompt", { id });

@@ -126,6 +126,7 @@ export function AppShell() {
             ) : (
               <PromptLibrary
                 key={libraryKey}
+                batchArchive={async (ids) => { await desktopCommands.batchArchivePrompts(ids); }}
                 loadPrompts={desktopCommands.listPrompts}
                 onCreate={() => setEditorOpen(true)}
                 onFavorite={async (prompt, favorite) => { await desktopCommands.setPromptFavorite(prompt.id, favorite); }}

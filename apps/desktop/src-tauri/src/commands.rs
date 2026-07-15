@@ -228,6 +228,20 @@ impl PromptService {
         })
     }
 
+    pub fn batch_archive(
+        &self,
+        ids: Vec<PromptId>,
+        archived_at: OffsetDateTime,
+    ) -> Result<(), String> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        for id in ids {
+            self.archive(id, archived_at)?;
+        }
+        Ok(())
+    }
+
     pub fn soft_delete(&self, id: PromptId, deleted_at: OffsetDateTime) -> Result<Prompt, String> {
         self.modify(id, |prompt| {
             prompt
@@ -506,6 +520,14 @@ pub fn revise_prompt(
 #[tauri::command]
 pub fn archive_prompt(service: State<'_, PromptService>, id: PromptId) -> Result<Prompt, String> {
     service.archive(id, OffsetDateTime::now_utc())
+}
+
+#[tauri::command]
+pub fn batch_archive_prompts(
+    service: State<'_, PromptService>,
+    ids: Vec<PromptId>,
+) -> Result<(), String> {
+    service.batch_archive(ids, OffsetDateTime::now_utc())
 }
 
 #[tauri::command]

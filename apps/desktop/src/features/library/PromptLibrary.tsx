@@ -7,11 +7,14 @@ type PromptLibraryProps = {
   onCreate?: () => void;
   onSelect?: (prompt: PromptListItem) => void;
   onFavorite?: (prompt: PromptListItem, favorite: boolean) => Promise<void>;
+  batchArchive?: (ids: string[]) => Promise<void>;
 };
 
-export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite }: PromptLibraryProps) {
+export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite, batchArchive }: PromptLibraryProps) {
   const [prompts, setPrompts] = useState<PromptListItem[] | null>(null);
   const [error, setError] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [confirmBatchArchive, setConfirmBatchArchive] = useState(false);
 
   useEffect(() => {
     void loadPrompts()
@@ -27,6 +30,16 @@ export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite }: P
     });
   };
 
+  const toggleSelected = (id: string) => setSelected((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
+  const archiveSelected = () => {
+    if (!batchArchive) return;
+    void batchArchive(selected).then(() => {
+      setPrompts((current) => current?.map((prompt) => selected.includes(prompt.id) ? { ...prompt, status: "archived" } : prompt) ?? null);
+      setSelected([]);
+      setConfirmBatchArchive(false);
+    });
+  };
+
   return (
     <section aria-labelledby="library-title" className="prompt-library">
       <div className="feature-heading">
@@ -38,9 +51,10 @@ export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite }: P
       </div>
       {prompts?.length === 0 ? <p>还没有提示词资产</p> : null}
       {prompts?.length ? (
-        <ul aria-label="提示词列表">
+        <><ul aria-label="提示词列表">
           {prompts.map((prompt) => (
             <li key={prompt.id}>
+              <label><input aria-label={`选择提示词：${prompt.title}`} checked={selected.includes(prompt.id)} onChange={() => toggleSelected(prompt.id)} type="checkbox" /></label>
               <button aria-label={`打开提示词：${prompt.title}`} onClick={() => onSelect?.(prompt)} type="button">
                 <strong>{prompt.title}</strong>
               </button>
@@ -55,6 +69,10 @@ export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite }: P
             </li>
           ))}
         </ul>
+        {selected.length ? <div>
+          <button onClick={() => setConfirmBatchArchive(true)} type="button">批量归档 {selected.length} 条提示词</button>
+          {confirmBatchArchive ? <div role="dialog" aria-label="确认批量归档"><p>批量归档可在提示词详情中恢复。</p><button onClick={archiveSelected} type="button">确认归档</button><button onClick={() => setConfirmBatchArchive(false)} type="button">取消</button></div> : null}
+        </div> : null}</>
       ) : null}
       {error ? <p role="alert">无法读取本地提示词库，请重试。</p> : null}
     </section>
