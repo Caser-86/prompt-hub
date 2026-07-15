@@ -3030,6 +3030,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "prompt-ai"
+version = "0.1.0"
+dependencies = [
+ "secrecy",
+ "serde",
+ "thiserror 2.0.18",
+ "time",
+]
+
+[[package]]
 name = "prompt-domain"
 version = "0.1.0"
 dependencies = [
