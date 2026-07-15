@@ -1407,6 +1407,14 @@ pub struct DiagnosticsStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RedactedDiagnosticEvent {
+    occurred_at: String,
+    event: String,
+    recommendation: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AiCredentialStatus {
     configured: bool,
 }
@@ -1478,6 +1486,21 @@ pub fn get_diagnostics_status(
         database_available,
         search_index_consistent,
         mcp_database_available: database_available,
+    }
+}
+
+#[tauri::command]
+pub fn get_redacted_diagnostic_events(
+    backups: State<'_, BackupService>,
+) -> Vec<RedactedDiagnosticEvent> {
+    if prompt_store::Database::open(&backups.database_path).is_ok() {
+        Vec::new()
+    } else {
+        vec![RedactedDiagnosticEvent {
+            occurred_at: format_timestamp(OffsetDateTime::now_utc()).unwrap_or_default(),
+            event: "database_unavailable".to_owned(),
+            recommendation: "检查数据目录权限后重试。".to_owned(),
+        }]
     }
 }
 
