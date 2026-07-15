@@ -3023,11 +3023,13 @@ dependencies = [
 name = "prompt-hub-desktop"
 version = "0.1.0"
 dependencies = [
+ "prompt-domain",
  "prompt-store",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
+ "time",
 ]
 
 [[package]]
