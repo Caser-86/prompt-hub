@@ -149,6 +149,7 @@ export type DesktopCommandClient = {
   getAiCredentialStatus: (providerId: string) => Promise<AiCredentialStatus>;
   saveAiCredential: (providerId: string, secret: string) => Promise<AiCredentialStatus>;
   testAiConnection: (request: AiConnectionRequest) => Promise<AiConnectionStatus>;
+  optimizeAiPrompt: (id: string, request: AiGenerationRequest) => Promise<unknown>;
   generateAiDraft: (request: AiGenerationRequest) => Promise<unknown>;
 };
 
@@ -294,6 +295,9 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       const result = await invoke("test_ai_connection", { request });
       if (!isAiConnectionStatus(result)) throw new Error("test_ai_connection returned an invalid response");
       return result;
+    },
+    optimizeAiPrompt(id, request) {
+      return invoke("optimize_ai_prompt", { id, request });
     },
     generateAiDraft(request) {
       return invoke("generate_ai_draft", { request });

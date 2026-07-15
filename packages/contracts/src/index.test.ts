@@ -52,6 +52,14 @@ describe("desktop command client", () => {
     expect(calls).toEqual([{ command: "test_ai_connection", args: { request } }]);
   });
 
+  it("optimizes a selected prompt through the inbox-only command", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => { calls.push({ command, args }); return { id: "draft-2" }; });
+    const request = { endpoint: "https://api.example.com", providerId: "openai-compatible", instruction: "更清晰", inputSummary: "忽略", model: "gpt-test" };
+    await client.optimizeAiPrompt("prompt-1", request);
+    expect(calls).toEqual([{ command: "optimize_ai_prompt", args: { id: "prompt-1", request } }]);
+  });
+
   it("uses the service-only list command for prompt library reads", async () => {
     const calls: string[] = [];
     const client = createDesktopCommandClient(async (command) => {
