@@ -27,6 +27,7 @@ pub fn run() {
             commands::restore_prompt_version,
             commands::search_prompts,
             commands::create_manual_prompt_draft,
+            commands::generate_ai_draft,
             commands::import_file_to_inbox,
             commands::import_folder_to_inbox,
             commands::recent_import_jobs,

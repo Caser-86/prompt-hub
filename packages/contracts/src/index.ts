@@ -8,6 +8,13 @@ export type BackupInfo = { path: string; byteLen: number; schemaVersion: number 
 export type BackupRestorePreview = { targetExists: boolean; backupSchemaVersion: number; backupByteLen: number };
 export type ImportResult = { imported: number; skippedDuplicates: number; failed: number };
 export type AiCredentialStatus = { configured: boolean };
+export type AiGenerationRequest = {
+  endpoint: string;
+  providerId: string;
+  instruction: string;
+  inputSummary: string;
+  model: string;
+};
 export type ImportJobSummary = {
   id: string;
   sourceKind: string;
@@ -128,6 +135,7 @@ export type DesktopCommandClient = {
   recentImportJobs: () => Promise<ImportJobSummary[]>;
   getAiCredentialStatus: (providerId: string) => Promise<AiCredentialStatus>;
   saveAiCredential: (providerId: string, secret: string) => Promise<AiCredentialStatus>;
+  generateAiDraft: (request: AiGenerationRequest) => Promise<unknown>;
 };
 
 export function createDesktopCommandClient(invoke: CommandInvoker): DesktopCommandClient {
@@ -239,6 +247,9 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       const result = await invoke("save_ai_credential", { providerId, secret });
       if (!isAiCredentialStatus(result)) throw new Error("save_ai_credential returned an invalid response");
       return result;
+    },
+    generateAiDraft(request) {
+      return invoke("generate_ai_draft", { request });
     },
   };
 }

@@ -45,6 +45,26 @@ impl AiDraft {
     pub const fn destination(&self) -> DraftDestination {
         self.destination
     }
+    #[must_use]
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+    #[must_use]
+    pub fn body(&self) -> &str {
+        &self.body
+    }
+    #[must_use]
+    pub fn model(&self) -> &str {
+        &self.model
+    }
+    #[must_use]
+    pub fn input_summary(&self) -> &str {
+        &self.input_summary
+    }
+    #[must_use]
+    pub const fn generated_at(&self) -> OffsetDateTime {
+        self.generated_at
+    }
 }
 
 fn required(value: String, error: DraftError) -> Result<String, DraftError> {

@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use prompt_domain::{
     Actor, AuditAction, Compatibility, CompatibilityStatus, EffectivenessStatus, Prompt,
@@ -12,7 +13,10 @@ use tauri::State;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
-use prompt_ai::{CredentialStore, SystemCredentialAdapter};
+use prompt_ai::{
+    CredentialStore, DraftGenerator, GenerationRequest, OpenAiCompatibleProvider,
+    SystemCredentialAdapter,
+};
 use prompt_import::{ImportCandidate, normalized_body_fingerprint, parse_file, scan_folder};
 use prompt_store::{
     BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage,
@@ -39,6 +43,16 @@ pub struct ManualPromptVariable {
     pub description: Option<String>,
     pub default_value: Option<String>,
     pub required: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiGenerationRequestInput {
+    pub endpoint: String,
+    pub provider_id: String,
+    pub instruction: String,
+    pub input_summary: String,
+    pub model: String,
 }
 
 impl ManualPromptVariable {
@@ -212,6 +226,51 @@ impl PromptService {
         let source = PromptSource::new(SourceKind::Manual, "手动录入", None, created_at)
             .map_err(|error| error.to_string())?;
         let prompt = Prompt::new_inbox(content, source, Actor::User, created_at);
+        self.save(&prompt, AuditAction::Created)?;
+        Ok(prompt)
+    }
+
+    pub fn create_ai_draft(
+        &self,
+        request: AiGenerationRequestInput,
+        generated_at: OffsetDateTime,
+    ) -> Result<Prompt, String> {
+        let provider = OpenAiCompatibleProvider::new(request.endpoint, Duration::from_secs(45))
+            .map_err(|error| error.to_string())?;
+        let credentials = SystemCredentialAdapter::new("Prompt Hub", "default")
+            .map_err(|error| error.to_string())?;
+        let generator = DraftGenerator::new(provider, credentials);
+        let draft = generator
+            .generate(
+                &request.provider_id,
+                GenerationRequest {
+                    instruction: request.instruction,
+                    input_summary: request.input_summary,
+                    model: request.model,
+                },
+                generated_at,
+            )
+            .map_err(|error| error.to_string())?;
+        let content = PromptContent::new(
+            draft.title(),
+            draft.body(),
+            Some(format!(
+                "AI 生成；模型：{}；输入摘要：{}",
+                draft.model(),
+                draft.input_summary()
+            )),
+            None,
+            Vec::new(),
+        )
+        .map_err(|error| error.to_string())?;
+        let source = PromptSource::new(
+            SourceKind::AiGenerated,
+            "AI 生成",
+            Some(format!("模型：{}", draft.model())),
+            draft.generated_at(),
+        )
+        .map_err(|error| error.to_string())?;
+        let prompt = Prompt::new_inbox(content, source, Actor::User, draft.generated_at());
         self.save(&prompt, AuditAction::Created)?;
         Ok(prompt)
     }
@@ -794,6 +853,14 @@ pub fn create_manual_prompt_draft(
     draft: ManualPromptDraft,
 ) -> Result<Prompt, String> {
     service.create_manual_draft(draft, OffsetDateTime::now_utc())
+}
+
+#[tauri::command]
+pub fn generate_ai_draft(
+    service: State<'_, PromptService>,
+    request: AiGenerationRequestInput,
+) -> Result<Prompt, String> {
+    service.create_ai_draft(request, OffsetDateTime::now_utc())
 }
 
 #[tauri::command]

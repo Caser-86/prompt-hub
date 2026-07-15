@@ -23,6 +23,7 @@ const desktopMock = vi.hoisted(() => ({
   restoreBackup: vi.fn(),
   getAiCredentialStatus: vi.fn(),
   saveAiCredential: vi.fn(),
+  generateAiDraft: vi.fn(),
   getApplicationStatus: vi.fn(),
 }));
 vi.mock("./services/desktop", () => ({
