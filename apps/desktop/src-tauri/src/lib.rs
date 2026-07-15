@@ -11,10 +11,14 @@ pub fn run() {
             let database = prompt_store::Database::open(&database_path)?;
             app.manage(commands::PromptService::new(database.into_repository()));
             app.manage(commands::BackupService::new(database_path));
+            let credentials = prompt_ai::SystemCredentialAdapter::new("Prompt Hub", "default")?;
+            app.manage(commands::AiSettingsService::new(credentials));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_application_status,
+            commands::get_ai_credential_status,
+            commands::save_ai_credential,
             commands::create_manual_backup,
             commands::preview_backup_restore,
             commands::restore_backup,

@@ -6,11 +6,13 @@ use prompt_domain::{
     PromptContent, PromptId, PromptSource, PromptVariable, PromptVersion, SourceKind,
     ValidationRecord, VariableKind,
 };
+use secrecy::SecretString;
 use serde::Serialize;
 use tauri::State;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
+use prompt_ai::{CredentialStore, SystemCredentialAdapter};
 use prompt_import::normalized_body_fingerprint;
 use prompt_import::parse_file;
 use prompt_store::{
@@ -124,6 +126,33 @@ pub struct FileImportOutcome {
 
 pub struct BackupService {
     database_path: PathBuf,
+}
+
+pub struct AiSettingsService {
+    credentials: SystemCredentialAdapter,
+}
+
+impl AiSettingsService {
+    pub const fn new(credentials: SystemCredentialAdapter) -> Self {
+        Self { credentials }
+    }
+
+    fn status(&self, provider_id: String) -> Result<AiCredentialStatus, String> {
+        Ok(AiCredentialStatus {
+            configured: self
+                .credentials
+                .load(&provider_id)
+                .map_err(|error| error.to_string())?
+                .is_some(),
+        })
+    }
+
+    fn save(&self, provider_id: String, secret: String) -> Result<AiCredentialStatus, String> {
+        self.credentials
+            .save(&provider_id, SecretString::from(secret))
+            .map_err(|error| error.to_string())?;
+        Ok(AiCredentialStatus { configured: true })
+    }
 }
 
 impl BackupService {
@@ -659,6 +688,12 @@ pub struct ApplicationStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AiCredentialStatus {
+    configured: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BackupInfo {
     path: String,
     byte_len: u64,
@@ -700,6 +735,23 @@ pub fn get_application_status() -> ApplicationStatus {
         database_schema_version: LATEST_SCHEMA_VERSION,
         offline_capable: true,
     }
+}
+
+#[tauri::command]
+pub fn get_ai_credential_status(
+    service: State<'_, AiSettingsService>,
+    provider_id: String,
+) -> Result<AiCredentialStatus, String> {
+    service.status(provider_id)
+}
+
+#[tauri::command]
+pub fn save_ai_credential(
+    service: State<'_, AiSettingsService>,
+    provider_id: String,
+    secret: String,
+) -> Result<AiCredentialStatus, String> {
+    service.save(provider_id, secret)
 }
 
 #[tauri::command]

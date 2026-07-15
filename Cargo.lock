@@ -3055,9 +3055,11 @@ dependencies = [
 name = "prompt-hub-desktop"
 version = "0.1.0"
 dependencies = [
+ "prompt-ai",
  "prompt-domain",
  "prompt-import",
  "prompt-store",
+ "secrecy",
  "serde",
  "serde_json",
  "tauri",
