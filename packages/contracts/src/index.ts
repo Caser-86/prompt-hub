@@ -115,6 +115,7 @@ export type PromptValidationDraft = {
 export type DesktopCommandClient = {
   getApplicationStatus: () => Promise<ApplicationStatus>;
   getDiagnosticsStatus: () => Promise<DiagnosticsStatus>;
+  rebuildSearchIndex: () => Promise<void>;
   createManualBackup: () => Promise<BackupInfo>;
   previewBackupRestore: (path: string) => Promise<BackupRestorePreview>;
   restoreBackup: (path: string) => Promise<BackupInfo>;
@@ -161,6 +162,9 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       const result = await invoke("get_diagnostics_status");
       if (!isDiagnosticsStatus(result)) throw new Error("get_diagnostics_status returned an invalid response");
       return result;
+    },
+    async rebuildSearchIndex() {
+      await invoke("rebuild_search_index");
     },
     async createManualBackup() {
       const result = await invoke("create_manual_backup");

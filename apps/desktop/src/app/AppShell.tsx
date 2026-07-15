@@ -152,6 +152,7 @@ export function AppShell() {
               getAiCredentialStatus={desktopCommands.getAiCredentialStatus}
               getApplicationStatus={desktopCommands.getApplicationStatus}
               getDiagnosticsStatus={desktopCommands.getDiagnosticsStatus}
+              rebuildSearchIndex={desktopCommands.rebuildSearchIndex}
               getMcpSetup={desktopCommands.getMcpSetup}
               generateAiDraft={desktopCommands.generateAiDraft}
               previewRestore={desktopCommands.previewBackupRestore}

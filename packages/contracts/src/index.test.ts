@@ -33,6 +33,13 @@ describe("desktop command client", () => {
     expect(calls).toEqual([{ command: "get_diagnostics_status", args: undefined }]);
   });
 
+  it("rebuilds the local search index through the diagnostics command", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => { calls.push({ command, args }); return undefined; });
+    await client.rebuildSearchIndex();
+    expect(calls).toEqual([{ command: "rebuild_search_index", args: undefined }]);
+  });
+
   it("uses the service-only list command for prompt library reads", async () => {
     const calls: string[] = [];
     const client = createDesktopCommandClient(async (command) => {

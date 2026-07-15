@@ -29,6 +29,7 @@ const desktopMock = vi.hoisted(() => ({
   getMcpSetup: vi.fn(),
   getApplicationStatus: vi.fn(),
   getDiagnosticsStatus: vi.fn(),
+  rebuildSearchIndex: vi.fn(),
 }));
 vi.mock("./services/desktop", () => ({
   desktopCommands: desktopMock,

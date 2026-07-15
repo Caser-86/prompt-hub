@@ -18,6 +18,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_application_status,
             commands::get_diagnostics_status,
+            commands::rebuild_search_index,
             commands::get_ai_credential_status,
             commands::save_ai_credential,
             commands::create_manual_backup,

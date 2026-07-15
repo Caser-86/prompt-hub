@@ -1348,6 +1348,16 @@ pub fn get_diagnostics_status(
 }
 
 #[tauri::command]
+pub fn rebuild_search_index(prompts: State<'_, PromptService>) -> Result<(), String> {
+    prompts
+        .repository
+        .lock()
+        .map_err(|_| "prompt repository is unavailable".to_owned())?
+        .rebuild_search_index()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub fn get_ai_credential_status(
     service: State<'_, AiSettingsService>,
     provider_id: String,
