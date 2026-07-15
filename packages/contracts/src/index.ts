@@ -38,6 +38,19 @@ export type PromptSearchPage = {
   total: number;
 };
 
+export type PromptSearchFilters = {
+  status?: "inbox" | "published" | "archived" | "deleted";
+  effectiveness?: "unverified" | "effective" | "ineffective" | "needs_retest";
+  sourceKind?: "manual" | "file_import" | "web_url" | "ai_generated" | "mcp";
+  category?: string;
+  tags?: string[];
+  tool?: string;
+  model?: string;
+  minimumRating?: number;
+  updatedAfter?: string;
+  updatedBefore?: string;
+};
+
 export type PromptListItem = {
   id: string;
   title: string;
@@ -77,7 +90,12 @@ export type DesktopCommandClient = {
   archivePrompt: (id: string) => Promise<unknown>;
   softDeletePrompt: (id: string) => Promise<unknown>;
   recoverPrompt: (id: string) => Promise<unknown>;
-  searchPrompts: (text: string, limit?: number, offset?: number) => Promise<PromptSearchPage>;
+  searchPrompts: (
+    text: string,
+    limit?: number,
+    offset?: number,
+    filters?: PromptSearchFilters,
+  ) => Promise<PromptSearchPage>;
   recordPromptCompatibility: (id: string, metadata: PromptCompatibilityDraft) => Promise<unknown>;
   recordPromptValidation: (id: string, metadata: PromptValidationDraft) => Promise<unknown>;
   createManualPromptDraft: (draft: ManualPromptDraft) => Promise<unknown>;
@@ -118,8 +136,10 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
     recoverPrompt(id) {
       return invoke("recover_prompt", { id });
     },
-    async searchPrompts(text, limit = 20, offset = 0) {
-      const result = await invoke("search_prompts", { text, limit, offset });
+    async searchPrompts(text, limit = 20, offset = 0, filters) {
+      const result = await invoke("search_prompts", filters === undefined
+        ? { text, limit, offset }
+        : { text, limit, offset, filters });
       if (!isPromptSearchPage(result)) {
         throw new Error("search_prompts returned an invalid response");
       }

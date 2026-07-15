@@ -10,7 +10,9 @@ use tauri::State;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
-use prompt_store::{LATEST_SCHEMA_VERSION, PromptRepository, SearchPage, SearchQuery};
+use prompt_store::{
+    LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage, SearchQuery,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,6 +64,47 @@ pub struct ManualValidation {
     pub status: EffectivenessStatus,
     pub rating: Option<u8>,
     pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptSearchFilterInput {
+    pub status: Option<prompt_domain::PromptStatus>,
+    pub effectiveness: Option<EffectivenessStatus>,
+    pub source_kind: Option<SourceKind>,
+    pub category: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    pub tool: Option<String>,
+    pub model: Option<String>,
+    pub minimum_rating: Option<u8>,
+    pub updated_after: Option<String>,
+    pub updated_before: Option<String>,
+}
+
+impl PromptSearchFilterInput {
+    fn into_store(self) -> Result<SearchFilters, String> {
+        Ok(SearchFilters {
+            status: self.status,
+            effectiveness: self.effectiveness,
+            source_kind: self.source_kind,
+            category: self.category,
+            tags: self.tags,
+            tool: self.tool,
+            model: self.model,
+            minimum_rating: self.minimum_rating,
+            updated_after: parse_optional_timestamp(self.updated_after)?,
+            updated_before: parse_optional_timestamp(self.updated_before)?,
+        })
+    }
+}
+
+fn parse_optional_timestamp(value: Option<String>) -> Result<Option<OffsetDateTime>, String> {
+    value
+        .map(|timestamp| {
+            OffsetDateTime::parse(&timestamp, &Rfc3339).map_err(|error| error.to_string())
+        })
+        .transpose()
 }
 
 pub struct PromptService {
@@ -377,8 +420,12 @@ pub fn search_prompts(
     text: String,
     limit: Option<u32>,
     offset: Option<u32>,
+    filters: Option<PromptSearchFilterInput>,
 ) -> Result<SearchPage, String> {
-    service.search(SearchQuery::new(text).with_page(limit.unwrap_or(20), offset.unwrap_or(0)))
+    let query = SearchQuery::new(text)
+        .with_filters(filters.unwrap_or_default().into_store()?)
+        .with_page(limit.unwrap_or(20), offset.unwrap_or(0));
+    service.search(query)
 }
 
 #[tauri::command]

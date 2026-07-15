@@ -84,6 +84,26 @@ describe("desktop command client", () => {
     ]);
   });
 
+  it("passes structured search filters through the service boundary", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      return { hits: [], total: 0 };
+    });
+
+    await client.searchPrompts("审查", 20, 0, { effectiveness: "effective", minimumRating: 4 });
+
+    expect(calls).toEqual([
+      {
+        command: "search_prompts",
+        args: {
+          text: "审查", limit: 20, offset: 0,
+          filters: { effectiveness: "effective", minimumRating: 4 },
+        },
+      },
+    ]);
+  });
+
   it("records compatibility and validation metadata through approved commands", async () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const client = createDesktopCommandClient(async (command, args) => {

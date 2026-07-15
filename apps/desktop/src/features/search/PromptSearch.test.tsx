@@ -42,4 +42,21 @@ describe("PromptSearch", () => {
     expect(screen.queryByText("旧结果")).not.toBeInTheDocument();
     vi.useRealTimers();
   });
+
+  it("sends effectiveness and minimum-rating filters to local search", async () => {
+    vi.useFakeTimers();
+    const searchPrompts = vi.fn().mockResolvedValue({ hits: [], total: 0 });
+    render(<PromptSearch searchPrompts={searchPrompts} />);
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "搜索提示词" }), { target: { value: "审查" } });
+    fireEvent.change(screen.getByLabelText("有效性筛选"), { target: { value: "effective" } });
+    fireEvent.change(screen.getByLabelText("最低评分"), { target: { value: "4" } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(250); });
+
+    expect(searchPrompts).toHaveBeenCalledWith("审查", 20, 0, {
+      effectiveness: "effective",
+      minimumRating: 4,
+    });
+    vi.useRealTimers();
+  });
 });
