@@ -30,6 +30,7 @@ export type ImportJobSummary = {
 };
 export type McpSetupInfo = { databasePath: string; databaseAvailable: boolean; configuration: string };
 export type DiagnosticsStatus = { databaseAvailable: boolean; searchIndexConsistent: boolean; mcpDatabaseAvailable: boolean };
+export type RedactedDiagnosticEvent = { occurredAt: string; event: string; recommendation: string };
 
 export type CommandInvoker = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -117,6 +118,7 @@ export type PromptValidationDraft = {
 export type DesktopCommandClient = {
   getApplicationStatus: () => Promise<ApplicationStatus>;
   getDiagnosticsStatus: () => Promise<DiagnosticsStatus>;
+  getRedactedDiagnosticEvents: () => Promise<RedactedDiagnosticEvent[]>;
   rebuildSearchIndex: () => Promise<void>;
   createManualBackup: () => Promise<BackupInfo>;
   previewBackupRestore: (path: string) => Promise<BackupRestorePreview>;
@@ -165,6 +167,11 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
     async getDiagnosticsStatus() {
       const result = await invoke("get_diagnostics_status");
       if (!isDiagnosticsStatus(result)) throw new Error("get_diagnostics_status returned an invalid response");
+      return result;
+    },
+    async getRedactedDiagnosticEvents() {
+      const result = await invoke("get_redacted_diagnostic_events");
+      if (!Array.isArray(result) || !result.every(isRedactedDiagnosticEvent)) throw new Error("get_redacted_diagnostic_events returned an invalid response");
       return result;
     },
     async rebuildSearchIndex() {
@@ -303,6 +310,12 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       return invoke("generate_ai_draft", { request });
     },
   };
+}
+
+function isRedactedDiagnosticEvent(value: unknown): value is RedactedDiagnosticEvent {
+  if (typeof value !== "object" || value === null) return false;
+  const event = value as Record<string, unknown>;
+  return typeof event.occurredAt === "string" && typeof event.event === "string" && typeof event.recommendation === "string";
 }
 
 function isAiConnectionStatus(value: unknown): value is AiConnectionStatus {

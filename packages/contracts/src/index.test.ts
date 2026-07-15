@@ -33,6 +33,11 @@ describe("desktop command client", () => {
     expect(calls).toEqual([{ command: "get_diagnostics_status", args: undefined }]);
   });
 
+  it("reads only structured redacted diagnostic events", async () => {
+    const client = createDesktopCommandClient(async () => [{ occurredAt: "2026-07-15T00:00:00Z", event: "database_unavailable", recommendation: "检查数据目录权限" }]);
+    await expect(client.getRedactedDiagnosticEvents()).resolves.toEqual([{ occurredAt: "2026-07-15T00:00:00Z", event: "database_unavailable", recommendation: "检查数据目录权限" }]);
+  });
+
   it("rebuilds the local search index through the diagnostics command", async () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const client = createDesktopCommandClient(async (command, args) => { calls.push({ command, args }); return undefined; });
