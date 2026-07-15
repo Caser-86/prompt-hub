@@ -6,7 +6,7 @@ use prompt_domain::{
     Actor, Prompt, PromptContent, PromptId, PromptSource, PromptVariable, SourceKind,
 };
 use prompt_mcp::{ToolOperation, approved_tools};
-use prompt_store::{Database, PromptRepository, SearchQuery};
+use prompt_store::{Database, PromptRepository, SearchFilters, SearchQuery};
 use serde_json::{Map, Value, json};
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -87,8 +87,20 @@ fn search(repository: &PromptRepository, arguments: &Map<String, Value>) -> Resu
     let query = arguments.get("query").and_then(Value::as_str).unwrap_or("");
     let limit = arguments.get("limit").and_then(Value::as_u64).unwrap_or(20) as u32;
     let offset = arguments.get("offset").and_then(Value::as_u64).unwrap_or(0) as u32;
+    let filters = arguments
+        .get("filters")
+        .map(|value| {
+            serde_json::from_value::<SearchFilters>(value.clone())
+                .map_err(|_| "invalid search filters".to_owned())
+        })
+        .transpose()?
+        .unwrap_or_default();
     let page = repository
-        .search(SearchQuery::new(query).with_page(limit, offset))
+        .search(
+            SearchQuery::new(query)
+                .with_filters(filters)
+                .with_page(limit, offset),
+        )
         .map_err(|_| "database_unavailable".to_owned())?;
     serde_json::to_value(page).map_err(|_| "serialization_failed".to_owned())
 }

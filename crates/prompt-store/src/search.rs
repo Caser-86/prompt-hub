@@ -1,13 +1,13 @@
 use prompt_domain::{EffectivenessStatus, PromptId, PromptStatus, PromptVersion, SourceKind};
 use rusqlite::types::Value;
 use rusqlite::{Transaction, params, params_from_iter};
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::{PromptRepository, StoreError};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct SearchFilters {
     pub favorite: Option<bool>,
     pub status: Option<PromptStatus>,
