@@ -46,14 +46,44 @@ describe("PromptLibrary", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "打开提示词：代码审查" }));
-    expect(screen.getByRole("list", { name: "提示词列表" })).toHaveClass("prompt-grid");
-    expect(screen.getByRole("listitem")).toHaveClass("prompt-card");
+    expect(screen.getByRole("list", { name: "提示词列表" })).toHaveClass("prompt-list");
+    expect(screen.getByRole("listitem")).toHaveClass("prompt-list-item");
     expect(screen.getByText("来源：手动录入")).toBeVisible();
     expect(screen.getByText("有效")).toBeVisible();
-    expect(screen.getByText("适用工具：Codex")).toBeVisible();
-    expect(screen.getByText("适用模型：gpt-5")).toBeVisible();
-    expect(screen.getByText("评分：5")).toBeVisible();
+    expect(screen.getByText("工具：Codex")).toBeVisible();
+    expect(screen.queryByText(/适用模型：/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/评分：/)).not.toBeInTheDocument();
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "prompt-1" }));
+  });
+
+  it("renders compact rows without model or rating and filters verified prompts", async () => {
+    render(
+      <PromptLibrary
+        loadPrompts={async () => [
+          {
+            id: "effective", title: "已验证提示词", status: "published", effectiveness: "effective", category: null, tags: ["会议"], sourceNames: ["手动录入"], applicableTools: ["Codex"], applicableModels: ["gpt-5"], rating: 5, favorite: false,
+            createdAt: "2026-07-15T00:00:00Z", updatedAt: "2026-07-15T00:00:00Z",
+          },
+          {
+            id: "favorite", title: "收藏提示词", status: "published", effectiveness: "unverified", category: null, tags: [], sourceNames: ["网页导入"], favorite: true,
+            createdAt: "2026-07-14T00:00:00Z", updatedAt: "2026-07-14T00:00:00Z",
+          },
+          {
+            id: "retest", title: "待复测提示词", status: "published", effectiveness: "needs_retest", category: null, tags: [], sourceNames: ["手动录入"], favorite: false,
+            createdAt: "2026-07-13T00:00:00Z", updatedAt: "2026-07-13T00:00:00Z",
+          },
+        ]}
+      />,
+    );
+
+    expect(await screen.findByText("共 3 条提示词")).toBeVisible();
+    expect(screen.getByRole("list", { name: "提示词列表" })).toHaveClass("prompt-list");
+    expect(screen.queryByText(/评分：/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/适用模型：/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "已验证" }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByText("已验证提示词")).toBeVisible();
   });
 
   it("confirms a recoverable batch archive for selected prompts", async () => {

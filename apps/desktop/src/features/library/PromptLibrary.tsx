@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 
 import type { PromptListItem } from "@prompt-hub/contracts";
 
+import { filterAndSortPrompts, formatLibraryUpdatedAt, type PromptLibraryFilter } from "./libraryView";
+
 type PromptLibraryProps = {
   loadPrompts: () => Promise<PromptListItem[]>;
   onCreate?: () => void;
@@ -15,6 +17,7 @@ export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite, bat
   const [error, setError] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [confirmBatchArchive, setConfirmBatchArchive] = useState(false);
+  const [filter, setFilter] = useState<PromptLibraryFilter>("all");
 
   useEffect(() => {
     void loadPrompts()
@@ -39,6 +42,7 @@ export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite, bat
       setConfirmBatchArchive(false);
     });
   };
+  const visiblePrompts = prompts ? filterAndSortPrompts(prompts, filter) : [];
 
   return (
     <section aria-labelledby="library-title" className="prompt-library">
@@ -58,28 +62,46 @@ export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite, bat
         </section>
       ) : null}
       {prompts?.length ? (
-        <><ul aria-label="提示词列表" className="prompt-grid">
-          {prompts.map((prompt) => (
-            <li className="prompt-card surface-card" key={prompt.id}>
-              <div className="prompt-card-actions">
+        <>
+          <div aria-label="提示词库筛选" className="library-quick-filters">
+            <div aria-label="筛选提示词" className="library-filter-options" role="group">
+              {(["all", "favorite", "effective", "needs_retest"] as const).map((value) => (
+                <button
+                  aria-pressed={filter === value}
+                  className="library-filter-button"
+                  key={value}
+                  onClick={() => setFilter(value)}
+                  type="button"
+                >
+                  {filterLabel(value)}
+                </button>
+              ))}
+            </div>
+            <p aria-live="polite" className="library-result-count">共 {visiblePrompts.length} 条提示词</p>
+          </div>
+          <ul aria-label="提示词列表" className="prompt-list">
+            {visiblePrompts.map((prompt) => (
+              <li className="prompt-list-item surface-card" key={prompt.id}>
+                <div className="prompt-list-primary">
+                  <button aria-label={`打开提示词：${prompt.title}`} className="prompt-list-title" onClick={() => onSelect?.(prompt)} type="button">
+                    <strong>{prompt.title}</strong>
+                  </button>
+                  {prompt.tags.length ? <div aria-label="标签" className="prompt-list-tags">{prompt.tags.map((tag) => <span key={tag}>{tag}</span>)}</div> : null}
+                </div>
+                <div className="prompt-list-meta">
+                  {prompt.sourceNames.length ? <span>来源：{prompt.sourceNames.join("、")}</span> : null}
+                  <span className={`status-pill status-${prompt.effectiveness}`}>{effectivenessLabel(prompt.effectiveness)}</span>
+                  {prompt.applicableTools?.length ? <span>工具：{prompt.applicableTools.join("、")}</span> : null}
+                  <time dateTime={prompt.updatedAt}>更新于 {formatLibraryUpdatedAt(prompt.updatedAt)}</time>
+                </div>
+                <div className="prompt-list-actions">
                 <label><input aria-label={`选择提示词：${prompt.title}`} checked={selected.includes(prompt.id)} onChange={() => toggleSelected(prompt.id)} type="checkbox" /></label>
                 <button
                   aria-label={`${prompt.favorite ? "取消收藏" : "收藏"}提示词：${prompt.title}`}
                   onClick={() => toggleFavorite(prompt)}
                   type="button"
                 >{prompt.favorite ? "★" : "☆"}</button>
-              </div>
-              <button aria-label={`打开提示词：${prompt.title}`} className="prompt-card-title" onClick={() => onSelect?.(prompt)} type="button">
-                <strong>{prompt.title}</strong>
-              </button>
-              <div className="prompt-card-meta">
-                <p>来源：{prompt.sourceNames.join("、") || "未记录"}</p>
-                <p><span className={`status-pill status-${prompt.effectiveness}`}>{effectivenessLabel(prompt.effectiveness)}</span></p>
-                <p>适用工具：{prompt.applicableTools?.join("、") || "未记录"}</p>
-                <p>适用模型：{prompt.applicableModels?.join("、") || "未记录"}</p>
-                <p>评分：{prompt.rating ?? "未评分"}</p>
-                <time dateTime={prompt.updatedAt}>更新于 {prompt.updatedAt}</time>
-              </div>
+                </div>
             </li>
           ))}
         </ul>
@@ -100,4 +122,13 @@ function effectivenessLabel(status: string) {
     ineffective: "失效",
     needs_retest: "待复测",
   }[status] ?? "未知";
+}
+
+function filterLabel(filter: PromptLibraryFilter) {
+  return {
+    all: "全部",
+    favorite: "收藏",
+    effective: "已验证",
+    needs_retest: "待复测",
+  }[filter];
 }
