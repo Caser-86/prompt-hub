@@ -113,6 +113,12 @@ input:focus-visible {
   color: #f8fbf5;
 }
 
+.workspace-header {
+  min-height: 4.75rem;
+  padding: 0.75rem clamp(1rem, 3vw, 2.5rem);
+  background: var(--sidebar);
+}
+
 .brand {
   display: inline-flex;
   align-items: center;
@@ -168,6 +174,11 @@ kbd {
   min-height: 0;
 }
 
+.app-frame {
+  grid-template-columns: 15.5rem minmax(0, 1fr);
+  background: var(--canvas);
+}
+
 .primary-navigation {
   display: flex;
   flex-direction: column;
@@ -175,6 +186,13 @@ kbd {
   padding: 1.25rem 0.85rem;
   border-right: 1px solid #dce1d7;
   background: #edf0e8;
+}
+
+.primary-navigation {
+  gap: 0.45rem;
+  padding: 1rem 0.75rem;
+  border-right-color: #252b38;
+  background: var(--sidebar);
 }
 
 .primary-navigation a {
@@ -185,19 +203,57 @@ kbd {
   font-weight: 600;
 }
 
+.primary-navigation .navigation-link {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: var(--sidebar-muted);
+}
+
+.navigation-marker {
+  display: grid;
+  width: 1.55rem;
+  height: 1.55rem;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 0.42rem;
+  color: #d7dcf0;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
 .primary-navigation a:hover {
-  background: #e2e9dd;
-  color: #1f372b;
+  background: rgb(255 255 255 / 8%);
+  color: #fff;
 }
 
 .primary-navigation a[aria-current="page"] {
-  background: #d7e8c7;
-  color: #1e4c36;
+  background: rgb(255 255 255 / 12%);
+  color: #fff;
+}
+
+.primary-navigation a[aria-current="page"] .navigation-marker {
+  border-color: transparent;
+  background: var(--accent);
+  color: #fff;
 }
 
 .app-content {
   width: min(100%, 80rem);
   padding: clamp(2rem, 5vw, 5rem);
+}
+
+.content-frame {
+  width: min(100%, 96rem);
+  min-height: calc(100vh - 4.75rem);
+  padding: clamp(1.5rem, 3vw, 3rem);
+}
+
+.header-create {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
 }
 
 .eyebrow {
@@ -349,11 +405,20 @@ h1 {
     border-bottom: 1px solid #dce1d7;
   }
 
+  .primary-navigation {
+    background: var(--sidebar);
+  }
+
   .primary-navigation a {
     flex: 0 0 auto;
   }
 
   .app-content {
     padding: 2rem 1.25rem;
+  }
+
+  .header-create {
+    padding: 0.55rem 0.65rem;
+    font-size: 0.85rem;
   }
 }

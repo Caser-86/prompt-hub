@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const desktopMock = vi.hoisted(() => ({
@@ -61,7 +61,7 @@ describe("App", () => {
   it("provides accessible primary navigation and a command palette", () => {
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: "Prompt Hub" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Prompt Hub" })).toBeVisible();
     expect(screen.getByRole("navigation", { name: "主导航" })).toBeVisible();
     expect(screen.getByRole("link", { name: "提示词库" })).toHaveAttribute(
       "aria-current",
@@ -72,6 +72,13 @@ describe("App", () => {
 
     expect(screen.getByRole("dialog", { name: "命令面板" })).toBeVisible();
     expect(screen.getByRole("status", { name: "通知" })).toBeVisible();
+  });
+
+  it("renders a persistent workspace header and primary creation action", () => {
+    render(<App />);
+
+    expect(screen.getByRole("banner")).toHaveClass("workspace-header");
+    expect(screen.getByRole("button", { name: "新建提示词" })).toHaveClass("button-primary");
   });
 
   it("opens the command palette by keyboard and restores trigger focus on escape", () => {
@@ -95,7 +102,7 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "搜索提示词" })).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "打开命令面板" }));
-    fireEvent.click(screen.getByRole("button", { name: "新建提示词" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "命令面板" })).getByRole("button", { name: "新建提示词" }));
     expect(screen.getByRole("form", { name: "提示词编辑器" })).toBeVisible();
   });
 

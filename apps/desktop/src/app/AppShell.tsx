@@ -55,7 +55,7 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      <header className="app-header">
+      <header className="app-header workspace-header">
         <a className="brand" href="#library" onClick={() => setActiveRoute("library")}>
           <span aria-hidden="true" className="brand-mark">P</span>
           <span>Prompt Hub</span>
@@ -70,6 +70,18 @@ export function AppShell() {
           <span>搜索提示词或执行命令</span>
           <kbd>Ctrl K</kbd>
         </button>
+        <button
+          className="button-primary header-create"
+          onClick={() => {
+            setActiveRoute("library");
+            setSelectedPrompt(null);
+            setEditorOpen(true);
+          }}
+          type="button"
+        >
+          <span aria-hidden="true">＋</span>
+          新建提示词
+        </button>
       </header>
 
       <div className="app-frame">
@@ -79,17 +91,16 @@ export function AppShell() {
               aria-current={activeRoute === item.id ? "page" : undefined}
               href={`#${item.id}`}
               key={item.id}
+              className="navigation-link"
               onClick={() => setActiveRoute(item.id)}
             >
-              {item.label}
+              <span aria-hidden="true" className="navigation-marker">{item.label.slice(0, 1)}</span>
+              <span>{item.label}</span>
             </a>
           ))}
         </nav>
 
-        <main className="app-content" id="main-content">
-          <p className="eyebrow">PROMPT ASSET WORKSPACE</p>
-          <h1>Prompt Hub</h1>
-          <p>本地优先的提示词资产管理工具</p>
+        <main className="app-content content-frame" id="main-content">
           {activeRoute === "library" ? (
             selectedPrompt ? (
               <section aria-labelledby="prompt-details-title">
