@@ -78,6 +78,18 @@ describe("App", () => {
     expect(trigger).toHaveFocus();
   });
 
+  it("uses command palette actions to open search and create a draft", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "打开命令面板" }));
+    fireEvent.click(screen.getByRole("button", { name: "打开搜索" }));
+    expect(screen.getByRole("heading", { name: "搜索提示词" })).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "打开命令面板" }));
+    fireEvent.click(screen.getByRole("button", { name: "新建提示词" }));
+    expect(screen.getByRole("form", { name: "提示词编辑器" })).toBeVisible();
+  });
+
   it("opens metadata editing for a selected library prompt", async () => {
     desktopMock.listPrompts.mockResolvedValueOnce([
       {

@@ -194,7 +194,19 @@ export function AppShell() {
       </div>
 
       <NotificationRegion />
-      {isCommandPaletteOpen ? <CommandPalette onClose={closeCommandPalette} /> : null}
+      {isCommandPaletteOpen ? <CommandPalette
+        onClose={closeCommandPalette}
+        onCreate={() => {
+          setActiveRoute("library");
+          setSelectedPrompt(null);
+          setEditorOpen(true);
+        }}
+        onNavigate={(route) => {
+          setActiveRoute(route);
+          setSelectedPrompt(null);
+          setEditorOpen(false);
+        }}
+      /> : null}
     </div>
   );
 }
