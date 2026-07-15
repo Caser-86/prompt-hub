@@ -7,6 +7,7 @@ import { PromptMetadataEditor } from "../features/editor/PromptMetadataEditor";
 import { PromptHistory } from "../features/history/PromptHistory";
 import { PromptLibrary } from "../features/library/PromptLibrary";
 import { PromptLifecycleActions } from "../features/library/PromptLifecycleActions";
+import { PromptSearch } from "../features/search/PromptSearch";
 import { desktopCommands } from "../services/desktop";
 import { navigationItems, type AppRoute } from "./navigation";
 import type { PromptHistoryItem, PromptListItem } from "@prompt-hub/contracts";
@@ -129,6 +130,8 @@ export function AppShell() {
                 onSelect={setSelectedPrompt}
               />
             )
+          ) : activeRoute === "search" ? (
+            <PromptSearch searchPrompts={desktopCommands.searchPrompts} />
           ) : (
             <section aria-label={`${navigationItems.find((item) => item.id === activeRoute)?.label}内容`} className="empty-state">
               <h2>{navigationItems.find((item) => item.id === activeRoute)?.label}</h2>

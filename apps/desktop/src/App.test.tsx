@@ -11,6 +11,7 @@ const desktopMock = vi.hoisted(() => ({
   archivePrompt: vi.fn(),
   softDeletePrompt: vi.fn(),
   recoverPrompt: vi.fn(),
+  searchPrompts: vi.fn(),
 }));
 vi.mock("./services/desktop", () => ({
   desktopCommands: desktopMock,
@@ -75,5 +76,12 @@ describe("App", () => {
     expect(screen.getByRole("form", { name: "提示词元数据" })).toBeVisible();
     expect(await screen.findByRole("heading", { name: "版本历史" })).toBeVisible();
     expect(screen.getByRole("button", { name: "软删除提示词" })).toBeVisible();
+  });
+
+  it("opens local prompt search from navigation", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("link", { name: "搜索" }));
+    expect(screen.getByRole("heading", { name: "搜索提示词" })).toBeVisible();
   });
 });
