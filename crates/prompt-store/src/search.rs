@@ -9,6 +9,7 @@ use crate::{PromptRepository, StoreError};
 
 #[derive(Debug, Clone, Default)]
 pub struct SearchFilters {
+    pub favorite: Option<bool>,
     pub status: Option<PromptStatus>,
     pub effectiveness: Option<EffectivenessStatus>,
     pub source_kind: Option<SourceKind>,
@@ -247,6 +248,9 @@ fn append_filters(
     values: &mut Vec<Value>,
     filters: &SearchFilters,
 ) -> Result<(), StoreError> {
+    if filters.favorite == Some(true) {
+        sql.push_str(" AND EXISTS (SELECT 1 FROM prompt_favorites pf WHERE pf.prompt_id = p.id)");
+    }
     if let Some(status) = filters.status {
         sql.push_str(" AND p.status = ?");
         values.push(Value::Text(wire_value(&status)?));

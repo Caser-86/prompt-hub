@@ -26,6 +26,7 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
   const [model, setModel] = useState("");
   const [updatedAfter, setUpdatedAfter] = useState("");
   const [updatedBefore, setUpdatedBefore] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [offset, setOffset] = useState(0);
   const generation = useRef(0);
 
@@ -43,6 +44,7 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
       ...(model ? { model } : {}),
       ...(updatedAfter ? { updatedAfter: `${updatedAfter}T00:00:00Z` } : {}),
       ...(updatedBefore ? { updatedBefore: `${updatedBefore}T23:59:59Z` } : {}),
+      ...(favoritesOnly ? { favorite: true } : {}),
     };
     if (!trimmedQuery) {
       setPage(null);
@@ -73,7 +75,7 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
         });
     }, 250);
     return () => window.clearTimeout(timeout);
-  }, [category, effectiveness, minimumRating, model, offset, query, searchPrompts, sourceKind, status, tagText, tool, updatedAfter, updatedBefore]);
+  }, [category, effectiveness, favoritesOnly, minimumRating, model, offset, query, searchPrompts, sourceKind, status, tagText, tool, updatedAfter, updatedBefore]);
 
   const resetPage = () => setOffset(0);
   const saveView = () => window.localStorage.setItem("prompt-hub.search-view", JSON.stringify({ query, effectiveness, minimumRating, status, sourceKind, category, tagText, tool, model, updatedAfter, updatedBefore }));
@@ -105,6 +107,7 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
       <label>适用模型<input onChange={(event) => { setModel(event.target.value); resetPage(); }} value={model} /></label>
       <label>更新开始日期<input onChange={(event) => { setUpdatedAfter(event.target.value); resetPage(); }} type="date" value={updatedAfter} /></label>
       <label>更新结束日期<input onChange={(event) => { setUpdatedBefore(event.target.value); resetPage(); }} type="date" value={updatedBefore} /></label>
+      <label><input checked={favoritesOnly} onChange={(event) => { setFavoritesOnly(event.target.checked); resetPage(); }} type="checkbox" />仅看收藏</label>
       <label>
         有效性筛选
         <select onChange={(event) => { setEffectiveness(event.target.value); resetPage(); }} value={effectiveness}>

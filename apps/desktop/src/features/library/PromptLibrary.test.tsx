@@ -33,6 +33,7 @@ describe("PromptLibrary", () => {
             category: "开发",
             tags: ["审查"],
             sourceNames: ["手动录入"],
+            favorite: false,
             createdAt: "2026-07-15T00:00:00Z",
             updatedAt: "2026-07-15T00:01:00Z",
           },

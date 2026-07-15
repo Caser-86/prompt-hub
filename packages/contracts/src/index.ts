@@ -42,6 +42,7 @@ export type PromptSearchPage = {
 };
 
 export type PromptSearchFilters = {
+  favorite?: boolean;
   status?: "inbox" | "published" | "archived" | "deleted";
   effectiveness?: "unverified" | "effective" | "ineffective" | "needs_retest";
   sourceKind?: "manual" | "file_import" | "web_url" | "ai_generated" | "mcp";
@@ -62,6 +63,7 @@ export type PromptListItem = {
   category: string | null;
   tags: string[];
   sourceNames: string[];
+  favorite: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -95,6 +97,7 @@ export type DesktopCommandClient = {
   archivePrompt: (id: string) => Promise<unknown>;
   softDeletePrompt: (id: string) => Promise<unknown>;
   recoverPrompt: (id: string) => Promise<unknown>;
+  setPromptFavorite: (id: string, favorite: boolean) => Promise<unknown>;
   searchPrompts: (
     text: string,
     limit?: number,
@@ -151,6 +154,9 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
     recoverPrompt(id) {
       return invoke("recover_prompt", { id });
     },
+    setPromptFavorite(id, favorite) {
+      return invoke("set_prompt_favorite", { id, favorite });
+    },
     async searchPrompts(text, limit = 20, offset = 0, filters) {
       const result = await invoke("search_prompts", filters === undefined
         ? { text, limit, offset }
@@ -185,6 +191,7 @@ function isPromptListItem(value: unknown): value is PromptListItem {
     (typeof item.category === "string" || item.category === null) &&
     Array.isArray(item.tags) && item.tags.every((tag) => typeof tag === "string") &&
     Array.isArray(item.sourceNames) && item.sourceNames.every((name) => typeof name === "string") &&
+    typeof item.favorite === "boolean" &&
     typeof item.createdAt === "string" &&
     typeof item.updatedAt === "string"
   );

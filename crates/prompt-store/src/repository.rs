@@ -144,6 +144,39 @@ impl PromptRepository {
         )?;
         Ok(count)
     }
+
+    pub fn set_favorite(
+        &mut self,
+        id: PromptId,
+        favorite: bool,
+        marked_at: OffsetDateTime,
+    ) -> Result<(), StoreError> {
+        if favorite {
+            self.connection.execute(
+                "INSERT INTO prompt_favorites(prompt_id, marked_at) VALUES (?1, ?2)
+                 ON CONFLICT(prompt_id) DO UPDATE SET marked_at = excluded.marked_at",
+                params![id.value().to_string(), marked_at.unix_timestamp()],
+            )?;
+        } else {
+            self.connection.execute(
+                "DELETE FROM prompt_favorites WHERE prompt_id = ?1",
+                [id.value().to_string()],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn is_favorite(&self, id: PromptId) -> Result<bool, StoreError> {
+        let found: Option<u8> = self
+            .connection
+            .query_row(
+                "SELECT 1 FROM prompt_favorites WHERE prompt_id = ?1",
+                [id.value().to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(found.is_some())
+    }
 }
 
 fn sync_current_metadata(

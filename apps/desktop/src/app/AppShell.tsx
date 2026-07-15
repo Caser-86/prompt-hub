@@ -128,6 +128,7 @@ export function AppShell() {
                 key={libraryKey}
                 loadPrompts={desktopCommands.listPrompts}
                 onCreate={() => setEditorOpen(true)}
+                onFavorite={async (prompt, favorite) => { await desktopCommands.setPromptFavorite(prompt.id, favorite); }}
                 onSelect={setSelectedPrompt}
               />
             )

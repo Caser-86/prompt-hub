@@ -194,3 +194,22 @@ fn returns_immutable_version_history_in_ascending_order() {
     assert_eq!(history[1].number(), 2);
     assert_eq!(history[1].content().body(), "第二版");
 }
+
+#[test]
+fn persists_favorite_state_without_mutating_prompt_versions() {
+    let database = Database::open_in_memory().unwrap();
+    let mut repository = database.into_repository();
+    let prompt = prompt("收藏提示词");
+    repository.save(&prompt, AuditAction::Created).unwrap();
+
+    repository
+        .set_favorite(prompt.id(), true, datetime!(2026-07-15 00:01 UTC))
+        .unwrap();
+    assert!(repository.is_favorite(prompt.id()).unwrap());
+    assert_eq!(repository.version_count(prompt.id()).unwrap(), 1);
+
+    repository
+        .set_favorite(prompt.id(), false, datetime!(2026-07-15 00:02 UTC))
+        .unwrap();
+    assert!(!repository.is_favorite(prompt.id()).unwrap());
+}

@@ -71,6 +71,7 @@ pub struct ManualValidation {
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptSearchFilterInput {
+    pub favorite: Option<bool>,
     pub status: Option<prompt_domain::PromptStatus>,
     pub effectiveness: Option<EffectivenessStatus>,
     pub source_kind: Option<SourceKind>,
@@ -87,6 +88,7 @@ pub struct PromptSearchFilterInput {
 impl PromptSearchFilterInput {
     fn into_store(self) -> Result<SearchFilters, String> {
         Ok(SearchFilters {
+            favorite: self.favorite,
             status: self.status,
             effectiveness: self.effectiveness,
             source_kind: self.source_kind,
@@ -192,6 +194,19 @@ impl PromptService {
             .lock()
             .map_err(|_| "prompt repository is unavailable".to_owned())?
             .search(query)
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn set_favorite(
+        &self,
+        id: PromptId,
+        favorite: bool,
+        marked_at: OffsetDateTime,
+    ) -> Result<(), String> {
+        self.repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?
+            .set_favorite(id, favorite, marked_at)
             .map_err(|error| error.to_string())
     }
 
@@ -361,6 +376,7 @@ pub struct PromptListItem {
     category: Option<String>,
     tags: Vec<String>,
     source_names: Vec<String>,
+    favorite: bool,
     created_at: String,
     updated_at: String,
 }
@@ -384,7 +400,7 @@ impl PromptHistoryItem {
 }
 
 impl PromptListItem {
-    fn from_prompt(prompt: Prompt) -> Result<Self, String> {
+    fn from_prompt(prompt: Prompt, favorite: bool) -> Result<Self, String> {
         let content = prompt.current_version().content();
         Ok(Self {
             id: prompt.id().value().to_string(),
@@ -398,6 +414,7 @@ impl PromptListItem {
                 .iter()
                 .map(|source| source.name().to_owned())
                 .collect(),
+            favorite,
             created_at: format_timestamp(prompt.created_at())?,
             updated_at: format_timestamp(prompt.updated_at())?,
         })
@@ -412,10 +429,20 @@ fn format_timestamp(timestamp: OffsetDateTime) -> Result<String, String> {
 
 #[tauri::command]
 pub fn list_prompts(service: State<'_, PromptService>) -> Result<Vec<PromptListItem>, String> {
-    service
-        .list()?
+    let repository = service
+        .repository
+        .lock()
+        .map_err(|_| "prompt repository is unavailable".to_owned())?;
+    repository
+        .list()
+        .map_err(|error| error.to_string())?
         .into_iter()
-        .map(PromptListItem::from_prompt)
+        .map(|prompt| {
+            let favorite = repository
+                .is_favorite(prompt.id())
+                .map_err(|error| error.to_string())?;
+            PromptListItem::from_prompt(prompt, favorite)
+        })
         .collect()
 }
 
@@ -492,6 +519,15 @@ pub fn soft_delete_prompt(
 #[tauri::command]
 pub fn recover_prompt(service: State<'_, PromptService>, id: PromptId) -> Result<Prompt, String> {
     service.recover(id, OffsetDateTime::now_utc())
+}
+
+#[tauri::command]
+pub fn set_prompt_favorite(
+    service: State<'_, PromptService>,
+    id: PromptId,
+    favorite: bool,
+) -> Result<(), String> {
+    service.set_favorite(id, favorite, OffsetDateTime::now_utc())
 }
 
 #[tauri::command]

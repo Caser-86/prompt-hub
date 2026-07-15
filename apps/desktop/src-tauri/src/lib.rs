@@ -27,6 +27,7 @@ pub fn run() {
             commands::archive_prompt,
             commands::soft_delete_prompt,
             commands::recover_prompt,
+            commands::set_prompt_favorite,
             commands::record_prompt_compatibility,
             commands::record_prompt_validation
         ])

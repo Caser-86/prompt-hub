@@ -47,3 +47,34 @@ fn creates_a_verified_backup_before_upgrading_an_existing_database() {
         .unwrap();
     assert_eq!(marker, "keep-me");
 }
+
+#[test]
+fn upgrades_a_v2_database_with_the_favorites_migration() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("v2.db");
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute_batch(include_str!("../migrations/0001_initial.sql"))
+        .unwrap();
+    connection
+        .execute_batch(include_str!("../migrations/0002_search.sql"))
+        .unwrap();
+    connection
+        .execute_batch("PRAGMA user_version = 2;")
+        .unwrap();
+    drop(connection);
+
+    let database = Database::open(&path).unwrap();
+    assert_eq!(database.schema_version().unwrap(), LATEST_SCHEMA_VERSION);
+    let backup = database.migration_report().backup_path().unwrap();
+    assert!(backup.exists());
+    let upgraded = Connection::open(&path).unwrap();
+    let exists: i64 = upgraded
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'prompt_favorites'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(exists, 1);
+}
