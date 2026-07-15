@@ -213,3 +213,46 @@ fn persists_favorite_state_without_mutating_prompt_versions() {
         .unwrap();
     assert!(!repository.is_favorite(prompt.id()).unwrap());
 }
+
+#[test]
+fn persists_import_job_path_fingerprint_and_terminal_diagnostics() {
+    let database = Database::open_in_memory().unwrap();
+    let mut repository = database.into_repository();
+    let started_at = datetime!(2026-07-15 00:00 UTC);
+    let job = repository
+        .start_import_job(
+            "file_import",
+            "C:/提示词/导入.md",
+            Some("source-fingerprint"),
+            started_at,
+        )
+        .unwrap();
+
+    repository
+        .record_import_job_item(
+            job.id(),
+            "C:/提示词/导入.md",
+            Some("body-fingerprint"),
+            Some("导入标题"),
+            "imported",
+            "[]",
+            None,
+            None,
+            started_at,
+        )
+        .unwrap();
+    repository
+        .finish_import_job(
+            job.id(),
+            "completed",
+            r#"{"imported":1,"skippedDuplicates":0,"failed":0}"#,
+            datetime!(2026-07-15 00:01 UTC),
+        )
+        .unwrap();
+
+    let stored = repository.import_job(job.id()).unwrap().unwrap();
+    assert_eq!(stored.status(), "completed");
+    assert_eq!(stored.source_path(), Some("C:/提示词/导入.md"));
+    assert!(stored.completed_at().is_some());
+    assert!(stored.diagnostics_json().contains("imported"));
+}

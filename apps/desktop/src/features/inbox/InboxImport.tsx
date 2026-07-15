@@ -61,6 +61,7 @@ export function InboxImport({ importFile, importFolder, loadPrompts, onReview }:
       {result ? (
         <p role="status">
           已创建 {result.imported} 条待审核草稿；跳过 {result.skippedDuplicates} 条完全重复内容。
+          {result.failed > 0 ? ` 有 ${result.failed} 条未导入，请查看诊断后重试。` : ""}
         </p>
       ) : null}
       {drafts.length ? (

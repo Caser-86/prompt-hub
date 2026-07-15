@@ -14,6 +14,40 @@ pub struct PromptRepository {
     pub(crate) connection: Connection,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportJob {
+    id: String,
+    source_kind: String,
+    source_path: Option<String>,
+    status: String,
+    started_at: OffsetDateTime,
+    completed_at: Option<OffsetDateTime>,
+    diagnostics_json: String,
+}
+
+impl ImportJob {
+    #[must_use]
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+    #[must_use]
+    pub fn status(&self) -> &str {
+        &self.status
+    }
+    #[must_use]
+    pub fn source_path(&self) -> Option<&str> {
+        self.source_path.as_deref()
+    }
+    #[must_use]
+    pub const fn completed_at(&self) -> Option<OffsetDateTime> {
+        self.completed_at
+    }
+    #[must_use]
+    pub fn diagnostics_json(&self) -> &str {
+        &self.diagnostics_json
+    }
+}
+
 impl PromptRepository {
     pub(crate) const fn new(connection: Connection) -> Self {
         Self { connection }
@@ -184,6 +218,70 @@ impl PromptRepository {
         let backup = Backup::new(&source, &mut self.connection)?;
         backup.run_to_completion(64, std::time::Duration::from_millis(5), None)?;
         Ok(())
+    }
+
+    pub fn start_import_job(
+        &mut self,
+        source_kind: &str,
+        source_path: &str,
+        source_fingerprint: Option<&str>,
+        started_at: OffsetDateTime,
+    ) -> Result<ImportJob, StoreError> {
+        let id = Uuid::now_v7().to_string();
+        self.connection.execute(
+            "INSERT INTO import_jobs(id, source_kind, status, started_at, diagnostics_json, source_path, source_fingerprint)
+             VALUES (?1, ?2, 'running', ?3, '{}', ?4, ?5)",
+            params![id, source_kind, started_at.unix_timestamp(), source_path, source_fingerprint],
+        )?;
+        self.import_job(&id)?.ok_or(StoreError::ImportJobMissing)
+    }
+
+    pub fn record_import_job_item(
+        &mut self,
+        job_id: &str,
+        source_path: &str,
+        body_fingerprint: Option<&str>,
+        title: Option<&str>,
+        outcome: &str,
+        warnings_json: &str,
+        error_message: Option<&str>,
+        prompt_id: Option<PromptId>,
+        recorded_at: OffsetDateTime,
+    ) -> Result<(), StoreError> {
+        self.connection.execute(
+            "INSERT INTO import_job_items(id, job_id, source_path, body_fingerprint, title, outcome, warnings_json, error_message, prompt_id, recorded_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![Uuid::now_v7().to_string(), job_id, source_path, body_fingerprint, title, outcome, warnings_json, error_message, prompt_id.map(|id| id.value().to_string()), recorded_at.unix_timestamp()],
+        )?;
+        Ok(())
+    }
+
+    pub fn finish_import_job(
+        &mut self,
+        job_id: &str,
+        status: &str,
+        diagnostics_json: &str,
+        completed_at: OffsetDateTime,
+    ) -> Result<(), StoreError> {
+        self.connection.execute(
+            "UPDATE import_jobs SET status = ?2, completed_at = ?3, diagnostics_json = ?4 WHERE id = ?1",
+            params![job_id, status, completed_at.unix_timestamp(), diagnostics_json],
+        )?;
+        Ok(())
+    }
+
+    pub fn import_job(&self, job_id: &str) -> Result<Option<ImportJob>, StoreError> {
+        self.connection.query_row(
+            "SELECT id, source_kind, source_path, status, started_at, completed_at, diagnostics_json FROM import_jobs WHERE id = ?1",
+            [job_id],
+            |row| {
+                let started_at = OffsetDateTime::from_unix_timestamp(row.get(4)?)
+                    .map_err(|error| rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Integer, Box::new(error)))?;
+                let completed_at = row.get::<_, Option<i64>>(5)?.map(OffsetDateTime::from_unix_timestamp).transpose()
+                    .map_err(|error| rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Integer, Box::new(error)))?;
+                Ok(ImportJob { id: row.get(0)?, source_kind: row.get(1)?, source_path: row.get(2)?, status: row.get(3)?, started_at, completed_at, diagnostics_json: row.get(6)? })
+            },
+        ).optional().map_err(StoreError::from)
     }
 }
 
@@ -375,4 +473,6 @@ pub enum StoreError {
     WireValue,
     #[error("prompt version conflict: stored {stored}, incoming {incoming}")]
     VersionConflict { stored: u32, incoming: u32 },
+    #[error("import job was not found after it was created")]
+    ImportJobMissing,
 }

@@ -121,6 +121,7 @@ pub struct PromptService {
 pub struct FileImportOutcome {
     pub drafts: Vec<Prompt>,
     pub skipped_duplicates: usize,
+    pub failed: usize,
 }
 
 pub struct BackupService {
@@ -220,8 +221,7 @@ impl PromptService {
         path: PathBuf,
         created_at: OffsetDateTime,
     ) -> Result<FileImportOutcome, String> {
-        let candidates = parse_file(&path).map_err(|error| error.to_string())?;
-        self.import_candidates_to_inbox(candidates, "文件导入", created_at)
+        self.import_path_to_inbox(path, "file_import", "文件导入", parse_file, created_at)
     }
 
     pub fn import_folder_to_inbox(
@@ -229,14 +229,54 @@ impl PromptService {
         path: PathBuf,
         created_at: OffsetDateTime,
     ) -> Result<FileImportOutcome, String> {
-        let candidates = scan_folder(&path).map_err(|error| error.to_string())?;
-        self.import_candidates_to_inbox(candidates, "文件夹导入", created_at)
+        self.import_path_to_inbox(path, "folder_import", "文件夹导入", scan_folder, created_at)
+    }
+
+    fn import_path_to_inbox(
+        &self,
+        path: PathBuf,
+        source_kind: &str,
+        source_name: &str,
+        parse: fn(&std::path::Path) -> Result<Vec<ImportCandidate>, prompt_import::FileImportError>,
+        created_at: OffsetDateTime,
+    ) -> Result<FileImportOutcome, String> {
+        let job_id = self
+            .repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?
+            .start_import_job(source_kind, &path.to_string_lossy(), None, created_at)
+            .map_err(|error| error.to_string())?
+            .id()
+            .to_owned();
+        let candidates = match parse(&path) {
+            Ok(candidates) => candidates,
+            Err(error) => {
+                self.finish_import_job(&job_id, "failed", 0, 0, 1, created_at)?;
+                return Err(error.to_string());
+            }
+        };
+        let outcome =
+            self.import_candidates_to_inbox(candidates, source_name, &job_id, created_at)?;
+        self.finish_import_job(
+            &job_id,
+            if outcome.failed == 0 {
+                "completed"
+            } else {
+                "completed_with_errors"
+            },
+            outcome.drafts.len(),
+            outcome.skipped_duplicates,
+            outcome.failed,
+            created_at,
+        )?;
+        Ok(outcome)
     }
 
     fn import_candidates_to_inbox(
         &self,
         candidates: Vec<ImportCandidate>,
         source_name: &str,
+        job_id: &str,
         created_at: OffsetDateTime,
     ) -> Result<FileImportOutcome, String> {
         let existing = self
@@ -245,32 +285,123 @@ impl PromptService {
             .map(|prompt| normalized_body_fingerprint(prompt.current_version().content().body()))
             .collect::<std::collections::HashSet<_>>();
         let mut fingerprints = existing;
+        let candidate_count = candidates.len();
         let mut drafts = Vec::with_capacity(candidates.len());
         let mut skipped_duplicates = 0;
         for candidate in candidates {
             let fingerprint = normalized_body_fingerprint(&candidate.body);
             if !fingerprints.insert(fingerprint) {
                 skipped_duplicates += 1;
+                self.record_import_item(job_id, &candidate, "duplicate", None, None, created_at)?;
                 continue;
             }
-            let content =
-                PromptContent::new(candidate.title, candidate.body, None, None, Vec::new())
-                    .map_err(|error| error.to_string())?;
+            let content = match PromptContent::new(
+                candidate.title.clone(),
+                candidate.body.clone(),
+                None,
+                None,
+                Vec::new(),
+            ) {
+                Ok(content) => content,
+                Err(error) => {
+                    self.record_import_item(
+                        job_id,
+                        &candidate,
+                        "failed",
+                        Some(error.to_string()),
+                        None,
+                        created_at,
+                    )?;
+                    continue;
+                }
+            };
             let source = PromptSource::new(
                 SourceKind::FileImport,
                 source_name,
-                Some(candidate.source_path),
+                Some(candidate.source_path.clone()),
                 created_at,
             )
             .map_err(|error| error.to_string())?;
             let prompt = Prompt::new_inbox(content, source, Actor::User, created_at);
-            self.save(&prompt, AuditAction::Created)?;
+            if let Err(error) = self.save(&prompt, AuditAction::Created) {
+                self.record_import_item(
+                    job_id,
+                    &candidate,
+                    "failed",
+                    Some(error),
+                    None,
+                    created_at,
+                )?;
+                continue;
+            }
+            self.record_import_item(
+                job_id,
+                &candidate,
+                "imported",
+                None,
+                Some(prompt.id()),
+                created_at,
+            )?;
             drafts.push(prompt);
         }
+        let imported = drafts.len();
         Ok(FileImportOutcome {
             drafts,
             skipped_duplicates,
+            failed: candidate_count.saturating_sub(imported + skipped_duplicates),
         })
+    }
+
+    fn record_import_item(
+        &self,
+        job_id: &str,
+        candidate: &ImportCandidate,
+        outcome: &str,
+        error: Option<String>,
+        prompt_id: Option<PromptId>,
+        recorded_at: OffsetDateTime,
+    ) -> Result<(), String> {
+        self.repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?
+            .record_import_job_item(
+                job_id,
+                &candidate.source_path,
+                Some(&normalized_body_fingerprint(&candidate.body)),
+                Some(&candidate.title),
+                outcome,
+                &serde_json::to_string(&candidate.warnings).map_err(|error| error.to_string())?,
+                error.as_deref(),
+                prompt_id,
+                recorded_at,
+            )
+            .map_err(|error| error.to_string())
+    }
+
+    fn finish_import_job(
+        &self,
+        job_id: &str,
+        status: &str,
+        imported: usize,
+        skipped_duplicates: usize,
+        failed: usize,
+        completed_at: OffsetDateTime,
+    ) -> Result<(), String> {
+        self.repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?
+            .finish_import_job(
+                job_id,
+                status,
+                &serde_json::json!({
+                    "imported": imported,
+                    "skippedDuplicates": skipped_duplicates,
+                    "failed": failed,
+                })
+                .to_string(),
+                completed_at,
+            )
+            .map_err(|error| error.to_string())
     }
 
     pub fn list(&self) -> Result<Vec<Prompt>, String> {
@@ -516,6 +647,7 @@ pub struct PromptHistoryItem {
 pub struct ImportResult {
     imported: usize,
     skipped_duplicates: usize,
+    failed: usize,
 }
 
 impl PromptHistoryItem {
@@ -627,6 +759,7 @@ pub fn import_file_to_inbox(
     Ok(ImportResult {
         imported: outcome.drafts.len(),
         skipped_duplicates: outcome.skipped_duplicates,
+        failed: outcome.failed,
     })
 }
 
@@ -639,6 +772,7 @@ pub fn import_folder_to_inbox(
     Ok(ImportResult {
         imported: outcome.drafts.len(),
         skipped_duplicates: outcome.skipped_duplicates,
+        failed: outcome.failed,
     })
 }
 

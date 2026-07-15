@@ -196,10 +196,10 @@ describe("desktop command client", () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const client = createDesktopCommandClient(async (command, args) => {
       calls.push({ command, args });
-      return { imported: 2, skippedDuplicates: 1 };
+      return { imported: 2, skippedDuplicates: 1, failed: 0 };
     });
 
-    await expect(client.importFolderToInbox("C:/提示词")).resolves.toEqual({ imported: 2, skippedDuplicates: 1 });
+    await expect(client.importFolderToInbox("C:/提示词")).resolves.toEqual({ imported: 2, skippedDuplicates: 1, failed: 0 });
     expect(calls).toEqual([{ command: "import_folder_to_inbox", args: { path: "C:/提示词" } }]);
   });
 });

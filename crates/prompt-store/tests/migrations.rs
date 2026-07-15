@@ -78,3 +78,35 @@ fn upgrades_a_v2_database_with_the_favorites_migration() {
         .unwrap();
     assert_eq!(exists, 1);
 }
+
+#[test]
+fn upgrades_a_v3_database_with_import_job_item_tracking() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("v3.db");
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute_batch(include_str!("../migrations/0001_initial.sql"))
+        .unwrap();
+    connection
+        .execute_batch(include_str!("../migrations/0002_search.sql"))
+        .unwrap();
+    connection
+        .execute_batch(include_str!("../migrations/0003_favorites.sql"))
+        .unwrap();
+    connection
+        .execute_batch("PRAGMA user_version = 3;")
+        .unwrap();
+    drop(connection);
+
+    let database = Database::open(&path).unwrap();
+    assert_eq!(database.schema_version().unwrap(), LATEST_SCHEMA_VERSION);
+    let upgraded = Connection::open(&path).unwrap();
+    let item_table_exists: i64 = upgraded
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'import_job_items'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(item_table_exists, 1);
+}

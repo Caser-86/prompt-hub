@@ -9,7 +9,7 @@ describe("InboxImport", () => {
     render(
       <InboxImport
         importFile={importFile}
-        importFolder={vi.fn().mockResolvedValue({ imported: 0, skippedDuplicates: 0 })}
+        importFolder={vi.fn().mockResolvedValue({ imported: 0, skippedDuplicates: 0, failed: 0 })}
         loadPrompts={vi.fn().mockResolvedValue([])}
         onReview={vi.fn()}
       />,
@@ -24,7 +24,7 @@ describe("InboxImport", () => {
   });
 
   it("scans a selected local folder into the inbox", async () => {
-    const importFolder = vi.fn().mockResolvedValue({ imported: 2, skippedDuplicates: 1 });
+    const importFolder = vi.fn().mockResolvedValue({ imported: 2, skippedDuplicates: 1, failed: 0 });
     render(
       <InboxImport
         importFile={vi.fn()}

@@ -9,13 +9,15 @@ use crate::{PromptRepository, StoreError};
 const INITIAL_SCHEMA: &str = include_str!("../migrations/0001_initial.sql");
 const SEARCH_SCHEMA: &str = include_str!("../migrations/0002_search.sql");
 const FAVORITES_SCHEMA: &str = include_str!("../migrations/0003_favorites.sql");
+const IMPORT_JOBS_SCHEMA: &str = include_str!("../migrations/0004_import_jobs.sql");
 const MIGRATIONS: &[(u32, &str)] = &[
     (1, INITIAL_SCHEMA),
     (2, SEARCH_SCHEMA),
     (3, FAVORITES_SCHEMA),
+    (4, IMPORT_JOBS_SCHEMA),
 ];
 
-pub const LATEST_SCHEMA_VERSION: u32 = 3;
+pub const LATEST_SCHEMA_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, Default)]
 pub struct MigrationReport {

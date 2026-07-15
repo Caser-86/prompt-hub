@@ -6,7 +6,7 @@ export type ApplicationStatus = {
 
 export type BackupInfo = { path: string; byteLen: number; schemaVersion: number };
 export type BackupRestorePreview = { targetExists: boolean; backupSchemaVersion: number; backupByteLen: number };
-export type ImportResult = { imported: number; skippedDuplicates: number };
+export type ImportResult = { imported: number; skippedDuplicates: number; failed: number };
 export type AiCredentialStatus = { configured: boolean };
 
 export type CommandInvoker = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -314,5 +314,6 @@ function isAiCredentialStatus(value: unknown): value is AiCredentialStatus {
 function isImportResult(value: unknown): value is ImportResult {
   return typeof value === "object" && value !== null
     && typeof (value as Record<string, unknown>).imported === "number"
-    && typeof (value as Record<string, unknown>).skippedDuplicates === "number";
+    && typeof (value as Record<string, unknown>).skippedDuplicates === "number"
+    && typeof (value as Record<string, unknown>).failed === "number";
 }
