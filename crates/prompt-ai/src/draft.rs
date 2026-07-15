@@ -49,7 +49,11 @@ impl AiDraft {
 
 fn required(value: String, error: DraftError) -> Result<String, DraftError> {
     let value = value.trim().to_owned();
-    if value.is_empty() { Err(error) } else { Ok(value) }
+    if value.is_empty() {
+        Err(error)
+    } else {
+        Ok(value)
+    }
 }
 
 #[derive(Debug, Error)]
