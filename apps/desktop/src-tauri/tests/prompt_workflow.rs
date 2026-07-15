@@ -1,4 +1,6 @@
-use prompt_hub_desktop_lib::commands::{ManualPromptDraft, PromptService};
+use prompt_hub_desktop_lib::commands::{
+    ManualCompatibility, ManualPromptDraft, ManualValidation, PromptService,
+};
 use prompt_store::{Database, SearchQuery};
 use time::macros::datetime;
 
@@ -139,6 +141,56 @@ fn service_preserves_typed_variables_from_a_manual_draft() {
     assert_eq!(variable.name(), "language");
     assert_eq!(variable.default_value(), Some("Rust"));
     assert!(variable.required());
+}
+
+#[test]
+fn service_records_tool_model_compatibility_and_effectiveness_metadata() {
+    let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
+    let created = service
+        .create_manual_draft(
+            ManualPromptDraft {
+                title: "代码审查".to_owned(),
+                body: "审查当前变更".to_owned(),
+                description: None,
+                category: Some("开发".to_owned()),
+                tags: vec!["审查".to_owned()],
+                variables: vec![],
+            },
+            datetime!(2026-07-15 00:00 UTC),
+        )
+        .unwrap();
+
+    let compatible = service
+        .record_compatibility(
+            created.id(),
+            ManualCompatibility {
+                tool: "Codex".to_owned(),
+                model: Some("gpt-5".to_owned()),
+                status: prompt_domain::CompatibilityStatus::Confirmed,
+                notes: Some("已在本地验证".to_owned()),
+            },
+            datetime!(2026-07-15 00:01 UTC),
+        )
+        .unwrap();
+    let validated = service
+        .record_validation(
+            created.id(),
+            ManualValidation {
+                status: prompt_domain::EffectivenessStatus::Effective,
+                rating: Some(5),
+                notes: Some("输出可直接使用".to_owned()),
+            },
+            datetime!(2026-07-15 00:02 UTC),
+        )
+        .unwrap();
+
+    assert_eq!(compatible.compatibilities()[0].tool(), "Codex");
+    assert_eq!(compatible.compatibilities()[0].model(), Some("gpt-5"));
+    assert_eq!(
+        validated.effectiveness(),
+        prompt_domain::EffectivenessStatus::Effective
+    );
+    assert_eq!(validated.validations()[0].rating, Some(5));
 }
 
 #[test]

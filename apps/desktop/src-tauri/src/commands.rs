@@ -1,8 +1,9 @@
 use std::sync::Mutex;
 
 use prompt_domain::{
-    Actor, AuditAction, EffectivenessStatus, Prompt, PromptContent, PromptId, PromptSource,
-    PromptVariable, PromptVersion, SourceKind, VariableKind,
+    Actor, AuditAction, Compatibility, CompatibilityStatus, EffectivenessStatus, Prompt,
+    PromptContent, PromptId, PromptSource, PromptVariable, PromptVersion, SourceKind,
+    ValidationRecord, VariableKind,
 };
 use serde::Serialize;
 use tauri::State;
@@ -43,6 +44,23 @@ impl ManualPromptVariable {
         )
         .map_err(|error| error.to_string())
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualCompatibility {
+    pub tool: String,
+    pub model: Option<String>,
+    pub status: CompatibilityStatus,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualValidation {
+    pub status: EffectivenessStatus,
+    pub rating: Option<u8>,
+    pub notes: Option<String>,
 }
 
 pub struct PromptService {
@@ -140,6 +158,45 @@ impl PromptService {
                 .recover(Actor::User, recovered_at)
                 .map_err(|error| error.to_string())?;
             Ok(AuditAction::Restored)
+        })
+    }
+
+    pub fn record_compatibility(
+        &self,
+        id: PromptId,
+        metadata: ManualCompatibility,
+        updated_at: OffsetDateTime,
+    ) -> Result<Prompt, String> {
+        let compatibility = Compatibility::new(
+            metadata.tool,
+            metadata.model,
+            metadata.status,
+            metadata.notes,
+            (metadata.status == CompatibilityStatus::Confirmed).then_some(updated_at),
+        )
+        .map_err(|error| error.to_string())?;
+        self.modify(id, |prompt| {
+            prompt
+                .add_compatibility(compatibility, Actor::User, updated_at)
+                .map_err(|error| error.to_string())?;
+            Ok(AuditAction::Revised)
+        })
+    }
+
+    pub fn record_validation(
+        &self,
+        id: PromptId,
+        metadata: ManualValidation,
+        updated_at: OffsetDateTime,
+    ) -> Result<Prompt, String> {
+        let validation =
+            ValidationRecord::new(metadata.status, metadata.rating, metadata.notes, updated_at)
+                .map_err(|error| error.to_string())?;
+        self.modify(id, |prompt| {
+            prompt
+                .record_validation(validation, Actor::User, updated_at)
+                .map_err(|error| error.to_string())?;
+            Ok(AuditAction::Revised)
         })
     }
 
@@ -285,6 +342,24 @@ pub fn soft_delete_prompt(
 #[tauri::command]
 pub fn recover_prompt(service: State<'_, PromptService>, id: PromptId) -> Result<Prompt, String> {
     service.recover(id, OffsetDateTime::now_utc())
+}
+
+#[tauri::command]
+pub fn record_prompt_compatibility(
+    service: State<'_, PromptService>,
+    id: PromptId,
+    metadata: ManualCompatibility,
+) -> Result<Prompt, String> {
+    service.record_compatibility(id, metadata, OffsetDateTime::now_utc())
+}
+
+#[tauri::command]
+pub fn record_prompt_validation(
+    service: State<'_, PromptService>,
+    id: PromptId,
+    metadata: ManualValidation,
+) -> Result<Prompt, String> {
+    service.record_validation(id, metadata, OffsetDateTime::now_utc())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

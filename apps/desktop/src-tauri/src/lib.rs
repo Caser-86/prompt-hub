@@ -21,7 +21,9 @@ pub fn run() {
             commands::revise_prompt,
             commands::archive_prompt,
             commands::soft_delete_prompt,
-            commands::recover_prompt
+            commands::recover_prompt,
+            commands::record_prompt_compatibility,
+            commands::record_prompt_validation
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Prompt Hub desktop application");
