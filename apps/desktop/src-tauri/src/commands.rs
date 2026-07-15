@@ -194,6 +194,22 @@ impl BackupService {
                 .map_err(|error| error.to_string())?,
         )
     }
+
+    fn mcp_setup(&self) -> McpSetupInfo {
+        McpSetupInfo {
+            database_path: self.database_path.to_string_lossy().into_owned(),
+            database_available: prompt_store::Database::open(&self.database_path).is_ok(),
+            configuration: serde_json::json!({
+                "mcpServers": {
+                    "prompt-hub": {
+                        "command": "prompt-mcp",
+                        "env": { "PROMPT_HUB_DATABASE_PATH": self.database_path }
+                    }
+                }
+            })
+            .to_string(),
+        }
+    }
 }
 
 impl PromptService {
@@ -731,6 +747,14 @@ pub struct ImportJobSummary {
     failed: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpSetupInfo {
+    database_path: String,
+    database_available: bool,
+    configuration: String,
+}
+
 impl ImportJobSummary {
     fn from_store(job: prompt_store::ImportJob) -> Result<Self, String> {
         let diagnostics: serde_json::Value =
@@ -898,6 +922,11 @@ pub fn recent_import_jobs(
         .into_iter()
         .map(ImportJobSummary::from_store)
         .collect()
+}
+
+#[tauri::command]
+pub fn get_mcp_setup(backups: State<'_, BackupService>) -> McpSetupInfo {
+    backups.mcp_setup()
 }
 
 #[tauri::command]

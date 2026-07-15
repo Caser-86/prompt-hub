@@ -26,6 +26,7 @@ export type ImportJobSummary = {
   skippedDuplicates: number;
   failed: number;
 };
+export type McpSetupInfo = { databasePath: string; databaseAvailable: boolean; configuration: string };
 
 export type CommandInvoker = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -133,6 +134,7 @@ export type DesktopCommandClient = {
   importFileToInbox: (path: string) => Promise<ImportResult>;
   importFolderToInbox: (path: string) => Promise<ImportResult>;
   recentImportJobs: () => Promise<ImportJobSummary[]>;
+  getMcpSetup: () => Promise<McpSetupInfo>;
   getAiCredentialStatus: (providerId: string) => Promise<AiCredentialStatus>;
   saveAiCredential: (providerId: string, secret: string) => Promise<AiCredentialStatus>;
   generateAiDraft: (request: AiGenerationRequest) => Promise<unknown>;
@@ -236,6 +238,11 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       if (!Array.isArray(result) || !result.every(isImportJobSummary)) {
         throw new Error("recent_import_jobs returned an invalid response");
       }
+      return result;
+    },
+    async getMcpSetup() {
+      const result = await invoke("get_mcp_setup");
+      if (!isMcpSetupInfo(result)) throw new Error("get_mcp_setup returned an invalid response");
       return result;
     },
     async getAiCredentialStatus(providerId) {
@@ -357,4 +364,11 @@ function isImportJobSummary(value: unknown): value is ImportJobSummary {
     && (typeof item.completedAt === "string" || item.completedAt === null)
     && typeof item.imported === "number" && typeof item.skippedDuplicates === "number"
     && typeof item.failed === "number";
+}
+
+function isMcpSetupInfo(value: unknown): value is McpSetupInfo {
+  if (typeof value !== "object" || value === null) return false;
+  const item = value as Record<string, unknown>;
+  return typeof item.databasePath === "string" && typeof item.databaseAvailable === "boolean"
+    && typeof item.configuration === "string";
 }

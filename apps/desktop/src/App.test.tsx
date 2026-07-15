@@ -24,6 +24,7 @@ const desktopMock = vi.hoisted(() => ({
   getAiCredentialStatus: vi.fn(),
   saveAiCredential: vi.fn(),
   generateAiDraft: vi.fn(),
+  getMcpSetup: vi.fn(),
   getApplicationStatus: vi.fn(),
 }));
 vi.mock("./services/desktop", () => ({
@@ -39,6 +40,7 @@ describe("App", () => {
     desktopMock.getApplicationStatus.mockResolvedValue({ appVersion: "0.1.0", databaseSchemaVersion: 2, offlineCapable: true });
     desktopMock.getAiCredentialStatus.mockResolvedValue({ configured: false });
     desktopMock.recentImportJobs.mockResolvedValue([]);
+    desktopMock.getMcpSetup.mockResolvedValue({ databasePath: "C:/data/prompt-hub.db", databaseAvailable: true, configuration: "{}" });
   });
   it("provides accessible primary navigation and a command palette", () => {
     render(<App />);
