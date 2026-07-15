@@ -1,7 +1,7 @@
 use prompt_domain::{EffectivenessStatus, PromptId, PromptStatus, PromptVersion, SourceKind};
 use rusqlite::types::Value;
 use rusqlite::{Transaction, params, params_from_iter};
-use serde::de::DeserializeOwned;
+use serde::{Serialize, de::DeserializeOwned};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -54,7 +54,8 @@ impl SearchQuery {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchHit {
     pub id: PromptId,
     pub title: String,
@@ -65,7 +66,8 @@ pub struct SearchHit {
     pub updated_at: OffsetDateTime,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchPage {
     pub hits: Vec<SearchHit>,
     pub total: u64,

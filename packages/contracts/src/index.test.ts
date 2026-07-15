@@ -50,4 +50,30 @@ describe("desktop command client", () => {
     await expect(client.createManualPromptDraft(draft)).resolves.toEqual({ id: "draft-1" });
     expect(calls).toEqual([{ command: "create_manual_prompt_draft", args: { draft } }]);
   });
+
+  it("searches with explicit pagination through the approved command boundary", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      return {
+        hits: [
+          {
+            id: "search-result-1",
+            title: "代码审查",
+            snippet: "审查当前变更",
+            status: "published",
+            effectiveness: "effective",
+            rating: 5,
+            updatedAt: "2026-07-15T00:00:00Z",
+          },
+        ],
+        total: 1,
+      };
+    });
+
+    await expect(client.searchPrompts("审查", 10, 20)).resolves.toMatchObject({ total: 1 });
+    expect(calls).toEqual([
+      { command: "search_prompts", args: { text: "审查", limit: 10, offset: 20 } },
+    ]);
+  });
 });

@@ -201,6 +201,16 @@ pub fn prompt_history(
 }
 
 #[tauri::command]
+pub fn search_prompts(
+    service: State<'_, PromptService>,
+    text: String,
+    limit: Option<u32>,
+    offset: Option<u32>,
+) -> Result<SearchPage, String> {
+    service.search(SearchQuery::new(text).with_page(limit.unwrap_or(20), offset.unwrap_or(0)))
+}
+
+#[tauri::command]
 pub fn create_manual_prompt_draft(
     service: State<'_, PromptService>,
     draft: ManualPromptDraft,
