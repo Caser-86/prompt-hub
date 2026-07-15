@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { expect, it, vi } from "vitest";
 
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 
@@ -18,4 +18,12 @@ it("renders only redacted diagnostic event summaries", () => {
   expect(screen.getByText("本地诊断日志")).toBeVisible();
   expect(screen.getByText(/database_unavailable/)).toBeVisible();
   expect(screen.getByText(/检查数据目录权限/)).toBeVisible();
+});
+
+it("rebuilds an inconsistent index through the supplied command", async () => {
+  const rebuildSearchIndex = vi.fn().mockResolvedValue(undefined);
+  render(<DiagnosticsPanel diagnostics={{ databaseAvailable: true, searchIndexConsistent: false, mcpDatabaseAvailable: true }} importJobs={[]} rebuildSearchIndex={rebuildSearchIndex} status={null} />);
+
+  fireEvent.click(screen.getByRole("button", { name: "重建搜索索引" }));
+  await waitFor(() => expect(rebuildSearchIndex).toHaveBeenCalledOnce());
 });

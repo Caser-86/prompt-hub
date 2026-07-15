@@ -1492,6 +1492,30 @@ pub struct RedactedDiagnosticEvent {
     recommendation: String,
 }
 
+fn redacted_diagnostic_events(
+    database_available: bool,
+    search_index_consistent: bool,
+    observed_at: OffsetDateTime,
+) -> Vec<RedactedDiagnosticEvent> {
+    let occurred_at = format_timestamp(observed_at).unwrap_or_default();
+    let mut events = Vec::new();
+    if !database_available {
+        events.push(RedactedDiagnosticEvent {
+            occurred_at: occurred_at.clone(),
+            event: "database_unavailable".to_owned(),
+            recommendation: "检查数据目录权限后重试。".to_owned(),
+        });
+    }
+    if !search_index_consistent {
+        events.push(RedactedDiagnosticEvent {
+            occurred_at,
+            event: "search_index_inconsistent".to_owned(),
+            recommendation: "在诊断信息中重建搜索索引后重试。".to_owned(),
+        });
+    }
+    events
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiCredentialStatus {
@@ -1570,17 +1594,21 @@ pub fn get_diagnostics_status(
 
 #[tauri::command]
 pub fn get_redacted_diagnostic_events(
+    prompts: State<'_, PromptService>,
     backups: State<'_, BackupService>,
 ) -> Vec<RedactedDiagnosticEvent> {
-    if prompt_store::Database::open(&backups.database_path).is_ok() {
-        Vec::new()
-    } else {
-        vec![RedactedDiagnosticEvent {
-            occurred_at: format_timestamp(OffsetDateTime::now_utc()).unwrap_or_default(),
-            event: "database_unavailable".to_owned(),
-            recommendation: "检查数据目录权限后重试。".to_owned(),
-        }]
-    }
+    let database_available = prompt_store::Database::open(&backups.database_path).is_ok();
+    let search_index_consistent = prompts
+        .repository
+        .lock()
+        .ok()
+        .and_then(|repository| repository.search_index_is_consistent().ok())
+        .unwrap_or(false);
+    redacted_diagnostic_events(
+        database_available,
+        search_index_consistent,
+        OffsetDateTime::now_utc(),
+    )
 }
 
 #[tauri::command]
@@ -1651,6 +1679,21 @@ mod ai_cancellation_tests {
 
         registry.finish("generation-1");
         assert!(!registry.cancel("generation-1"));
+    }
+}
+
+#[cfg(test)]
+mod diagnostics_tests {
+    use super::*;
+
+    #[test]
+    fn redacted_events_explain_an_inconsistent_search_index_without_sensitive_data() {
+        let events = redacted_diagnostic_events(false, false, OffsetDateTime::UNIX_EPOCH);
+
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].event, "database_unavailable");
+        assert_eq!(events[1].event, "search_index_inconsistent");
+        assert!(!events.iter().any(|event| event.event.contains("secret")));
     }
 }
 
