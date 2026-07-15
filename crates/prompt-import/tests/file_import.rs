@@ -1,6 +1,6 @@
 use std::fs;
 
-use prompt_import::{ImportFormat, parse_file};
+use prompt_import::{ImportFormat, normalized_body_fingerprint, parse_file};
 use tempfile::tempdir;
 
 #[test]
@@ -25,5 +25,17 @@ fn parses_supported_files_into_unpublished_candidates() {
         markdown_candidates
             .iter()
             .all(|candidate| !candidate.publishable)
+    );
+}
+
+#[test]
+fn fingerprints_normalized_bodies_for_exact_duplicate_detection() {
+    assert_eq!(
+        normalized_body_fingerprint("审查  当前\r\n变更"),
+        normalized_body_fingerprint("审查 当前\n变更")
+    );
+    assert_ne!(
+        normalized_body_fingerprint("审查当前变更"),
+        normalized_body_fingerprint("生成测试")
     );
 }

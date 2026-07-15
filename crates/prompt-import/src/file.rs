@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,6 +56,13 @@ pub fn parse_file(path: &Path) -> Result<Vec<ImportCandidate>, FileImportError> 
         "csv" => parse_csv(path, &content),
         _ => Err(FileImportError::UnsupportedFormat(extension)),
     }
+}
+
+#[must_use]
+pub fn normalized_body_fingerprint(body: &str) -> String {
+    let normalized = body.split_whitespace().collect::<Vec<_>>().join(" ");
+    let digest = Sha256::digest(normalized.as_bytes());
+    format!("{digest:x}")
 }
 
 fn parse_markdown(path: &Path, content: &str) -> Result<Vec<ImportCandidate>, FileImportError> {
