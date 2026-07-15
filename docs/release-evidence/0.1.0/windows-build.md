@@ -17,7 +17,7 @@ pnpm --filter @prompt-hub/desktop exec tauri build
 
 ## 未完成的发布验收
 
-- 没有提供代码签名证书，两个安装器均未验证签名。
+- 已在 `Cert:\CurrentUser\My` 与 `Cert:\LocalMachine\My` 只读检查有效且带私钥的代码签名证书；未发现可用证书，因此两个安装器均未验证签名。
 - 已在当前用户的临时隔离安装目录静默安装 NSIS 包、启动 `prompt-hub-desktop.exe`、静默卸载，并确认可执行文件被移除；该基础冒烟测试通过。
 - 尚未在干净 Windows 用户配置文件验证安装、首次启动、卸载后应用数据保留和 MCP 发现。
 - 未配置自动更新服务、更新签名密钥或用户确认升级流程。
