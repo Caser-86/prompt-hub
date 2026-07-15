@@ -4,6 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 import { AiDraftGenerator } from "./AiDraftGenerator";
 
 describe("AiDraftGenerator", () => {
+  it("restores non-sensitive endpoint and model preferences locally", () => {
+    localStorage.setItem("prompt-hub.ai.draft-settings", JSON.stringify({ endpoint: "https://api.example.com", model: "gpt-test" }));
+    render(<AiDraftGenerator generateDraft={vi.fn()} />);
+
+    expect(screen.getByLabelText("兼容 API 地址")).toHaveValue("https://api.example.com");
+    expect(screen.getByLabelText("模型")).toHaveValue("gpt-test");
+  });
+
   it("sends generation output only to the draft command", async () => {
     const generateDraft = vi.fn().mockResolvedValue({ id: "inbox-draft" });
     render(<AiDraftGenerator generateDraft={generateDraft} />);

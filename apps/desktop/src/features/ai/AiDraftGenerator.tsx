@@ -2,9 +2,18 @@ import { useState } from "react";
 
 import type { AiGenerationRequest } from "@prompt-hub/contracts";
 
+const preferencesKey = "prompt-hub.ai.draft-settings";
+
+function preferences() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(preferencesKey) ?? "{}") as { endpoint?: unknown; model?: unknown };
+    return { endpoint: typeof stored.endpoint === "string" ? stored.endpoint : "https://api.openai.com", model: typeof stored.model === "string" ? stored.model : "" };
+  } catch { return { endpoint: "https://api.openai.com", model: "" }; }
+}
+
 export function AiDraftGenerator({ generateDraft }: { generateDraft: (request: AiGenerationRequest) => Promise<unknown> }) {
-  const [endpoint, setEndpoint] = useState("https://api.openai.com");
-  const [model, setModel] = useState("");
+  const [endpoint, setEndpoint] = useState(() => preferences().endpoint);
+  const [model, setModel] = useState(() => preferences().model);
   const [instruction, setInstruction] = useState("");
   const [inputSummary, setInputSummary] = useState("");
   const [error, setError] = useState(false);
@@ -16,6 +25,7 @@ export function AiDraftGenerator({ generateDraft }: { generateDraft: (request: A
     setComplete(false);
     try {
       await generateDraft({ endpoint, providerId: "openai-compatible", instruction, inputSummary, model });
+      localStorage.setItem(preferencesKey, JSON.stringify({ endpoint, model }));
       setComplete(true);
     } catch {
       setError(true);
