@@ -7,6 +7,7 @@ import { PromptMetadataEditor } from "../features/editor/PromptMetadataEditor";
 import { PromptHistory } from "../features/history/PromptHistory";
 import { AiOptimizationReview } from "../features/ai/AiOptimizationReview";
 import { PromptLibrary } from "../features/library/PromptLibrary";
+import { PromptContentActions } from "../features/library/PromptContentActions";
 import { PromptLifecycleActions } from "../features/library/PromptLifecycleActions";
 import { PromptSearch } from "../features/search/PromptSearch";
 import { InboxImport } from "../features/inbox/InboxImport";
@@ -124,6 +125,7 @@ export function AppShell() {
                         versionNumber,
                       )}
                     />
+                    <PromptContentActions body={history.at(-1)?.body ?? ""} title={selectedPrompt.title} />
                     <AiOptimizationReview
                       body={history.at(-1)?.body ?? ""}
                       cancel={desktopCommands.cancelAiGeneration}

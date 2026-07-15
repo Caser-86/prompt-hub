@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import type { ManualPromptDraft, PromptVariableDraft } from "@prompt-hub/contracts";
+import { PromptContentActions } from "../library/PromptContentActions";
 
 type PromptEditorProps = {
   saveDraft: (draft: ManualPromptDraft) => Promise<unknown>;
@@ -107,6 +108,7 @@ export function PromptEditor({ saveDraft, onSaved }: PromptEditorProps) {
           <p>未替换变量：{preview.unresolved.join("、")}</p>
         ) : null}
         <pre>{preview.body}</pre>
+        <PromptContentActions body={preview.body} title={title} />
       </section>
       <button type="submit">保存到收件箱</button>
     </form>

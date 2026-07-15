@@ -57,5 +57,6 @@ describe("PromptEditor", () => {
 
     expect(screen.getByText("缺少必填变量：language")).toBeVisible();
     expect(within(screen.getByLabelText("渲染预览")).getByText("审查 {{language}} 的变更")).toBeVisible();
+    expect(screen.getByRole("button", { name: "复制提示词正文" })).toBeVisible();
   });
 });
