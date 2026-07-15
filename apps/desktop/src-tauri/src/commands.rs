@@ -17,7 +17,9 @@ use prompt_ai::{
     CredentialStore, DraftGenerator, GenerationRequest, OpenAiCompatibleProvider,
     SystemCredentialAdapter,
 };
-use prompt_import::{ImportCandidate, normalized_body_fingerprint, parse_file, scan_folder};
+use prompt_import::{
+    ImportCandidate, UrlPolicy, fetch_url, normalized_body_fingerprint, parse_file, scan_folder,
+};
 use prompt_store::{
     BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage,
     SearchQuery, create_backup, preview_restore,
@@ -305,6 +307,50 @@ impl PromptService {
         created_at: OffsetDateTime,
     ) -> Result<FileImportOutcome, String> {
         self.import_path_to_inbox(path, "folder_import", "文件夹导入", scan_folder, created_at)
+    }
+
+    pub fn import_url_to_inbox(
+        &self,
+        url: String,
+        created_at: OffsetDateTime,
+    ) -> Result<FileImportOutcome, String> {
+        let fetched = fetch_url(&url, UrlPolicy::default()).map_err(|error| error.to_string())?;
+        let fingerprint = normalized_body_fingerprint(&fetched.text);
+        if self.list()?.into_iter().any(|prompt| {
+            normalized_body_fingerprint(prompt.current_version().content().body()) == fingerprint
+        }) {
+            return Ok(FileImportOutcome {
+                drafts: Vec::new(),
+                skipped_duplicates: 1,
+                failed: 0,
+            });
+        }
+        let content = PromptContent::new(
+            fetched.title.unwrap_or_else(|| "网页导入提示词".to_owned()),
+            fetched.text,
+            if fetched.warnings.is_empty() {
+                None
+            } else {
+                Some(fetched.warnings.join("；"))
+            },
+            None,
+            Vec::new(),
+        )
+        .map_err(|error| error.to_string())?;
+        let source = PromptSource::new(
+            SourceKind::WebUrl,
+            "网页导入",
+            Some(fetched.canonical_url),
+            fetched.retrieved_at,
+        )
+        .map_err(|error| error.to_string())?;
+        let prompt = Prompt::new_inbox(content, source, Actor::User, created_at);
+        self.save(&prompt, AuditAction::Created)?;
+        Ok(FileImportOutcome {
+            drafts: vec![prompt],
+            skipped_duplicates: 0,
+            failed: 0,
+        })
     }
 
     fn import_path_to_inbox(
@@ -906,6 +952,19 @@ pub fn import_folder_to_inbox(
     path: String,
 ) -> Result<ImportResult, String> {
     let outcome = service.import_folder_to_inbox(PathBuf::from(path), OffsetDateTime::now_utc())?;
+    Ok(ImportResult {
+        imported: outcome.drafts.len(),
+        skipped_duplicates: outcome.skipped_duplicates,
+        failed: outcome.failed,
+    })
+}
+
+#[tauri::command]
+pub fn import_url_to_inbox(
+    service: State<'_, PromptService>,
+    url: String,
+) -> Result<ImportResult, String> {
+    let outcome = service.import_url_to_inbox(url, OffsetDateTime::now_utc())?;
     Ok(ImportResult {
         imported: outcome.drafts.len(),
         skipped_duplicates: outcome.skipped_duplicates,

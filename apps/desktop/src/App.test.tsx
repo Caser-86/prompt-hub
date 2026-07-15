@@ -6,6 +6,7 @@ const desktopMock = vi.hoisted(() => ({
   publishPrompt: vi.fn(),
   importFileToInbox: vi.fn(),
   importFolderToInbox: vi.fn(),
+  importUrlToInbox: vi.fn(),
   recentImportJobs: vi.fn(),
   listPrompts: vi.fn(),
   promptHistory: vi.fn(),

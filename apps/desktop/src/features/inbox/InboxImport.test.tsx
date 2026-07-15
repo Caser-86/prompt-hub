@@ -10,6 +10,7 @@ describe("InboxImport", () => {
       <InboxImport
         importFile={importFile}
         importFolder={vi.fn().mockResolvedValue({ imported: 0, skippedDuplicates: 0, failed: 0 })}
+        importUrl={vi.fn().mockResolvedValue({ imported: 0, skippedDuplicates: 0, failed: 0 })}
         loadPrompts={vi.fn().mockResolvedValue([])}
         onReview={vi.fn()}
       />,
@@ -29,6 +30,7 @@ describe("InboxImport", () => {
       <InboxImport
         importFile={vi.fn()}
         importFolder={importFolder}
+        importUrl={vi.fn()}
         loadPrompts={vi.fn().mockResolvedValue([])}
         onReview={vi.fn()}
       />,

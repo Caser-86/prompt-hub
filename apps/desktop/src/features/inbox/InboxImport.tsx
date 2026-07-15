@@ -2,18 +2,20 @@ import { useEffect, useState } from "react";
 
 import type { ImportResult, PromptListItem } from "@prompt-hub/contracts";
 
-type ImportKind = "file" | "folder";
+type ImportKind = "file" | "folder" | "url";
 
 type InboxImportProps = {
   importFile: (path: string) => Promise<ImportResult>;
   importFolder: (path: string) => Promise<ImportResult>;
+  importUrl: (url: string) => Promise<ImportResult>;
   loadPrompts: () => Promise<PromptListItem[]>;
   onReview: (prompt: PromptListItem) => void;
 };
 
-export function InboxImport({ importFile, importFolder, loadPrompts, onReview }: InboxImportProps) {
+export function InboxImport({ importFile, importFolder, importUrl, loadPrompts, onReview }: InboxImportProps) {
   const [filePath, setFilePath] = useState("");
   const [folderPath, setFolderPath] = useState("");
+  const [url, setUrl] = useState("");
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -27,12 +29,12 @@ export function InboxImport({ importFile, importFolder, loadPrompts, onReview }:
   }, [loadPrompts, result]);
 
   async function run(kind: ImportKind) {
-    const path = kind === "file" ? filePath : folderPath;
+    const path = kind === "file" ? filePath : kind === "folder" ? folderPath : url;
     setError(false);
     setLastImportKind(kind);
     setIsImporting(true);
     try {
-      setResult(await (kind === "file" ? importFile(path) : importFolder(path)));
+      setResult(await (kind === "file" ? importFile(path) : kind === "folder" ? importFolder(path) : importUrl(path)));
     } catch {
       setError(true);
     } finally {
@@ -57,6 +59,13 @@ export function InboxImport({ importFile, importFolder, loadPrompts, onReview }:
       </label>
       <button disabled={!folderPath || isImporting} onClick={() => void run("folder")} type="button">
         扫描文件夹到收件箱
+      </button>
+      <label>
+        网页 URL
+        <input onChange={(event) => setUrl(event.target.value)} type="url" value={url} />
+      </label>
+      <button disabled={!url || isImporting} onClick={() => void run("url")} type="button">
+        导入网页到收件箱
       </button>
       {result ? (
         <p role="status">

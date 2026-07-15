@@ -138,7 +138,7 @@ export function AppShell() {
           ) : activeRoute === "search" ? (
             <PromptSearch searchPrompts={desktopCommands.searchPrompts} />
           ) : activeRoute === "inbox" ? (
-            <InboxImport importFile={desktopCommands.importFileToInbox} importFolder={desktopCommands.importFolderToInbox} loadPrompts={desktopCommands.listPrompts} onReview={(prompt) => { setSelectedPrompt(prompt); setActiveRoute("library"); }} />
+            <InboxImport importFile={desktopCommands.importFileToInbox} importFolder={desktopCommands.importFolderToInbox} importUrl={desktopCommands.importUrlToInbox} loadPrompts={desktopCommands.listPrompts} onReview={(prompt) => { setSelectedPrompt(prompt); setActiveRoute("library"); }} />
           ) : activeRoute === "settings" ? (
             <SettingsPage
               createBackup={desktopCommands.createManualBackup}

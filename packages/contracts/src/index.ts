@@ -133,6 +133,7 @@ export type DesktopCommandClient = {
   publishPrompt: (id: string) => Promise<unknown>;
   importFileToInbox: (path: string) => Promise<ImportResult>;
   importFolderToInbox: (path: string) => Promise<ImportResult>;
+  importUrlToInbox: (url: string) => Promise<ImportResult>;
   recentImportJobs: () => Promise<ImportJobSummary[]>;
   getMcpSetup: () => Promise<McpSetupInfo>;
   getAiCredentialStatus: (providerId: string) => Promise<AiCredentialStatus>;
@@ -231,6 +232,11 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       if (!isImportResult(result)) {
         throw new Error("import_folder_to_inbox returned an invalid response");
       }
+      return result as ImportResult;
+    },
+    async importUrlToInbox(url) {
+      const result = await invoke("import_url_to_inbox", { url });
+      if (!isImportResult(result)) throw new Error("import_url_to_inbox returned an invalid response");
       return result as ImportResult;
     },
     async recentImportJobs() {
