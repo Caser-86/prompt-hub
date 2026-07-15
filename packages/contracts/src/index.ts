@@ -38,10 +38,25 @@ export type PromptSearchPage = {
   total: number;
 };
 
+export type PromptCompatibilityDraft = {
+  tool: string;
+  model: string | null;
+  status: "unknown" | "confirmed" | "unsupported";
+  notes: string | null;
+};
+
+export type PromptValidationDraft = {
+  status: "unverified" | "effective" | "ineffective" | "needs_retest";
+  rating: number | null;
+  notes: string | null;
+};
+
 export type DesktopCommandClient = {
   getApplicationStatus: () => Promise<ApplicationStatus>;
   listPrompts: () => Promise<unknown[]>;
   searchPrompts: (text: string, limit?: number, offset?: number) => Promise<PromptSearchPage>;
+  recordPromptCompatibility: (id: string, metadata: PromptCompatibilityDraft) => Promise<unknown>;
+  recordPromptValidation: (id: string, metadata: PromptValidationDraft) => Promise<unknown>;
   createManualPromptDraft: (draft: ManualPromptDraft) => Promise<unknown>;
 };
 
@@ -67,6 +82,12 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
         throw new Error("search_prompts returned an invalid response");
       }
       return result;
+    },
+    recordPromptCompatibility(id, metadata) {
+      return invoke("record_prompt_compatibility", { id, metadata });
+    },
+    recordPromptValidation(id, metadata) {
+      return invoke("record_prompt_validation", { id, metadata });
     },
     createManualPromptDraft(draft) {
       return invoke("create_manual_prompt_draft", { draft });

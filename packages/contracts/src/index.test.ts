@@ -77,4 +77,31 @@ describe("desktop command client", () => {
       { command: "search_prompts", args: { text: "审查", limit: 10, offset: 20 } },
     ]);
   });
+
+  it("records compatibility and validation metadata through approved commands", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      return { id: "prompt-1" };
+    });
+    const compatibility = {
+      tool: "Codex",
+      model: "gpt-5",
+      status: "confirmed" as const,
+      notes: "已验证",
+    };
+    const validation = {
+      status: "effective" as const,
+      rating: 5,
+      notes: "输出可用",
+    };
+
+    await client.recordPromptCompatibility("prompt-1", compatibility);
+    await client.recordPromptValidation("prompt-1", validation);
+
+    expect(calls).toEqual([
+      { command: "record_prompt_compatibility", args: { id: "prompt-1", metadata: compatibility } },
+      { command: "record_prompt_validation", args: { id: "prompt-1", metadata: validation } },
+    ]);
+  });
 });
