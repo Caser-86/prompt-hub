@@ -8,7 +8,7 @@ use serde::Serialize;
 use tauri::State;
 use time::OffsetDateTime;
 
-use prompt_store::{LATEST_SCHEMA_VERSION, PromptRepository};
+use prompt_store::{LATEST_SCHEMA_VERSION, PromptRepository, SearchPage, SearchQuery};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -65,6 +65,14 @@ impl PromptService {
             .lock()
             .map_err(|_| "prompt repository is unavailable".to_owned())?
             .history(id)
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn search(&self, query: SearchQuery) -> Result<SearchPage, String> {
+        self.repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?
+            .search(query)
             .map_err(|error| error.to_string())
     }
 

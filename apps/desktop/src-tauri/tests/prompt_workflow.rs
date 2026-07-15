@@ -1,5 +1,5 @@
 use prompt_hub_desktop_lib::commands::{ManualPromptDraft, PromptService};
-use prompt_store::Database;
+use prompt_store::{Database, SearchQuery};
 use time::macros::datetime;
 
 #[test]
@@ -84,6 +84,27 @@ fn service_exposes_ordered_version_history_for_comparison() {
             .collect::<Vec<_>>(),
         [1, 2]
     );
+}
+
+#[test]
+fn service_searches_the_local_prompt_library() {
+    let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
+    service
+        .create_manual_draft(
+            ManualPromptDraft {
+                title: "代码审查".to_owned(),
+                body: "审查当前变更".to_owned(),
+                description: None,
+                category: Some("开发".to_owned()),
+                tags: vec![],
+            },
+            datetime!(2026-07-15 00:00 UTC),
+        )
+        .unwrap();
+
+    let page = service.search(SearchQuery::new("代码审查")).unwrap();
+    assert_eq!(page.total, 1);
+    assert_eq!(page.hits[0].title, "代码审查");
 }
 
 #[test]
