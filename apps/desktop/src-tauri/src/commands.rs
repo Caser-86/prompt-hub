@@ -24,7 +24,7 @@ use prompt_import::{
 };
 use prompt_store::{
     BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage,
-    SearchQuery, create_backup, preview_restore, prune_backups,
+    SearchQuery, SearchSort, create_backup, preview_restore, prune_backups,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
@@ -1262,9 +1262,11 @@ pub fn search_prompts(
     limit: Option<u32>,
     offset: Option<u32>,
     filters: Option<PromptSearchFilterInput>,
+    sort: Option<SearchSort>,
 ) -> Result<SearchPage, String> {
     let query = SearchQuery::new(text)
         .with_filters(filters.unwrap_or_default().into_store()?)
+        .with_sort(sort.unwrap_or_default())
         .with_page(limit.unwrap_or(20), offset.unwrap_or(0));
     service.search(query)
 }

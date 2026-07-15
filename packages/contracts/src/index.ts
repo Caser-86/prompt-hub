@@ -80,6 +80,7 @@ export type PromptSearchFilters = {
   updatedAfter?: string;
   updatedBefore?: string;
 };
+export type PromptSearchSort = "relevance" | "updated_at" | "rating";
 
 export type PromptListItem = {
   id: string;
@@ -139,6 +140,7 @@ export type DesktopCommandClient = {
     limit?: number,
     offset?: number,
     filters?: PromptSearchFilters,
+    sort?: PromptSearchSort,
   ) => Promise<PromptSearchPage>;
   recordPromptCompatibility: (id: string, metadata: PromptCompatibilityDraft) => Promise<unknown>;
   recordPromptValidation: (id: string, metadata: PromptValidationDraft) => Promise<unknown>;
@@ -238,10 +240,9 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
     setPromptFavorite(id, favorite) {
       return invoke("set_prompt_favorite", { id, favorite });
     },
-    async searchPrompts(text, limit = 20, offset = 0, filters) {
-      const result = await invoke("search_prompts", filters === undefined
-        ? { text, limit, offset }
-        : { text, limit, offset, filters });
+    async searchPrompts(text, limit = 20, offset = 0, filters, sort) {
+      const args = filters === undefined ? { text, limit, offset } : { text, limit, offset, filters };
+      const result = await invoke("search_prompts", sort === undefined ? args : { ...args, sort });
       if (!isPromptSearchPage(result)) {
         throw new Error("search_prompts returned an invalid response");
       }

@@ -9,4 +9,4 @@ pub use backup::{
 };
 pub use migration::{Database, LATEST_SCHEMA_VERSION, MigrationReport};
 pub use repository::{ImportJob, ImportJobItemRecord, PromptRepository, StoreError};
-pub use search::{SearchFilters, SearchHit, SearchPage, SearchQuery};
+pub use search::{SearchFilters, SearchHit, SearchPage, SearchQuery, SearchSort};

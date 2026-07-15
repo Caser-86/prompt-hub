@@ -22,12 +22,22 @@ pub struct SearchFilters {
     pub updated_before: Option<OffsetDateTime>,
 }
 
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SearchSort {
+    #[default]
+    Relevance,
+    UpdatedAt,
+    Rating,
+}
+
 #[derive(Debug, Clone)]
 pub struct SearchQuery {
     text: String,
     filters: SearchFilters,
     limit: u32,
     offset: u32,
+    sort: SearchSort,
 }
 
 impl SearchQuery {
@@ -38,6 +48,7 @@ impl SearchQuery {
             filters: SearchFilters::default(),
             limit: 20,
             offset: 0,
+            sort: SearchSort::default(),
         }
     }
 
@@ -51,6 +62,12 @@ impl SearchQuery {
     pub fn with_page(mut self, limit: u32, offset: u32) -> Self {
         self.limit = limit.clamp(1, 100);
         self.offset = offset;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_sort(mut self, sort: SearchSort) -> Self {
+        self.sort = sort;
         self
     }
 }
@@ -125,8 +142,9 @@ impl PromptRepository {
              WHERE 1 = 1"
         );
         append_filters(&mut sql, &mut values, &query.filters)?;
-        sql.push_str(
-            " ORDER BY
+        let order_by = match query.sort {
+            SearchSort::Relevance => {
+                " ORDER BY
                 m.text_rank ASC,
                 CASE p.effectiveness
                     WHEN 'effective' THEN 0
@@ -137,9 +155,13 @@ impl PromptRepository {
                 END ASC,
                 COALESCE(rating, 0) DESC,
                 p.updated_at DESC,
-                p.id ASC
-              LIMIT ? OFFSET ?",
-        );
+                p.id ASC"
+            }
+            SearchSort::UpdatedAt => " ORDER BY p.updated_at DESC, p.id ASC",
+            SearchSort::Rating => " ORDER BY COALESCE(rating, 0) DESC, p.updated_at DESC, p.id ASC",
+        };
+        sql.push_str(order_by);
+        sql.push_str(" LIMIT ? OFFSET ?");
         values.push(Value::Integer(i64::from(query.limit)));
         values.push(Value::Integer(i64::from(query.offset)));
 

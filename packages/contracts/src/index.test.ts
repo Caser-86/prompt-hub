@@ -136,6 +136,18 @@ describe("desktop command client", () => {
     ]);
   });
 
+  it("passes an explicit safe search sort through the command boundary", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      return { hits: [], total: 0 };
+    });
+
+    await client.searchPrompts("代码", 20, 0, undefined, "rating");
+
+    expect(calls).toEqual([{ command: "search_prompts", args: { text: "代码", limit: 20, offset: 0, sort: "rating" } }]);
+  });
+
   it("passes structured search filters through the service boundary", async () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const client = createDesktopCommandClient(async (command, args) => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { PromptSearchFilters, PromptSearchPage } from "@prompt-hub/contracts";
+import type { PromptSearchFilters, PromptSearchPage, PromptSearchSort } from "@prompt-hub/contracts";
 
 type PromptSearchProps = {
   searchPrompts: (
@@ -8,6 +8,7 @@ type PromptSearchProps = {
     limit?: number,
     offset?: number,
     filters?: PromptSearchFilters,
+    sort?: PromptSearchSort,
   ) => Promise<PromptSearchPage>;
 };
 
@@ -27,6 +28,7 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
   const [updatedAfter, setUpdatedAfter] = useState("");
   const [updatedBefore, setUpdatedBefore] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [sort, setSort] = useState<PromptSearchSort>("relevance");
   const [offset, setOffset] = useState(0);
   const generation = useRef(0);
 
@@ -55,9 +57,10 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
     setLoading(true);
     setError(false);
     const timeout = window.setTimeout(() => {
-      void (Object.keys(filters).length === 0
-        ? searchPrompts(trimmedQuery, 20, offset)
-        : searchPrompts(trimmedQuery, 20, offset, filters))
+      const hasFilters = Object.keys(filters).length > 0;
+      void (sort === "relevance"
+        ? (hasFilters ? searchPrompts(trimmedQuery, 20, offset, filters) : searchPrompts(trimmedQuery, 20, offset))
+        : searchPrompts(trimmedQuery, 20, offset, hasFilters ? filters : undefined, sort))
         .then((result) => {
           if (generation.current === requestGeneration) {
             setPage(result);
@@ -75,10 +78,10 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
         });
     }, 250);
     return () => window.clearTimeout(timeout);
-  }, [category, effectiveness, favoritesOnly, minimumRating, model, offset, query, searchPrompts, sourceKind, status, tagText, tool, updatedAfter, updatedBefore]);
+  }, [category, effectiveness, favoritesOnly, minimumRating, model, offset, query, searchPrompts, sort, sourceKind, status, tagText, tool, updatedAfter, updatedBefore]);
 
   const resetPage = () => setOffset(0);
-  const saveView = () => window.localStorage.setItem("prompt-hub.search-view", JSON.stringify({ query, effectiveness, minimumRating, status, sourceKind, category, tagText, tool, model, updatedAfter, updatedBefore }));
+  const saveView = () => window.localStorage.setItem("prompt-hub.search-view", JSON.stringify({ query, effectiveness, minimumRating, status, sourceKind, category, tagText, tool, model, updatedAfter, updatedBefore, sort }));
 
   return (
     <section aria-labelledby="search-title">
@@ -108,6 +111,9 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
       <label>更新开始日期<input onChange={(event) => { setUpdatedAfter(event.target.value); resetPage(); }} type="date" value={updatedAfter} /></label>
       <label>更新结束日期<input onChange={(event) => { setUpdatedBefore(event.target.value); resetPage(); }} type="date" value={updatedBefore} /></label>
       <label><input checked={favoritesOnly} onChange={(event) => { setFavoritesOnly(event.target.checked); resetPage(); }} type="checkbox" />仅看收藏</label>
+      <label>排序方式<select onChange={(event) => { setSort(event.target.value as PromptSearchSort); resetPage(); }} value={sort}>
+        <option value="relevance">相关度</option><option value="updated_at">最近更新</option><option value="rating">最高评分</option>
+      </select></label>
       <label>
         有效性筛选
         <select onChange={(event) => { setEffectiveness(event.target.value); resetPage(); }} value={effectiveness}>

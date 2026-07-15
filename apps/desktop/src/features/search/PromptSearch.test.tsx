@@ -96,4 +96,17 @@ describe("PromptSearch", () => {
     });
     vi.useRealTimers();
   });
+
+  it("switches the local search to explicit rating ordering", async () => {
+    vi.useFakeTimers();
+    const searchPrompts = vi.fn().mockResolvedValue({ hits: [], total: 0 });
+    render(<PromptSearch searchPrompts={searchPrompts} />);
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "搜索提示词" }), { target: { value: "审查" } });
+    fireEvent.change(screen.getByLabelText("排序方式"), { target: { value: "rating" } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(250); });
+
+    expect(searchPrompts).toHaveBeenLastCalledWith("审查", 20, 0, undefined, "rating");
+    vi.useRealTimers();
+  });
 });

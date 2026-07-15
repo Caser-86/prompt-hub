@@ -2,7 +2,7 @@ use prompt_domain::{
     Actor, AuditAction, Compatibility, CompatibilityStatus, EffectivenessStatus, Prompt,
     PromptContent, PromptSource, SourceKind, ValidationRecord,
 };
-use prompt_store::{Database, SearchFilters, SearchQuery};
+use prompt_store::{Database, SearchFilters, SearchQuery, SearchSort};
 use serde::Deserialize;
 use tempfile::tempdir;
 use time::macros::datetime;
@@ -136,6 +136,21 @@ fn pagination_is_deterministic_and_reports_the_full_total() {
     assert_eq!(first.total, 3);
     assert_ne!(first.hits[0].id, second.hits[0].id);
     assert_eq!(first.hits[0].id, repeat.hits[0].id);
+}
+
+#[test]
+fn supports_explicit_updated_at_and_rating_sorts() {
+    let repository = seed();
+
+    let newest = repository
+        .search(SearchQuery::new("").with_sort(SearchSort::UpdatedAt))
+        .unwrap();
+    let highest_rated = repository
+        .search(SearchQuery::new("").with_sort(SearchSort::Rating))
+        .unwrap();
+
+    assert_eq!(newest.hits[0].title, "旅行计划助手");
+    assert_eq!(highest_rated.hits[0].rating, Some(5));
 }
 
 #[test]
