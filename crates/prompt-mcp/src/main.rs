@@ -42,12 +42,29 @@ fn handle_request(line: &str) -> Value {
                 json!({"jsonrpc":"2.0", "id":id, "result":{"content":[{"type":"text", "text":result.to_string()}]}})
             }
             Err(message) => {
-                json!({"jsonrpc":"2.0", "id":id, "result":{"isError":true, "content":[{"type":"text", "text":message}]}})
+                json!({"jsonrpc":"2.0", "id":id, "result":{"isError":true, "content":[{"type":"text", "text":structured_tool_error(&message).to_string()}]}})
             }
         },
         Some(_) => error(id, -32601, "method not found"),
         None => error(id, -32600, "invalid request"),
     }
+}
+
+fn structured_tool_error(message: &str) -> Value {
+    let code = if message.starts_with("database_unavailable") {
+        "database_unavailable"
+    } else if message == "prompt_not_found" {
+        "not_found"
+    } else if message.contains("variable") {
+        "variable_validation_failed"
+    } else if message.starts_with("database_locked") {
+        "database_locked"
+    } else if message.starts_with("database_write_failed") || message == "serialization_failed" {
+        "internal"
+    } else {
+        "invalid_argument"
+    };
+    json!({"code": code, "message": message})
 }
 
 fn call_tool(request: &Value) -> Result<Value, String> {

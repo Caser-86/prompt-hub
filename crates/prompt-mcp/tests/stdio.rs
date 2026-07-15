@@ -45,6 +45,31 @@ fn stdio_server_discovers_only_approved_tools() {
 }
 
 #[test]
+fn stdio_server_returns_a_structured_database_unavailable_error() {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_prompt-mcp"))
+        .env_remove("PROMPT_HUB_DATABASE_PATH")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"search_prompts\",\"arguments\":{}}}\n")
+        .unwrap();
+    drop(child.stdin.take());
+
+    let output = child.wait_with_output().unwrap();
+    let response: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let error: serde_json::Value =
+        serde_json::from_str(response["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+
+    assert_eq!(error["code"], "database_unavailable");
+    assert!(error["message"].as_str().unwrap().contains("database"));
+}
+
+#[test]
 fn stdio_server_calls_read_tools_and_creates_only_an_inbox_draft() {
     let directory = tempdir().unwrap();
     let path = directory.path().join("prompt-hub.db");
