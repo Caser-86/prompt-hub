@@ -19,7 +19,7 @@ rust-version = "1.97"
 [workspace.dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
-rusqlite = { version = "0.40.1", features = ["bundled"] }
+rusqlite = { version = "0.40.1", features = ["backup", "bundled"] }
 secrecy = "0.10.3"
 thiserror = "2.0.18"
 time = { version = "0.3.53", features = ["serde", "formatting", "parsing", "macros"] }
