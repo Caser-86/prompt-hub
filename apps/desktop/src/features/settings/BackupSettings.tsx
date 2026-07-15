@@ -7,16 +7,20 @@ export function BackupSettings({
   createBackup,
   previewRestore,
   restoreBackup,
+  pruneBackups,
 }: {
   createBackup: () => Promise<BackupInfo>;
   previewRestore: (path: string) => Promise<RestorePreviewInfo>;
   restoreBackup: (path: string) => Promise<BackupInfo>;
+  pruneBackups: (retain: number) => Promise<number>;
 }) {
   const [backup, setBackup] = useState<BackupInfo | null>(null);
   const [path, setPath] = useState("");
   const [preview, setPreview] = useState<RestorePreviewInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [restored, setRestored] = useState<BackupInfo | null>(null);
+  const [retain, setRetain] = useState("10");
+  const [pruned, setPruned] = useState<number | null>(null);
 
   const makeBackup = async () => {
     setError(null);
@@ -31,6 +35,10 @@ export function BackupSettings({
     setError(null);
     try { setRestored(await restoreBackup(path)); } catch { setError("恢复失败；当前数据库保持不变，检查恢复前安全备份后再试。"); }
   };
+  const prune = async () => {
+    setError(null);
+    try { setPruned(await pruneBackups(Number(retain))); } catch { setError("无法清理备份，请检查备份目录权限。 "); }
+  };
 
   return <section aria-labelledby="backup-settings-title">
     <h2 id="backup-settings-title">备份与恢复</h2>
@@ -41,6 +49,9 @@ export function BackupSettings({
     <button disabled={!path} onClick={() => void inspectBackup()} type="button">检查恢复内容</button>
     {preview ? <><p role="status">恢复会替换现有数据库；备份架构版本 {preview.backupSchemaVersion}，大小 {preview.backupByteLen} 字节。</p><button onClick={() => void restore()} type="button">确认恢复备份</button></> : null}
     {restored ? <p role="status">恢复完成。恢复前安全备份：{restored.path}</p> : null}
+    <label>保留最近备份数<input min="0" onChange={(event) => setRetain(event.target.value)} type="number" value={retain} /></label>
+    <button disabled={!/^\d+$/.test(retain)} onClick={() => void prune()} type="button">清理旧备份</button>
+    {pruned !== null ? <p role="status">已清理 {pruned} 个旧备份。</p> : null}
     {error ? <p role="alert">{error}</p> : null}
   </section>;
 }

@@ -9,11 +9,12 @@ import { McpSettings } from "./McpSettings";
 import { AiDraftGenerator } from "../ai/AiDraftGenerator";
 
 export function SettingsPage({
-  createBackup, previewRestore, restoreBackup, getApplicationStatus, getAiCredentialStatus, saveAiCredential, recentImportJobs, generateAiDraft, getMcpSetup,
+  createBackup, previewRestore, restoreBackup, pruneLocalBackups, getApplicationStatus, getAiCredentialStatus, saveAiCredential, recentImportJobs, generateAiDraft, getMcpSetup,
 }: {
   createBackup: () => Promise<BackupInfo>;
   previewRestore: (path: string) => Promise<RestorePreviewInfo>;
   restoreBackup: (path: string) => Promise<BackupInfo>;
+  pruneLocalBackups: (retain: number) => Promise<number>;
   getApplicationStatus: () => Promise<ApplicationStatus>;
   getAiCredentialStatus: (providerId: string) => Promise<{ configured: boolean }>;
   saveAiCredential: (providerId: string, secret: string) => Promise<{ configured: boolean }>;
@@ -25,5 +26,5 @@ export function SettingsPage({
   const [importJobs, setImportJobs] = useState<ImportJobSummary[] | null>(null);
   useEffect(() => { void getApplicationStatus().then(setStatus).catch(() => setStatus(null)); }, [getApplicationStatus]);
   useEffect(() => { void recentImportJobs().then(setImportJobs).catch(() => setImportJobs([])); }, [recentImportJobs]);
-  return <><BackupSettings createBackup={createBackup} previewRestore={previewRestore} restoreBackup={restoreBackup} /><AiSettings getStatus={getAiCredentialStatus} saveCredential={saveAiCredential} /><AiDraftGenerator generateDraft={generateAiDraft} /><McpSettings getSetup={getMcpSetup} /><DiagnosticsPanel importJobs={importJobs} status={status} /><OnboardingGuide /></>;
+  return <><BackupSettings createBackup={createBackup} previewRestore={previewRestore} restoreBackup={restoreBackup} pruneBackups={pruneLocalBackups} /><AiSettings getStatus={getAiCredentialStatus} saveCredential={saveAiCredential} /><AiDraftGenerator generateDraft={generateAiDraft} /><McpSettings getSetup={getMcpSetup} /><DiagnosticsPanel importJobs={importJobs} status={status} /><OnboardingGuide /></>;
 }

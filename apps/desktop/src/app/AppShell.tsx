@@ -147,6 +147,7 @@ export function AppShell() {
               getMcpSetup={desktopCommands.getMcpSetup}
               generateAiDraft={desktopCommands.generateAiDraft}
               previewRestore={desktopCommands.previewBackupRestore}
+              pruneLocalBackups={desktopCommands.pruneLocalBackups}
               recentImportJobs={desktopCommands.recentImportJobs}
               restoreBackup={desktopCommands.restoreBackup}
               saveAiCredential={desktopCommands.saveAiCredential}

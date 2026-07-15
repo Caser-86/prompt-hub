@@ -33,6 +33,7 @@ pub fn run() {
             commands::import_url_to_inbox,
             commands::recent_import_jobs,
             commands::get_mcp_setup,
+            commands::prune_local_backups,
             commands::publish_prompt,
             commands::revise_prompt,
             commands::archive_prompt,

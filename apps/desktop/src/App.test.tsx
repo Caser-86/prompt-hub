@@ -22,6 +22,7 @@ const desktopMock = vi.hoisted(() => ({
   createManualBackup: vi.fn(),
   previewBackupRestore: vi.fn(),
   restoreBackup: vi.fn(),
+  pruneLocalBackups: vi.fn(),
   getAiCredentialStatus: vi.fn(),
   saveAiCredential: vi.fn(),
   generateAiDraft: vi.fn(),

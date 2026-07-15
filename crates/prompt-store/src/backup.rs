@@ -138,6 +138,40 @@ pub fn restore_backup(backup: &Path, target: &Path) -> Result<RestoreReport, Sto
     })
 }
 
+pub fn prune_backups(source: &Path, retain: usize) -> Result<usize, StoreError> {
+    let backup_directory = source
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("backups");
+    if !backup_directory.exists() {
+        return Ok(0);
+    }
+    let prefix = format!(
+        "{}-",
+        source
+            .file_stem()
+            .and_then(|name| name.to_str())
+            .unwrap_or("prompt-hub")
+    );
+    let mut backups = fs::read_dir(&backup_directory)?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.starts_with(&prefix) && name.ends_with(".db"))
+        })
+        .collect::<Vec<_>>();
+    backups.sort_by_key(|entry| std::cmp::Reverse(entry.file_name()));
+    let mut removed = 0;
+    for entry in backups.into_iter().skip(retain) {
+        fs::remove_file(entry.path())?;
+        removed += 1;
+    }
+    Ok(removed)
+}
+
 fn backup_metadata(
     path: PathBuf,
     destination: BackupDestination,

@@ -1,4 +1,6 @@
-use prompt_store::{BackupDestination, create_backup, preview_restore, restore_backup};
+use prompt_store::{
+    BackupDestination, create_backup, preview_restore, prune_backups, restore_backup,
+};
 use rusqlite::Connection;
 use tempfile::tempdir;
 
@@ -104,4 +106,27 @@ fn restores_an_open_repository_from_a_verified_backup() {
         .query_row("SELECT value FROM marker", [], |row| row.get(0))
         .unwrap();
     assert_eq!(value, "original");
+}
+
+#[test]
+fn retention_prunes_only_application_named_backups_beyond_the_requested_count() {
+    let directory = tempdir().unwrap();
+    let source = directory.path().join("library.db");
+    database_with_marker(&source, "original");
+    let backup_directory = directory.path().join("backups");
+    std::fs::create_dir(&backup_directory).unwrap();
+    for name in [
+        "library-manual-0001.db",
+        "library-manual-0002.db",
+        "library-manual-0003.db",
+        "other.db",
+    ] {
+        std::fs::write(backup_directory.join(name), b"marker").unwrap();
+    }
+
+    assert_eq!(prune_backups(&source, 2).unwrap(), 1);
+    assert!(!backup_directory.join("library-manual-0001.db").exists());
+    assert!(backup_directory.join("library-manual-0002.db").exists());
+    assert!(backup_directory.join("library-manual-0003.db").exists());
+    assert!(backup_directory.join("other.db").exists());
 }

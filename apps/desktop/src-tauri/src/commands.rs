@@ -22,7 +22,7 @@ use prompt_import::{
 };
 use prompt_store::{
     BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage,
-    SearchQuery, create_backup, preview_restore,
+    SearchQuery, create_backup, preview_restore, prune_backups,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
@@ -211,6 +211,10 @@ impl BackupService {
             })
             .to_string(),
         }
+    }
+
+    fn prune_backups(&self, retain: usize) -> Result<usize, String> {
+        prune_backups(&self.database_path, retain).map_err(|error| error.to_string())
     }
 }
 
@@ -986,6 +990,14 @@ pub fn recent_import_jobs(
 #[tauri::command]
 pub fn get_mcp_setup(backups: State<'_, BackupService>) -> McpSetupInfo {
     backups.mcp_setup()
+}
+
+#[tauri::command]
+pub fn prune_local_backups(
+    backups: State<'_, BackupService>,
+    retain: usize,
+) -> Result<usize, String> {
+    backups.prune_backups(retain)
 }
 
 #[tauri::command]

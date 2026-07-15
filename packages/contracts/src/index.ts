@@ -113,6 +113,7 @@ export type DesktopCommandClient = {
   createManualBackup: () => Promise<BackupInfo>;
   previewBackupRestore: (path: string) => Promise<BackupRestorePreview>;
   restoreBackup: (path: string) => Promise<BackupInfo>;
+  pruneLocalBackups: (retain: number) => Promise<number>;
   listPrompts: () => Promise<PromptListItem[]>;
   promptHistory: (id: string) => Promise<PromptHistoryItem[]>;
   restorePromptVersion: (id: string, versionNumber: number) => Promise<unknown>;
@@ -165,6 +166,11 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       if (!isBackupInfo(result)) {
         throw new Error("restore_backup returned an invalid response");
       }
+      return result;
+    },
+    async pruneLocalBackups(retain) {
+      const result = await invoke("prune_local_backups", { retain });
+      if (typeof result !== "number") throw new Error("prune_local_backups returned an invalid response");
       return result;
     },
     async listPrompts() {
