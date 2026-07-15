@@ -6,6 +6,7 @@ use prompt_domain::{
 };
 use serde::Serialize;
 use time::OffsetDateTime;
+use tauri::State;
 
 use prompt_store::{LATEST_SCHEMA_VERSION, PromptRepository};
 
@@ -49,6 +50,14 @@ impl PromptService {
         let prompt = Prompt::new_inbox(content, source, Actor::User, created_at);
         self.save(&prompt, AuditAction::Created)?;
         Ok(prompt)
+    }
+
+    pub fn list(&self) -> Result<Vec<Prompt>, String> {
+        self.repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?
+            .list()
+            .map_err(|error| error.to_string())
     }
 
     pub fn publish(&self, id: PromptId, published_at: OffsetDateTime) -> Result<Prompt, String> {
@@ -133,6 +142,19 @@ impl PromptService {
             .save(prompt, action)
             .map_err(|error| error.to_string())
     }
+}
+
+#[tauri::command]
+pub fn list_prompts(service: State<'_, PromptService>) -> Result<Vec<Prompt>, String> {
+    service.list()
+}
+
+#[tauri::command]
+pub fn create_manual_prompt_draft(
+    service: State<'_, PromptService>,
+    draft: ManualPromptDraft,
+) -> Result<Prompt, String> {
+    service.create_manual_draft(draft, OffsetDateTime::now_utc())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

@@ -46,3 +46,22 @@ fn user_can_create_publish_edit_and_restore_a_prompt_through_the_service_boundar
     assert_eq!(restored.current_version().number(), 3);
     assert_eq!(restored.current_version().content().body(), "审查当前变更");
 }
+
+#[test]
+fn service_lists_prompts_for_the_library() {
+    let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
+    let created = service
+        .create_manual_draft(
+            ManualPromptDraft {
+                title: "本地资产".to_owned(),
+                body: "可查询的正文".to_owned(),
+                description: None,
+                category: Some("开发".to_owned()),
+                tags: vec!["本地".to_owned()],
+            },
+            datetime!(2026-07-15 00:00 UTC),
+        )
+        .unwrap();
+
+    assert_eq!(service.list().unwrap(), vec![created]);
+}
