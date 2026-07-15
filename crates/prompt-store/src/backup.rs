@@ -94,7 +94,15 @@ pub fn create_backup(
         .parent()
         .unwrap_or_else(|| Path::new("."))
         .join("backups");
-    fs::create_dir_all(&backup_directory)?;
+    create_backup_in_directory(source, &backup_directory, destination)
+}
+
+pub fn create_backup_in_directory(
+    source: &Path,
+    backup_directory: &Path,
+    destination: BackupDestination,
+) -> Result<BackupMetadata, StoreError> {
+    fs::create_dir_all(backup_directory)?;
     let path = backup_directory.join(format!(
         "{}-{}-{}.db",
         source

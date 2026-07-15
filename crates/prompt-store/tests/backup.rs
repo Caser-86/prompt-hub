@@ -1,5 +1,6 @@
 use prompt_store::{
-    BackupDestination, create_backup, preview_restore, prune_backups, restore_backup,
+    BackupDestination, create_backup, create_backup_in_directory, preview_restore, prune_backups,
+    restore_backup,
 };
 use rusqlite::Connection;
 use tempfile::tempdir;
@@ -25,6 +26,21 @@ fn creates_an_integrity_checked_backup_with_metadata() {
     assert!(backup.path().exists());
     assert!(backup.byte_len() > 0);
     assert_eq!(backup.schema_version(), 0);
+    assert_eq!(backup.destination(), BackupDestination::Manual);
+}
+
+#[test]
+fn creates_a_manual_backup_in_the_user_selected_directory() {
+    let directory = tempdir().unwrap();
+    let source = directory.path().join("library.db");
+    let backup_directory = directory.path().join("chosen-backups");
+    database_with_marker(&source, "original");
+
+    let backup =
+        create_backup_in_directory(&source, &backup_directory, BackupDestination::Manual).unwrap();
+
+    assert_eq!(backup.path().parent(), Some(backup_directory.as_path()));
+    assert!(backup.path().exists());
     assert_eq!(backup.destination(), BackupDestination::Manual);
 }
 

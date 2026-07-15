@@ -14,6 +14,16 @@ describe("BackupSettings", () => {
     expect(screen.getByText(/备份已完成并通过完整性校验/)).toBeInTheDocument();
   });
 
+  it("creates a backup in the directory selected by the user", async () => {
+    const createBackup = vi.fn().mockResolvedValue({ path: "D:/backups/manual.db", byteLen: 512, schemaVersion: 2 });
+    render(<BackupSettings createBackup={createBackup} previewRestore={vi.fn()} pruneBackups={vi.fn()} restoreBackup={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText("备份目录（可选）"), { target: { value: "D:/backups" } });
+    fireEvent.click(screen.getByRole("button", { name: "立即创建备份" }));
+
+    await waitFor(() => expect(createBackup).toHaveBeenCalledWith("D:/backups"));
+  });
+
   it("shows a read-only restore preview before a destructive restore", async () => {
     const previewRestore = vi.fn().mockResolvedValue({ targetExists: true, backupSchemaVersion: 2, backupByteLen: 512 });
     render(<BackupSettings createBackup={vi.fn()} previewRestore={previewRestore} pruneBackups={vi.fn()} restoreBackup={vi.fn()} />);

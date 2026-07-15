@@ -123,7 +123,7 @@ export type DesktopCommandClient = {
   getDiagnosticsStatus: () => Promise<DiagnosticsStatus>;
   getRedactedDiagnosticEvents: () => Promise<RedactedDiagnosticEvent[]>;
   rebuildSearchIndex: () => Promise<void>;
-  createManualBackup: () => Promise<BackupInfo>;
+  createManualBackup: (directory?: string) => Promise<BackupInfo>;
   previewBackupRestore: (path: string) => Promise<BackupRestorePreview>;
   restoreBackup: (path: string) => Promise<BackupInfo>;
   pruneLocalBackups: (retain: number) => Promise<number>;
@@ -182,8 +182,8 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
     async rebuildSearchIndex() {
       await invoke("rebuild_search_index");
     },
-    async createManualBackup() {
-      const result = await invoke("create_manual_backup");
+    async createManualBackup(directory) {
+      const result = await invoke("create_manual_backup", directory ? { directory } : undefined);
       if (!isBackupInfo(result)) throw new Error("create_manual_backup returned an invalid response");
       return result;
     },

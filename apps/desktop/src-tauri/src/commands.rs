@@ -24,7 +24,8 @@ use prompt_import::{
 };
 use prompt_store::{
     BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage,
-    SearchQuery, SearchSort, create_backup, preview_restore, prune_backups,
+    SearchQuery, SearchSort, create_backup, create_backup_in_directory, preview_restore,
+    prune_backups,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
@@ -222,11 +223,16 @@ impl BackupService {
         Self { database_path }
     }
 
-    fn create_manual_backup(&self) -> Result<BackupInfo, String> {
-        BackupInfo::from_store(
-            create_backup(&self.database_path, BackupDestination::Manual)
-                .map_err(|error| error.to_string())?,
-        )
+    fn create_manual_backup(&self, directory: Option<PathBuf>) -> Result<BackupInfo, String> {
+        let backup = match directory {
+            Some(directory) => create_backup_in_directory(
+                &self.database_path,
+                &directory,
+                BackupDestination::Manual,
+            ),
+            None => create_backup(&self.database_path, BackupDestination::Manual),
+        };
+        BackupInfo::from_store(backup.map_err(|error| error.to_string())?)
     }
 
     fn preview_restore(&self, path: PathBuf) -> Result<BackupRestorePreview, String> {
@@ -1663,8 +1669,11 @@ pub fn save_ai_credential(
 }
 
 #[tauri::command]
-pub fn create_manual_backup(service: State<'_, BackupService>) -> Result<BackupInfo, String> {
-    service.create_manual_backup()
+pub fn create_manual_backup(
+    service: State<'_, BackupService>,
+    directory: Option<String>,
+) -> Result<BackupInfo, String> {
+    service.create_manual_backup(directory.map(PathBuf::from))
 }
 
 #[tauri::command]
@@ -1733,7 +1742,7 @@ mod backup_service_tests {
         drop(database);
         let service = BackupService::new(database_path);
 
-        let backup = service.create_manual_backup().unwrap();
+        let backup = service.create_manual_backup(None).unwrap();
         let preview = service.preview_restore(PathBuf::from(backup.path)).unwrap();
 
         assert!(preview.target_exists);

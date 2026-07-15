@@ -11,7 +11,7 @@ import { AiDraftGenerator } from "../ai/AiDraftGenerator";
 export function SettingsPage({
   createBackup, previewRestore, restoreBackup, pruneLocalBackups, getApplicationStatus, getDiagnosticsStatus, getRedactedDiagnosticEvents, rebuildSearchIndex, getAiCredentialStatus, saveAiCredential, recentImportJobs, generateAiDraft, cancelAiGeneration, testAiConnection, getMcpSetup,
 }: {
-  createBackup: () => Promise<BackupInfo>;
+  createBackup: (directory?: string) => Promise<BackupInfo>;
   previewRestore: (path: string) => Promise<RestorePreviewInfo>;
   restoreBackup: (path: string) => Promise<BackupInfo>;
   pruneLocalBackups: (retain: number) => Promise<number>;

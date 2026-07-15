@@ -9,12 +9,13 @@ export function BackupSettings({
   restoreBackup,
   pruneBackups,
 }: {
-  createBackup: () => Promise<BackupInfo>;
+  createBackup: (directory?: string) => Promise<BackupInfo>;
   previewRestore: (path: string) => Promise<RestorePreviewInfo>;
   restoreBackup: (path: string) => Promise<BackupInfo>;
   pruneBackups: (retain: number) => Promise<number>;
 }) {
   const [backup, setBackup] = useState<BackupInfo | null>(null);
+  const [backupDirectory, setBackupDirectory] = useState("");
   const [path, setPath] = useState("");
   const [preview, setPreview] = useState<RestorePreviewInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +25,7 @@ export function BackupSettings({
 
   const makeBackup = async () => {
     setError(null);
-    try { setBackup(await createBackup()); } catch { setError("无法创建备份，请检查数据目录和可用磁盘空间。"); }
+    try { setBackup(await createBackup(backupDirectory.trim() || undefined)); } catch { setError("无法创建备份，请检查备份目录和可用磁盘空间。"); }
   };
   const inspectBackup = async () => {
     setError(null);
@@ -43,6 +44,7 @@ export function BackupSettings({
   return <section aria-labelledby="backup-settings-title">
     <h2 id="backup-settings-title">备份与恢复</h2>
     <p>备份仅保存在本机。恢复前会先检查备份完整性并显示预览。</p>
+    <label>备份目录（可选）<input onChange={(event) => setBackupDirectory(event.target.value)} placeholder="留空则保存到本机默认备份目录" value={backupDirectory} /></label>
     <button onClick={() => void makeBackup()} type="button">立即创建备份</button>
     {backup ? <p role="status">备份已完成并通过完整性校验：{backup.path}（架构版本 {backup.schemaVersion}）</p> : null}
     <label>备份文件路径<input onChange={(event) => setPath(event.target.value)} value={path} /></label>
