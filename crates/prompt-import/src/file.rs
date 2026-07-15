@@ -58,6 +58,40 @@ pub fn parse_file(path: &Path) -> Result<Vec<ImportCandidate>, FileImportError> 
     }
 }
 
+pub fn scan_folder(path: &Path) -> Result<Vec<ImportCandidate>, FileImportError> {
+    let mut candidates = Vec::new();
+    scan_entries(path, &mut candidates)?;
+    Ok(candidates)
+}
+
+fn scan_entries(path: &Path, candidates: &mut Vec<ImportCandidate>) -> Result<(), FileImportError> {
+    let mut entries = fs::read_dir(path)?.collect::<Result<Vec<_>, _>>()?;
+    entries.sort_by_key(|entry| entry.path());
+    for entry in entries {
+        let file_type = entry.file_type()?;
+        if file_type.is_symlink() {
+            continue;
+        }
+        let path = entry.path();
+        if file_type.is_dir() {
+            scan_entries(&path, candidates)?;
+        } else if file_type.is_file() && is_supported_format(&path) {
+            candidates.extend(parse_file(&path)?);
+        }
+    }
+    Ok(())
+}
+
+fn is_supported_format(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|value| value.to_str())
+            .map(str::to_ascii_lowercase)
+            .as_deref(),
+        Some("md" | "markdown" | "txt" | "json" | "csv")
+    )
+}
+
 #[must_use]
 pub fn normalized_body_fingerprint(body: &str) -> String {
     let normalized = body.split_whitespace().collect::<Vec<_>>().join(" ");
