@@ -14,6 +14,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_application_status,
             commands::list_prompts,
+            commands::prompt_history,
             commands::create_manual_prompt_draft,
             commands::publish_prompt,
             commands::revise_prompt,

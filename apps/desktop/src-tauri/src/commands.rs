@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use prompt_domain::{
     Actor, AuditAction, EffectivenessStatus, Prompt, PromptContent, PromptId, PromptSource,
-    SourceKind,
+    PromptVersion, SourceKind,
 };
 use serde::Serialize;
 use tauri::State;
@@ -57,6 +57,14 @@ impl PromptService {
             .lock()
             .map_err(|_| "prompt repository is unavailable".to_owned())?
             .list()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn history(&self, id: PromptId) -> Result<Vec<PromptVersion>, String> {
+        self.repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?
+            .history(id)
             .map_err(|error| error.to_string())
     }
 
@@ -174,6 +182,14 @@ impl PromptService {
 #[tauri::command]
 pub fn list_prompts(service: State<'_, PromptService>) -> Result<Vec<Prompt>, String> {
     service.list()
+}
+
+#[tauri::command]
+pub fn prompt_history(
+    service: State<'_, PromptService>,
+    id: PromptId,
+) -> Result<Vec<PromptVersion>, String> {
+    service.history(id)
 }
 
 #[tauri::command]

@@ -48,6 +48,45 @@ fn user_can_create_publish_edit_and_restore_a_prompt_through_the_service_boundar
 }
 
 #[test]
+fn service_exposes_ordered_version_history_for_comparison() {
+    let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
+    let created = service
+        .create_manual_draft(
+            ManualPromptDraft {
+                title: "历史记录".to_owned(),
+                body: "第一版".to_owned(),
+                description: None,
+                category: Some("开发".to_owned()),
+                tags: vec![],
+            },
+            datetime!(2026-07-15 00:00 UTC),
+        )
+        .unwrap();
+    service
+        .revise(
+            created.id(),
+            ManualPromptDraft {
+                title: "历史记录".to_owned(),
+                body: "第二版".to_owned(),
+                description: None,
+                category: Some("开发".to_owned()),
+                tags: vec![],
+            },
+            datetime!(2026-07-15 00:01 UTC),
+        )
+        .unwrap();
+
+    let history = service.history(created.id()).unwrap();
+    assert_eq!(
+        history
+            .iter()
+            .map(|version| version.number())
+            .collect::<Vec<_>>(),
+        [1, 2]
+    );
+}
+
+#[test]
 fn service_lists_prompts_for_the_library() {
     let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
     let created = service
