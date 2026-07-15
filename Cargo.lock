@@ -3112,11 +3112,13 @@ name = "prompt-import"
 version = "0.1.0"
 dependencies = [
  "csv",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
  "thiserror 2.0.18",
+ "time",
  "url",
 ]
 

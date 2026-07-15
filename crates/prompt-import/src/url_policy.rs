@@ -22,6 +22,19 @@ impl Default for UrlPolicy {
 }
 
 impl UrlPolicy {
+    pub fn validate_url(&self, url: &Url) -> Result<(), UrlPolicyError> {
+        if !matches!(url.scheme(), "http" | "https") {
+            return Err(UrlPolicyError::UnsupportedScheme);
+        }
+        if !url.username().is_empty() || url.password().is_some() {
+            return Err(UrlPolicyError::EmbeddedCredentials);
+        }
+        if url.host().is_none() {
+            return Err(UrlPolicyError::MissingHost);
+        }
+        Ok(())
+    }
+
     #[must_use]
     pub const fn request_timeout(&self) -> Duration {
         self.request_timeout
@@ -42,15 +55,7 @@ impl UrlPolicy {
         url: &Url,
         addresses: &[IpAddr],
     ) -> Result<(), UrlPolicyError> {
-        if !matches!(url.scheme(), "http" | "https") {
-            return Err(UrlPolicyError::UnsupportedScheme);
-        }
-        if !url.username().is_empty() || url.password().is_some() {
-            return Err(UrlPolicyError::EmbeddedCredentials);
-        }
-        if url.host().is_none() {
-            return Err(UrlPolicyError::MissingHost);
-        }
+        self.validate_url(url)?;
         if addresses.is_empty() {
             return Err(UrlPolicyError::ResolutionRequired);
         }
