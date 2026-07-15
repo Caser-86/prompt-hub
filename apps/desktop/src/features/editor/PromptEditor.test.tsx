@@ -1,0 +1,24 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+
+import { PromptEditor } from "./PromptEditor";
+
+describe("PromptEditor", () => {
+  it("submits a manual prompt as an inbox draft", async () => {
+    const saveDraft = vi.fn().mockResolvedValue(undefined);
+    render(<PromptEditor saveDraft={saveDraft} />);
+
+    fireEvent.change(screen.getByLabelText("标题"), { target: { value: "代码审查" } });
+    fireEvent.change(screen.getByLabelText("正文"), { target: { value: "审查当前变更" } });
+    fireEvent.change(screen.getByLabelText("分类"), { target: { value: "开发" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存到收件箱" }));
+
+    expect(saveDraft).toHaveBeenCalledWith({
+      title: "代码审查",
+      body: "审查当前变更",
+      description: null,
+      category: "开发",
+      tags: [],
+    });
+  });
+});
