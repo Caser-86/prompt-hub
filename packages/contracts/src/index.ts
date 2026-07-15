@@ -90,6 +90,7 @@ export type PromptListItem = {
   category: string | null;
   tags: string[];
   sourceNames: string[];
+  sources?: Array<{ kind: string; name: string; location: string | null; collectedAt: string }>;
   applicableTools?: string[];
   applicableModels?: string[];
   rating?: number | null;
@@ -341,6 +342,7 @@ function isPromptListItem(value: unknown): value is PromptListItem {
     (typeof item.category === "string" || item.category === null) &&
     Array.isArray(item.tags) && item.tags.every((tag) => typeof tag === "string") &&
     Array.isArray(item.sourceNames) && item.sourceNames.every((name) => typeof name === "string") &&
+    (item.sources === undefined || (Array.isArray(item.sources) && item.sources.every(isPromptSourceEvidence))) &&
     (item.applicableTools === undefined || (Array.isArray(item.applicableTools) && item.applicableTools.every((tool) => typeof tool === "string"))) &&
     (item.applicableModels === undefined || (Array.isArray(item.applicableModels) && item.applicableModels.every((model) => typeof model === "string"))) &&
     (item.rating === undefined || item.rating === null || typeof item.rating === "number") &&
@@ -348,6 +350,13 @@ function isPromptListItem(value: unknown): value is PromptListItem {
     typeof item.createdAt === "string" &&
     typeof item.updatedAt === "string"
   );
+}
+
+function isPromptSourceEvidence(value: unknown): value is { kind: string; name: string; location: string | null; collectedAt: string } {
+  if (typeof value !== "object" || value === null) return false;
+  const source = value as Record<string, unknown>;
+  return typeof source.kind === "string" && typeof source.name === "string"
+    && (typeof source.location === "string" || source.location === null) && typeof source.collectedAt === "string";
 }
 
 function isPromptHistoryItem(value: unknown): value is PromptHistoryItem {

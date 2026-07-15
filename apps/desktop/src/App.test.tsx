@@ -88,6 +88,7 @@ describe("App", () => {
         category: "开发",
         tags: ["审查"],
         sourceNames: ["手动录入"],
+        sources: [{ kind: "web_url", name: "工程规范", location: "https://example.com/guide", collectedAt: "2026-07-15T00:00:00Z" }],
         favorite: false,
         createdAt: "2026-07-15T00:00:00Z",
         updatedAt: "2026-07-15T00:01:00Z",
@@ -101,6 +102,9 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: "打开提示词：代码审查" }));
     expect(screen.getByRole("form", { name: "提示词元数据" })).toBeVisible();
     expect(await screen.findByRole("heading", { name: "版本历史" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "完整来源" })).toBeVisible();
+    expect(screen.getByText(/工程规范 · https:\/\/example.com\/guide/)).toBeVisible();
+    expect(screen.getAllByText("2026-07-15T00:00:00Z").at(-1)).toBeVisible();
     expect(screen.getByRole("button", { name: "软删除提示词" })).toBeVisible();
   });
 

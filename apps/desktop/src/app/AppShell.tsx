@@ -96,6 +96,7 @@ export function AppShell() {
                 <button onClick={() => setSelectedPrompt(null)} type="button">返回提示词库</button>
                 <h2 id="prompt-details-title">{selectedPrompt.title}</h2>
                 <p>来源：{selectedPrompt.sourceNames.join("、") || "未记录"}</p>
+                {selectedPrompt.sources?.length ? <section aria-label="完整来源证据"><h3>完整来源</h3><ul>{selectedPrompt.sources.map((source) => <li key={`${source.kind}-${source.name}-${source.collectedAt}`}>{source.name} · {source.location ?? "无位置记录"} · <time dateTime={source.collectedAt}>{source.collectedAt}</time></li>)}</ul></section> : null}
                 <time dateTime={selectedPrompt.createdAt}>创建于 {selectedPrompt.createdAt}</time>
                 <time dateTime={selectedPrompt.updatedAt}>最后更新于 {selectedPrompt.updatedAt}</time>
                 <p>适用工具：{selectedPrompt.applicableTools?.join("、") || "未记录"}</p>

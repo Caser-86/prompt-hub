@@ -1093,12 +1093,22 @@ pub struct PromptListItem {
     category: Option<String>,
     tags: Vec<String>,
     source_names: Vec<String>,
+    sources: Vec<PromptSourceItem>,
     applicable_tools: Vec<String>,
     applicable_models: Vec<String>,
     rating: Option<u8>,
     favorite: bool,
     created_at: String,
     updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptSourceItem {
+    kind: SourceKind,
+    name: String,
+    location: Option<String>,
+    collected_at: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1188,6 +1198,18 @@ impl PromptListItem {
                 .iter()
                 .map(|source| source.name().to_owned())
                 .collect(),
+            sources: prompt
+                .sources()
+                .iter()
+                .map(|source| {
+                    Ok(PromptSourceItem {
+                        kind: source.kind(),
+                        name: source.name().to_owned(),
+                        location: source.location().map(str::to_owned),
+                        collected_at: format_timestamp(source.collected_at())?,
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>()?,
             applicable_tools: prompt
                 .compatibilities()
                 .iter()
