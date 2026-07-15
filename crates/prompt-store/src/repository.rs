@@ -151,6 +151,27 @@ impl PromptRepository {
             .transpose()
     }
 
+    pub fn permanently_delete(&mut self, id: PromptId) -> Result<(), StoreError> {
+        let prompt_id = id.value().to_string();
+        let transaction = self.connection.transaction()?;
+        let status: Option<String> = transaction
+            .query_row(
+                "SELECT status FROM prompts WHERE id = ?1",
+                [&prompt_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if status.as_deref() != Some("deleted") {
+            return Err(StoreError::Domain(
+                "only soft-deleted prompts can be permanently removed".to_owned(),
+            ));
+        }
+        transaction.execute("DELETE FROM prompt_fts WHERE prompt_id = ?1", [&prompt_id])?;
+        transaction.execute("DELETE FROM prompts WHERE id = ?1", [&prompt_id])?;
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn list(&self) -> Result<Vec<Prompt>, StoreError> {
         let mut statement = self
             .connection

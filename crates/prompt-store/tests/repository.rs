@@ -147,6 +147,40 @@ fn persists_soft_deletion_with_its_recovery_timestamp() {
 }
 
 #[test]
+fn permanently_deletes_a_soft_deleted_prompt_and_its_search_entry() {
+    let database = Database::open_in_memory().unwrap();
+    let mut repository = database.into_repository();
+    let mut prompt = prompt("永久清除目标");
+    repository.save(&prompt, AuditAction::Created).unwrap();
+    prompt
+        .soft_delete(Actor::User, datetime!(2026-07-15 00:03 UTC))
+        .unwrap();
+    repository.save(&prompt, AuditAction::Deleted).unwrap();
+
+    repository.permanently_delete(prompt.id()).unwrap();
+
+    assert!(repository.get(prompt.id()).unwrap().is_none());
+    assert!(
+        repository
+            .search(prompt_store::SearchQuery::new("永久清除目标"))
+            .unwrap()
+            .hits
+            .is_empty()
+    );
+}
+
+#[test]
+fn permanent_deletion_rejects_a_prompt_that_is_not_soft_deleted() {
+    let database = Database::open_in_memory().unwrap();
+    let mut repository = database.into_repository();
+    let prompt = prompt("仍在收件箱");
+    repository.save(&prompt, AuditAction::Created).unwrap();
+
+    assert!(repository.permanently_delete(prompt.id()).is_err());
+    assert!(repository.get(prompt.id()).unwrap().is_some());
+}
+
+#[test]
 fn lists_prompts_by_most_recent_update_for_the_library() {
     let database = Database::open_in_memory().unwrap();
     let mut repository = database.into_repository();
