@@ -59,4 +59,19 @@ describe("PromptSearch", () => {
     });
     vi.useRealTimers();
   });
+
+  it("paginates deterministically and saves the local view state", async () => {
+    vi.useFakeTimers();
+    const searchPrompts = vi.fn().mockResolvedValue({ hits: [], total: 41 });
+    render(<PromptSearch searchPrompts={searchPrompts} />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "搜索提示词" }), { target: { value: "审查" } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(250); });
+    fireEvent.click(screen.getByRole("button", { name: "下一页" }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(250); });
+    expect(searchPrompts).toHaveBeenLastCalledWith("审查", 20, 20);
+
+    fireEvent.click(screen.getByRole("button", { name: "保存当前视图" }));
+    expect(window.localStorage.getItem("prompt-hub.search-view")).toContain("审查");
+    vi.useRealTimers();
+  });
 });

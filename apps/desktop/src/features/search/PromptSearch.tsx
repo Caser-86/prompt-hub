@@ -18,6 +18,7 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
   const [hasError, setError] = useState(false);
   const [effectiveness, setEffectiveness] = useState("");
   const [minimumRating, setMinimumRating] = useState("");
+  const [offset, setOffset] = useState(0);
   const generation = useRef(0);
 
   useEffect(() => {
@@ -37,8 +38,8 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
     setError(false);
     const timeout = window.setTimeout(() => {
       void (Object.keys(filters).length === 0
-        ? searchPrompts(trimmedQuery, 20, 0)
-        : searchPrompts(trimmedQuery, 20, 0, filters))
+        ? searchPrompts(trimmedQuery, 20, offset)
+        : searchPrompts(trimmedQuery, 20, offset, filters))
         .then((result) => {
           if (generation.current === requestGeneration) {
             setPage(result);
@@ -56,7 +57,10 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
         });
     }, 250);
     return () => window.clearTimeout(timeout);
-  }, [effectiveness, minimumRating, query, searchPrompts]);
+  }, [effectiveness, minimumRating, offset, query, searchPrompts]);
+
+  const resetPage = () => setOffset(0);
+  const saveView = () => window.localStorage.setItem("prompt-hub.search-view", JSON.stringify({ query, effectiveness, minimumRating }));
 
   return (
     <section aria-labelledby="search-title">
@@ -67,6 +71,7 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
           onChange={(event) => {
             generation.current += 1;
             setQuery(event.target.value);
+            resetPage();
           }}
           role="searchbox"
           value={query}
@@ -74,7 +79,7 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
       </label>
       <label>
         有效性筛选
-        <select onChange={(event) => setEffectiveness(event.target.value)} value={effectiveness}>
+        <select onChange={(event) => { setEffectiveness(event.target.value); resetPage(); }} value={effectiveness}>
           <option value="">全部</option>
           <option value="unverified">未验证</option>
           <option value="effective">有效</option>
@@ -84,7 +89,7 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
       </label>
       <label>
         最低评分
-        <select onChange={(event) => setMinimumRating(event.target.value)} value={minimumRating}>
+        <select onChange={(event) => { setMinimumRating(event.target.value); resetPage(); }} value={minimumRating}>
           <option value="">不限</option>
           <option value="1">1</option>
           <option value="2">2</option>
@@ -93,6 +98,7 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
           <option value="5">5</option>
         </select>
       </label>
+      <button onClick={saveView} type="button">保存当前视图</button>
       {isLoading ? <p role="status">正在搜索本地提示词库…</p> : null}
       {hasError ? <p role="alert">搜索失败，请重试。</p> : null}
       {page?.total === 0 ? <p>没有匹配的提示词。</p> : null}
@@ -108,6 +114,11 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
           ))}
         </ol>
       ) : null}
+      {page && page.total > 20 ? <nav aria-label="搜索结果分页">
+        <button disabled={offset === 0} onClick={() => setOffset((current) => Math.max(0, current - 20))} type="button">上一页</button>
+        <span>第 {Math.floor(offset / 20) + 1} 页</span>
+        <button disabled={offset + 20 >= page.total} onClick={() => setOffset((current) => current + 20)} type="button">下一页</button>
+      </nav> : null}
     </section>
   );
 }
