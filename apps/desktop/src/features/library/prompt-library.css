@@ -79,13 +79,15 @@
   gap: 0.55rem;
 }
 
-.prompt-list-title {
+.prompt-list-item .prompt-list-title {
   display: block;
   min-width: 0;
   overflow: hidden;
-  padding: 0;
-  border: 0;
-  background: transparent;
+  min-height: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
   color: inherit;
   font: inherit;
   text-align: left;
