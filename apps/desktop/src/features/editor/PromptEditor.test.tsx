@@ -19,6 +19,31 @@ describe("PromptEditor", () => {
       description: null,
       category: "开发",
       tags: [],
+      variables: [],
     });
+  });
+
+  it("includes typed variables in a saved manual draft", async () => {
+    const saveDraft = vi.fn().mockResolvedValue(undefined);
+    render(<PromptEditor saveDraft={saveDraft} />);
+
+    fireEvent.change(screen.getByLabelText("标题"), { target: { value: "代码审查" } });
+    fireEvent.change(screen.getByLabelText("正文"), { target: { value: "审查 {{language}}" } });
+    fireEvent.click(screen.getByRole("button", { name: "添加变量" }));
+    fireEvent.change(screen.getByLabelText("变量名称"), { target: { value: "language" } });
+    fireEvent.change(screen.getByLabelText("变量默认值"), { target: { value: "Rust" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存到收件箱" }));
+
+    expect(saveDraft).toHaveBeenCalledWith(expect.objectContaining({
+      variables: [
+        {
+          name: "language",
+          kind: "text",
+          description: null,
+          defaultValue: "Rust",
+          required: false,
+        },
+      ],
+    }));
   });
 });

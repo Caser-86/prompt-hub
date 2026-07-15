@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use prompt_domain::{
     Actor, AuditAction, EffectivenessStatus, Prompt, PromptContent, PromptId, PromptSource,
-    PromptVersion, SourceKind,
+    PromptVariable, PromptVersion, SourceKind, VariableKind,
 };
 use serde::Serialize;
 use tauri::State;
@@ -18,6 +18,31 @@ pub struct ManualPromptDraft {
     pub description: Option<String>,
     pub category: Option<String>,
     pub tags: Vec<String>,
+    #[serde(default)]
+    pub variables: Vec<ManualPromptVariable>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualPromptVariable {
+    pub name: String,
+    pub kind: VariableKind,
+    pub description: Option<String>,
+    pub default_value: Option<String>,
+    pub required: bool,
+}
+
+impl ManualPromptVariable {
+    fn into_domain(self) -> Result<PromptVariable, String> {
+        PromptVariable::new(
+            self.name,
+            self.kind,
+            self.description,
+            self.default_value,
+            self.required,
+        )
+        .map_err(|error| error.to_string())
+    }
 }
 
 pub struct PromptService {
@@ -37,12 +62,18 @@ impl PromptService {
         draft: ManualPromptDraft,
         created_at: OffsetDateTime,
     ) -> Result<Prompt, String> {
-        let content = PromptContent::new(
+        let variables = draft
+            .variables
+            .into_iter()
+            .map(ManualPromptVariable::into_domain)
+            .collect::<Result<Vec<_>, _>>()?;
+        let content = PromptContent::with_variables(
             draft.title,
             draft.body,
             draft.description,
             draft.category,
             draft.tags,
+            variables,
         )
         .map_err(|error| error.to_string())?;
         let source = PromptSource::new(SourceKind::Manual, "手动录入", None, created_at)
@@ -118,12 +149,18 @@ impl PromptService {
         draft: ManualPromptDraft,
         revised_at: OffsetDateTime,
     ) -> Result<Prompt, String> {
-        let content = PromptContent::new(
+        let variables = draft
+            .variables
+            .into_iter()
+            .map(ManualPromptVariable::into_domain)
+            .collect::<Result<Vec<_>, _>>()?;
+        let content = PromptContent::with_variables(
             draft.title,
             draft.body,
             draft.description,
             draft.category,
             draft.tags,
+            variables,
         )
         .map_err(|error| error.to_string())?;
         self.modify(id, |prompt| {

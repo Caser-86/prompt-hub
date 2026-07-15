@@ -12,6 +12,15 @@ export type ManualPromptDraft = {
   description: string | null;
   category: string | null;
   tags: string[];
+  variables: PromptVariableDraft[];
+};
+
+export type PromptVariableDraft = {
+  name: string;
+  kind: "text" | "number" | "boolean";
+  description: string | null;
+  defaultValue: string | null;
+  required: boolean;
 };
 
 export type PromptSearchHit = {

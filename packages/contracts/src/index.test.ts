@@ -45,6 +45,7 @@ describe("desktop command client", () => {
       description: null,
       category: "开发",
       tags: ["审查"],
+      variables: [],
     };
 
     await expect(client.createManualPromptDraft(draft)).resolves.toEqual({ id: "draft-1" });
