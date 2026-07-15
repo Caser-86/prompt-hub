@@ -8,6 +8,7 @@ import { PromptHistory } from "../features/history/PromptHistory";
 import { PromptLibrary } from "../features/library/PromptLibrary";
 import { PromptLifecycleActions } from "../features/library/PromptLifecycleActions";
 import { PromptSearch } from "../features/search/PromptSearch";
+import { InboxImport } from "../features/inbox/InboxImport";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { desktopCommands } from "../services/desktop";
 import { navigationItems, type AppRoute } from "./navigation";
@@ -135,6 +136,8 @@ export function AppShell() {
             )
           ) : activeRoute === "search" ? (
             <PromptSearch searchPrompts={desktopCommands.searchPrompts} />
+          ) : activeRoute === "inbox" ? (
+            <InboxImport importFile={desktopCommands.importFileToInbox} />
           ) : activeRoute === "settings" ? (
             <SettingsPage
               createBackup={desktopCommands.createManualBackup}

@@ -6,6 +6,7 @@ export type ApplicationStatus = {
 
 export type BackupInfo = { path: string; byteLen: number; schemaVersion: number };
 export type BackupRestorePreview = { targetExists: boolean; backupSchemaVersion: number; backupByteLen: number };
+export type ImportResult = { imported: number };
 
 export type CommandInvoker = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -109,6 +110,7 @@ export type DesktopCommandClient = {
   recordPromptCompatibility: (id: string, metadata: PromptCompatibilityDraft) => Promise<unknown>;
   recordPromptValidation: (id: string, metadata: PromptValidationDraft) => Promise<unknown>;
   createManualPromptDraft: (draft: ManualPromptDraft) => Promise<unknown>;
+  importFileToInbox: (path: string) => Promise<ImportResult>;
 };
 
 export function createDesktopCommandClient(invoke: CommandInvoker): DesktopCommandClient {
@@ -186,6 +188,13 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
     },
     createManualPromptDraft(draft) {
       return invoke("create_manual_prompt_draft", { draft });
+    },
+    async importFileToInbox(path) {
+      const result = await invoke("import_file_to_inbox", { path });
+      if (typeof result !== "object" || result === null || typeof (result as Record<string, unknown>).imported !== "number") {
+        throw new Error("import_file_to_inbox returned an invalid response");
+      }
+      return result as ImportResult;
     },
   };
 }

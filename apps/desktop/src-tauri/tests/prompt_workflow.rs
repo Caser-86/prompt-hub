@@ -5,6 +5,25 @@ use prompt_store::{Database, SearchQuery};
 use time::macros::datetime;
 
 #[test]
+fn file_import_creates_reviewable_inbox_drafts_without_publishing() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("review.md");
+    std::fs::write(&path, "# 文件导入\n\n仅供审核").unwrap();
+    let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
+
+    let drafts = service
+        .import_file_to_inbox(path, datetime!(2026-07-15 00:00 UTC))
+        .unwrap();
+
+    assert_eq!(drafts.len(), 1);
+    assert!(drafts[0].is_inbox());
+    assert_eq!(
+        drafts[0].sources()[0].kind(),
+        prompt_domain::SourceKind::FileImport
+    );
+}
+
+#[test]
 fn user_can_create_publish_edit_and_restore_a_prompt_through_the_service_boundary() {
     let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
     let created = service
