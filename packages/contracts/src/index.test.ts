@@ -33,6 +33,12 @@ describe("desktop command client", () => {
     expect(calls).toEqual(["list_prompts"]);
   });
 
+  it("rejects malformed list entries instead of leaking an unstable backend shape", async () => {
+    const client = createDesktopCommandClient(async () => [{ id: "prompt-1" }]);
+
+    await expect(client.listPrompts()).rejects.toThrow("list_prompts returned an invalid response");
+  });
+
   it("creates manual drafts through the approved command boundary", async () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const client = createDesktopCommandClient(async (command, args) => {

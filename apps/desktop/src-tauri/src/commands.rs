@@ -8,6 +8,7 @@ use prompt_domain::{
 use serde::Serialize;
 use tauri::State;
 use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 use prompt_store::{LATEST_SCHEMA_VERSION, PromptRepository, SearchPage, SearchQuery};
 
@@ -281,9 +282,54 @@ impl PromptService {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptListItem {
+    id: String,
+    title: String,
+    status: prompt_domain::PromptStatus,
+    effectiveness: EffectivenessStatus,
+    category: Option<String>,
+    tags: Vec<String>,
+    source_names: Vec<String>,
+    created_at: String,
+    updated_at: String,
+}
+
+impl PromptListItem {
+    fn from_prompt(prompt: Prompt) -> Result<Self, String> {
+        let content = prompt.current_version().content();
+        Ok(Self {
+            id: prompt.id().value().to_string(),
+            title: content.title().to_owned(),
+            status: prompt.status(),
+            effectiveness: prompt.effectiveness(),
+            category: content.category().map(str::to_owned),
+            tags: content.tags().to_vec(),
+            source_names: prompt
+                .sources()
+                .iter()
+                .map(|source| source.name().to_owned())
+                .collect(),
+            created_at: format_timestamp(prompt.created_at())?,
+            updated_at: format_timestamp(prompt.updated_at())?,
+        })
+    }
+}
+
+fn format_timestamp(timestamp: OffsetDateTime) -> Result<String, String> {
+    timestamp
+        .format(&Rfc3339)
+        .map_err(|error| error.to_string())
+}
+
 #[tauri::command]
-pub fn list_prompts(service: State<'_, PromptService>) -> Result<Vec<Prompt>, String> {
-    service.list()
+pub fn list_prompts(service: State<'_, PromptService>) -> Result<Vec<PromptListItem>, String> {
+    service
+        .list()?
+        .into_iter()
+        .map(PromptListItem::from_prompt)
+        .collect()
 }
 
 #[tauri::command]

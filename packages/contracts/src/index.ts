@@ -38,6 +38,18 @@ export type PromptSearchPage = {
   total: number;
 };
 
+export type PromptListItem = {
+  id: string;
+  title: string;
+  status: string;
+  effectiveness: string;
+  category: string | null;
+  tags: string[];
+  sourceNames: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type PromptCompatibilityDraft = {
   tool: string;
   model: string | null;
@@ -53,7 +65,7 @@ export type PromptValidationDraft = {
 
 export type DesktopCommandClient = {
   getApplicationStatus: () => Promise<ApplicationStatus>;
-  listPrompts: () => Promise<unknown[]>;
+  listPrompts: () => Promise<PromptListItem[]>;
   searchPrompts: (text: string, limit?: number, offset?: number) => Promise<PromptSearchPage>;
   recordPromptCompatibility: (id: string, metadata: PromptCompatibilityDraft) => Promise<unknown>;
   recordPromptValidation: (id: string, metadata: PromptValidationDraft) => Promise<unknown>;
@@ -71,7 +83,7 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
     },
     async listPrompts() {
       const result = await invoke("list_prompts");
-      if (!Array.isArray(result)) {
+      if (!Array.isArray(result) || !result.every(isPromptListItem)) {
         throw new Error("list_prompts returned an invalid response");
       }
       return result;
@@ -93,6 +105,24 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       return invoke("create_manual_prompt_draft", { draft });
     },
   };
+}
+
+function isPromptListItem(value: unknown): value is PromptListItem {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.id === "string" &&
+    typeof item.title === "string" &&
+    typeof item.status === "string" &&
+    typeof item.effectiveness === "string" &&
+    (typeof item.category === "string" || item.category === null) &&
+    Array.isArray(item.tags) && item.tags.every((tag) => typeof tag === "string") &&
+    Array.isArray(item.sourceNames) && item.sourceNames.every((name) => typeof name === "string") &&
+    typeof item.createdAt === "string" &&
+    typeof item.updatedAt === "string"
+  );
 }
 
 function isPromptSearchPage(value: unknown): value is PromptSearchPage {

@@ -3,14 +3,17 @@ import { useEffect, useRef, useState } from "react";
 import { CommandPalette } from "../components/CommandPalette";
 import { NotificationRegion } from "../components/NotificationRegion";
 import { PromptEditor } from "../features/editor/PromptEditor";
+import { PromptMetadataEditor } from "../features/editor/PromptMetadataEditor";
 import { PromptLibrary } from "../features/library/PromptLibrary";
 import { desktopCommands } from "../services/desktop";
 import { navigationItems, type AppRoute } from "./navigation";
+import type { PromptListItem } from "@prompt-hub/contracts";
 
 export function AppShell() {
   const [activeRoute, setActiveRoute] = useState<AppRoute>("library");
   const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [isEditorOpen, setEditorOpen] = useState(false);
+  const [selectedPrompt, setSelectedPrompt] = useState<PromptListItem | null>(null);
   const [libraryKey, setLibraryKey] = useState(0);
   const commandTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -72,7 +75,19 @@ export function AppShell() {
           <h1>Prompt Hub</h1>
           <p>本地优先的提示词资产管理工具</p>
           {activeRoute === "library" ? (
-            isEditorOpen ? (
+            selectedPrompt ? (
+              <section aria-labelledby="prompt-details-title">
+                <button onClick={() => setSelectedPrompt(null)} type="button">返回提示词库</button>
+                <h2 id="prompt-details-title">{selectedPrompt.title}</h2>
+                <p>来源：{selectedPrompt.sourceNames.join("、") || "未记录"}</p>
+                <time dateTime={selectedPrompt.createdAt}>创建于 {selectedPrompt.createdAt}</time>
+                <PromptMetadataEditor
+                  promptId={selectedPrompt.id}
+                  saveCompatibility={desktopCommands.recordPromptCompatibility}
+                  saveValidation={desktopCommands.recordPromptValidation}
+                />
+              </section>
+            ) : isEditorOpen ? (
               <PromptEditor
                 onSaved={() => {
                   setEditorOpen(false);
@@ -85,6 +100,7 @@ export function AppShell() {
                 key={libraryKey}
                 loadPrompts={desktopCommands.listPrompts}
                 onCreate={() => setEditorOpen(true)}
+                onSelect={setSelectedPrompt}
               />
             )
           ) : (

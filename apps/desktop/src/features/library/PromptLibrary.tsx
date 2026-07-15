@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 
+import type { PromptListItem } from "@prompt-hub/contracts";
+
 type PromptLibraryProps = {
-  loadPrompts: () => Promise<unknown[]>;
+  loadPrompts: () => Promise<PromptListItem[]>;
   onCreate?: () => void;
+  onSelect?: (prompt: PromptListItem) => void;
 };
 
-export function PromptLibrary({ loadPrompts, onCreate }: PromptLibraryProps) {
-  const [prompts, setPrompts] = useState<unknown[] | null>(null);
+export function PromptLibrary({ loadPrompts, onCreate, onSelect }: PromptLibraryProps) {
+  const [prompts, setPrompts] = useState<PromptListItem[] | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -25,7 +28,30 @@ export function PromptLibrary({ loadPrompts, onCreate }: PromptLibraryProps) {
         <button onClick={onCreate} type="button">创建提示词</button>
       </div>
       {prompts?.length === 0 ? <p>还没有提示词资产</p> : null}
+      {prompts?.length ? (
+        <ul aria-label="提示词列表">
+          {prompts.map((prompt) => (
+            <li key={prompt.id}>
+              <button aria-label={`打开提示词：${prompt.title}`} onClick={() => onSelect?.(prompt)} type="button">
+                <strong>{prompt.title}</strong>
+              </button>
+              <p>来源：{prompt.sourceNames.join("、") || "未记录"}</p>
+              <p>{effectivenessLabel(prompt.effectiveness)}</p>
+              <time dateTime={prompt.updatedAt}>更新于 {prompt.updatedAt}</time>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {error ? <p role="alert">无法读取本地提示词库，请重试。</p> : null}
     </section>
   );
+}
+
+function effectivenessLabel(status: string) {
+  return {
+    unverified: "未验证",
+    effective: "有效",
+    ineffective: "失效",
+    needs_retest: "待复测",
+  }[status] ?? "未知";
 }
