@@ -1,19 +1,23 @@
 use std::time::Duration;
 
-use reqwest::blocking::Client;
+use async_trait::async_trait;
+use reqwest::Client;
 use secrecy::ExposeSecret;
 use secrecy::SecretString;
 use serde_json::{Value, json};
 use thiserror::Error;
 use time::OffsetDateTime;
+use tokio::sync::watch;
 
 use crate::{AiDraft, CredentialStore, DraftError};
 
-pub trait AiProvider {
-    fn generate(
+#[async_trait]
+pub trait AiProvider: Send + Sync {
+    async fn generate(
         &self,
         request: GenerationRequest,
         credential: SecretString,
+        cancellation: watch::Receiver<bool>,
     ) -> Result<GenerationOutput, ProviderError>;
 }
 
@@ -69,12 +73,13 @@ impl OpenAiCompatibleProvider {
         })
     }
 
-    pub fn test_connection(&self, credential: SecretString) -> Result<(), ProviderError> {
+    pub async fn test_connection(&self, credential: SecretString) -> Result<(), ProviderError> {
         let response = self
             .client
             .get(format!("{}/v1/models", self.endpoint))
             .bearer_auth(credential.expose_secret())
             .send()
+            .await
             .map_err(|error| {
                 if error.is_timeout() {
                     ProviderError::Timeout
@@ -96,28 +101,44 @@ impl OpenAiCompatibleProvider {
     }
 }
 
+#[async_trait]
 impl AiProvider for OpenAiCompatibleProvider {
-    fn generate(
+    async fn generate(
         &self,
         request: GenerationRequest,
         credential: SecretString,
+        mut cancellation: watch::Receiver<bool>,
     ) -> Result<GenerationOutput, ProviderError> {
-        let response = self.client
-            .post(format!("{}/v1/chat/completions", self.endpoint))
-            .bearer_auth(credential.expose_secret())
-            .json(&json!({
-                "model": request.model,
-                "messages": [
-                    { "role": "system", "content": format!("{}\nReturn only a JSON object with non-empty title and body string fields.", request.instruction) },
-                    { "role": "user", "content": request.input_summary }
-                ],
-                "response_format": { "type": "json_object" }
-            }))
-            .send()
-            .map_err(|error| if error.is_timeout() { ProviderError::Timeout } else { ProviderError::RequestFailed })?;
+        if *cancellation.borrow() {
+            return Err(ProviderError::Cancelled);
+        }
+        let response = tokio::select! {
+            biased;
+            changed = cancellation.changed() => {
+                match changed {
+                    Ok(()) if *cancellation.borrow() => return Err(ProviderError::Cancelled),
+                    Ok(()) => return Err(ProviderError::Cancelled),
+                    Err(_) => return Err(ProviderError::Cancelled),
+                }
+            }
+            response = self.client
+                .post(format!("{}/v1/chat/completions", self.endpoint))
+                .bearer_auth(credential.expose_secret())
+                .json(&json!({
+                    "model": request.model,
+                    "messages": [
+                        { "role": "system", "content": format!("{}\nReturn only a JSON object with non-empty title and body string fields.", request.instruction) },
+                        { "role": "user", "content": request.input_summary }
+                    ],
+                    "response_format": { "type": "json_object" }
+                }))
+                .send() => response,
+        }
+        .map_err(|error| if error.is_timeout() { ProviderError::Timeout } else { ProviderError::RequestFailed })?;
         Self::ensure_success(response.status().as_u16())?;
         response
             .json::<Value>()
+            .await
             .map_err(|_| ProviderError::InvalidResponse)
             .and_then(Self::parse_output)
     }
@@ -150,12 +171,16 @@ impl<P: AiProvider, C: CredentialStore> DraftGenerator<P, C> {
         }
     }
 
-    pub fn generate(
+    pub async fn generate_cancellable(
         &self,
         provider_id: &str,
         request: GenerationRequest,
         generated_at: OffsetDateTime,
+        cancellation: watch::Receiver<bool>,
     ) -> Result<AiDraft, GenerationError> {
+        if *cancellation.borrow() {
+            return Err(GenerationError::Cancelled);
+        }
         let credential = self
             .credentials
             .load(provider_id)
@@ -163,8 +188,12 @@ impl<P: AiProvider, C: CredentialStore> DraftGenerator<P, C> {
             .ok_or(GenerationError::CredentialMissing)?;
         let output = self
             .provider
-            .generate(request.clone(), credential)
+            .generate(request.clone(), credential, cancellation.clone())
+            .await
             .map_err(GenerationError::Provider)?;
+        if *cancellation.borrow() {
+            return Err(GenerationError::Cancelled);
+        }
         AiDraft::new(
             output.title,
             output.body,
@@ -188,6 +217,8 @@ pub enum ProviderError {
     InvalidResponse,
     #[error("provider request failed")]
     RequestFailed,
+    #[error("AI generation was cancelled")]
+    Cancelled,
 }
 
 #[cfg(test)]
@@ -228,4 +259,6 @@ pub enum GenerationError {
     Provider(ProviderError),
     #[error(transparent)]
     Draft(DraftError),
+    #[error("AI generation was cancelled")]
+    Cancelled,
 }

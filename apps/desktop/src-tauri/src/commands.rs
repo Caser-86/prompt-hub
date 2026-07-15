@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -12,6 +13,7 @@ use serde::Serialize;
 use tauri::State;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
+use tokio::sync::watch;
 
 use prompt_ai::{
     CredentialStore, DraftGenerator, GenerationRequest, OpenAiCompatibleProvider,
@@ -50,6 +52,7 @@ pub struct ManualPromptVariable {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiGenerationRequestInput {
+    pub task_id: String,
     pub endpoint: String,
     pub provider_id: String,
     pub instruction: String,
@@ -140,6 +143,40 @@ fn parse_optional_timestamp(value: Option<String>) -> Result<Option<OffsetDateTi
 
 pub struct PromptService {
     repository: Mutex<PromptRepository>,
+}
+
+#[derive(Default)]
+pub struct AiCancellationRegistry {
+    tasks: Mutex<HashMap<String, watch::Sender<bool>>>,
+}
+
+impl AiCancellationRegistry {
+    pub fn register(&self, task_id: String) -> Result<watch::Receiver<bool>, String> {
+        let (sender, receiver) = watch::channel(false);
+        let mut tasks = self
+            .tasks
+            .lock()
+            .map_err(|_| "AI cancellation registry is unavailable".to_owned())?;
+        if tasks.insert(task_id, sender).is_some() {
+            return Err("AI generation task is already active".to_owned());
+        }
+        Ok(receiver)
+    }
+
+    #[must_use]
+    pub fn cancel(&self, task_id: &str) -> bool {
+        self.tasks
+            .lock()
+            .ok()
+            .and_then(|tasks| tasks.get(task_id).cloned())
+            .is_some_and(|sender| sender.send(true).is_ok())
+    }
+
+    pub fn finish(&self, task_id: &str) {
+        if let Ok(mut tasks) = self.tasks.lock() {
+            tasks.remove(task_id);
+        }
+    }
 }
 
 pub struct FileImportOutcome {
@@ -260,10 +297,11 @@ impl PromptService {
         Ok(prompt)
     }
 
-    pub fn create_ai_draft(
+    pub async fn create_ai_draft(
         &self,
         request: AiGenerationRequestInput,
         generated_at: OffsetDateTime,
+        cancellation: watch::Receiver<bool>,
     ) -> Result<Prompt, String> {
         let provider = OpenAiCompatibleProvider::new(request.endpoint, Duration::from_secs(45))
             .map_err(|error| error.to_string())?;
@@ -271,7 +309,7 @@ impl PromptService {
             .map_err(|error| error.to_string())?;
         let generator = DraftGenerator::new(provider, credentials);
         let draft = generator
-            .generate(
+            .generate_cancellable(
                 &request.provider_id,
                 GenerationRequest {
                     instruction: request.instruction,
@@ -279,8 +317,13 @@ impl PromptService {
                     model: request.model,
                 },
                 generated_at,
+                cancellation.clone(),
             )
+            .await
             .map_err(|error| error.to_string())?;
+        if *cancellation.borrow() {
+            return Err("AI generation was cancelled".to_owned());
+        }
         let content = PromptContent::new(
             draft.title(),
             draft.body(),
@@ -305,7 +348,10 @@ impl PromptService {
         Ok(prompt)
     }
 
-    pub fn test_ai_connection(&self, request: AiConnectionRequestInput) -> Result<(), String> {
+    pub async fn test_ai_connection(
+        &self,
+        request: AiConnectionRequestInput,
+    ) -> Result<(), String> {
         let provider = OpenAiCompatibleProvider::new(request.endpoint, Duration::from_secs(15))
             .map_err(|error| error.to_string())?;
         let credentials = SystemCredentialAdapter::new("Prompt Hub", "default")
@@ -316,6 +362,7 @@ impl PromptService {
             .ok_or_else(|| "AI credential is not configured".to_owned())?;
         provider
             .test_connection(credential)
+            .await
             .map_err(|error| error.to_string())
     }
 
@@ -366,11 +413,12 @@ impl PromptService {
         Ok(prompt)
     }
 
-    pub fn optimize_ai_prompt(
+    pub async fn optimize_ai_prompt(
         &self,
         original_id: PromptId,
         request: AiGenerationRequestInput,
         generated_at: OffsetDateTime,
+        cancellation: watch::Receiver<bool>,
     ) -> Result<Prompt, String> {
         let original_body = self
             .repository
@@ -388,7 +436,7 @@ impl PromptService {
         let credentials = SystemCredentialAdapter::new("Prompt Hub", "default")
             .map_err(|error| error.to_string())?;
         let draft = DraftGenerator::new(provider, credentials)
-            .generate(
+            .generate_cancellable(
                 &request.provider_id,
                 GenerationRequest {
                     instruction: request.instruction,
@@ -396,8 +444,13 @@ impl PromptService {
                     model: request.model,
                 },
                 generated_at,
+                cancellation.clone(),
             )
+            .await
             .map_err(|error| error.to_string())?;
+        if *cancellation.borrow() {
+            return Err("AI generation was cancelled".to_owned());
+        }
         self.create_ai_optimization_draft(
             original_id,
             draft.title().to_owned(),
@@ -1225,28 +1278,54 @@ pub fn create_manual_prompt_draft(
 }
 
 #[tauri::command]
-pub fn generate_ai_draft(
+pub async fn generate_ai_draft(
     service: State<'_, PromptService>,
+    cancellations: State<'_, AiCancellationRegistry>,
     request: AiGenerationRequestInput,
 ) -> Result<Prompt, String> {
-    service.create_ai_draft(request, OffsetDateTime::now_utc())
+    let task_id = request.task_id.clone();
+    let cancellation = cancellations.register(task_id.clone())?;
+    let result = service
+        .create_ai_draft(request, OffsetDateTime::now_utc(), cancellation)
+        .await;
+    cancellations.finish(&task_id);
+    result
 }
 
 #[tauri::command]
-pub fn optimize_ai_prompt(
+pub async fn optimize_ai_prompt(
     service: State<'_, PromptService>,
+    cancellations: State<'_, AiCancellationRegistry>,
     id: PromptId,
     request: AiGenerationRequestInput,
 ) -> Result<Prompt, String> {
-    service.optimize_ai_prompt(id, request, OffsetDateTime::now_utc())
+    let task_id = request.task_id.clone();
+    let cancellation = cancellations.register(task_id.clone())?;
+    let result = service
+        .optimize_ai_prompt(id, request, OffsetDateTime::now_utc(), cancellation)
+        .await;
+    cancellations.finish(&task_id);
+    result
 }
 
 #[tauri::command]
-pub fn test_ai_connection(
+pub fn cancel_ai_generation(
+    cancellations: State<'_, AiCancellationRegistry>,
+    task_id: String,
+) -> Result<(), String> {
+    if cancellations.cancel(&task_id) {
+        Ok(())
+    } else {
+        Err("AI generation task is not active".to_owned())
+    }
+}
+
+#[tauri::command]
+pub async fn test_ai_connection(
     service: State<'_, PromptService>,
     request: AiConnectionRequestInput,
 ) -> Result<AiConnectionStatus, String> {
-    service.test_ai_connection(request)?;
+    service.test_ai_connection(request).await?;
     Ok(AiConnectionStatus { connected: true })
 }
 
@@ -1555,6 +1634,24 @@ pub fn restore_backup(
     let safety_backup = backups.create_pre_restore_backup()?;
     prompts.restore_from_backup(PathBuf::from(path))?;
     Ok(safety_backup)
+}
+
+#[cfg(test)]
+mod ai_cancellation_tests {
+    use super::*;
+
+    #[test]
+    fn cancelling_a_registered_generation_marks_it_cancelled_and_removes_it() {
+        let registry = AiCancellationRegistry::default();
+        let mut cancellation = registry.register("generation-1".to_owned()).unwrap();
+
+        assert!(registry.cancel("generation-1"));
+        assert!(cancellation.has_changed().unwrap());
+        assert!(*cancellation.borrow_and_update());
+
+        registry.finish("generation-1");
+        assert!(!registry.cancel("generation-1"));
+    }
 }
 
 #[cfg(test)]

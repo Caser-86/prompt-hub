@@ -9,7 +9,7 @@ import { McpSettings } from "./McpSettings";
 import { AiDraftGenerator } from "../ai/AiDraftGenerator";
 
 export function SettingsPage({
-  createBackup, previewRestore, restoreBackup, pruneLocalBackups, getApplicationStatus, getDiagnosticsStatus, getRedactedDiagnosticEvents, rebuildSearchIndex, getAiCredentialStatus, saveAiCredential, recentImportJobs, generateAiDraft, testAiConnection, getMcpSetup,
+  createBackup, previewRestore, restoreBackup, pruneLocalBackups, getApplicationStatus, getDiagnosticsStatus, getRedactedDiagnosticEvents, rebuildSearchIndex, getAiCredentialStatus, saveAiCredential, recentImportJobs, generateAiDraft, cancelAiGeneration, testAiConnection, getMcpSetup,
 }: {
   createBackup: () => Promise<BackupInfo>;
   previewRestore: (path: string) => Promise<RestorePreviewInfo>;
@@ -23,6 +23,7 @@ export function SettingsPage({
   saveAiCredential: (providerId: string, secret: string) => Promise<{ configured: boolean }>;
   recentImportJobs: () => Promise<ImportJobSummary[]>;
   generateAiDraft: (request: AiGenerationRequest) => Promise<unknown>;
+  cancelAiGeneration: (taskId: string) => Promise<void>;
   testAiConnection: (request: AiConnectionRequest) => Promise<unknown>;
   getMcpSetup: () => Promise<import("@prompt-hub/contracts").McpSetupInfo>;
 }) {
@@ -34,5 +35,5 @@ export function SettingsPage({
   useEffect(() => { void recentImportJobs().then(setImportJobs).catch(() => setImportJobs([])); }, [recentImportJobs]);
   useEffect(() => { void getDiagnosticsStatus().then(setDiagnostics).catch(() => setDiagnostics(null)); }, [getDiagnosticsStatus]);
   useEffect(() => { void getRedactedDiagnosticEvents().then(setLogs).catch(() => setLogs([])); }, [getRedactedDiagnosticEvents]);
-  return <><BackupSettings createBackup={createBackup} previewRestore={previewRestore} restoreBackup={restoreBackup} pruneBackups={pruneLocalBackups} /><AiSettings getStatus={getAiCredentialStatus} saveCredential={saveAiCredential} /><AiDraftGenerator generateDraft={generateAiDraft} testConnection={testAiConnection} /><McpSettings getSetup={getMcpSetup} /><DiagnosticsPanel diagnostics={diagnostics} importJobs={importJobs} logs={logs} rebuildSearchIndex={rebuildSearchIndex} status={status} /><OnboardingGuide /></>;
+  return <><BackupSettings createBackup={createBackup} previewRestore={previewRestore} restoreBackup={restoreBackup} pruneBackups={pruneLocalBackups} /><AiSettings getStatus={getAiCredentialStatus} saveCredential={saveAiCredential} /><AiDraftGenerator cancelGeneration={cancelAiGeneration} generateDraft={generateAiDraft} testConnection={testAiConnection} /><McpSettings getSetup={getMcpSetup} /><DiagnosticsPanel diagnostics={diagnostics} importJobs={importJobs} logs={logs} rebuildSearchIndex={rebuildSearchIndex} status={status} /><OnboardingGuide /></>;
 }

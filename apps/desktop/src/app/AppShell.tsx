@@ -126,10 +126,12 @@ export function AppShell() {
                     />
                     <AiOptimizationReview
                       body={history.at(-1)?.body ?? ""}
+                      cancel={desktopCommands.cancelAiGeneration}
                       promptId={selectedPrompt.id}
-                      optimize={async (id, instruction) => {
+                      optimize={async (id, instruction, taskId) => {
                         const stored = JSON.parse(localStorage.getItem("prompt-hub.ai.draft-settings") ?? "{}") as { endpoint?: string; model?: string };
                         const result = await desktopCommands.optimizeAiPrompt(id, {
+                          taskId,
                           endpoint: stored.endpoint ?? "https://api.openai.com", providerId: "openai-compatible",
                           instruction, inputSummary: "", model: stored.model ?? "",
                         }) as { current_version?: { content?: { body?: string } } };
@@ -171,6 +173,7 @@ export function AppShell() {
               rebuildSearchIndex={desktopCommands.rebuildSearchIndex}
               getMcpSetup={desktopCommands.getMcpSetup}
               generateAiDraft={desktopCommands.generateAiDraft}
+              cancelAiGeneration={desktopCommands.cancelAiGeneration}
               testAiConnection={desktopCommands.testAiConnection}
               previewRestore={desktopCommands.previewBackupRestore}
               pruneLocalBackups={desktopCommands.pruneLocalBackups}

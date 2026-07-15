@@ -19,6 +19,7 @@ rust-version = "1.97"
 [workspace.dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
+async-trait = "0.1.89"
 rusqlite = { version = "0.40.1", features = ["backup", "bundled"] }
 secrecy = "0.10.3"
 thiserror = "2.0.18"
@@ -26,6 +27,7 @@ time = { version = "0.3.53", features = ["serde", "formatting", "parsing", "macr
 uuid = { version = "1.23.5", features = ["serde", "v7"] }
 url = "2.5.8"
 reqwest = { version = "0.13.4", default-features = false, features = ["blocking", "json", "rustls"] }
+tokio = { version = "1.52.3", features = ["sync", "macros", "rt"] }
 
 [profile.release]
 lto = true

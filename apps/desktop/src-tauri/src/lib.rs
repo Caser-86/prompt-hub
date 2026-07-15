@@ -10,6 +10,7 @@ pub fn run() {
             let database_path = data_directory.join("prompt-hub.db");
             let database = prompt_store::Database::open(&database_path)?;
             app.manage(commands::PromptService::new(database.into_repository()));
+            app.manage(commands::AiCancellationRegistry::default());
             app.manage(commands::BackupService::new(database_path));
             let credentials = prompt_ai::SystemCredentialAdapter::new("Prompt Hub", "default")?;
             app.manage(commands::AiSettingsService::new(credentials));
@@ -32,6 +33,7 @@ pub fn run() {
             commands::create_manual_prompt_draft,
             commands::generate_ai_draft,
             commands::optimize_ai_prompt,
+            commands::cancel_ai_generation,
             commands::test_ai_connection,
             commands::import_file_to_inbox,
             commands::import_folder_to_inbox,

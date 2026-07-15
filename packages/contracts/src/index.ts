@@ -11,6 +11,7 @@ export type AiCredentialStatus = { configured: boolean };
 export type AiConnectionRequest = { endpoint: string; providerId: string; model: string };
 export type AiConnectionStatus = { connected: boolean };
 export type AiGenerationRequest = {
+  taskId: string;
   endpoint: string;
   providerId: string;
   instruction: string;
@@ -151,6 +152,7 @@ export type DesktopCommandClient = {
   getAiCredentialStatus: (providerId: string) => Promise<AiCredentialStatus>;
   saveAiCredential: (providerId: string, secret: string) => Promise<AiCredentialStatus>;
   testAiConnection: (request: AiConnectionRequest) => Promise<AiConnectionStatus>;
+  cancelAiGeneration: (taskId: string) => Promise<void>;
   optimizeAiPrompt: (id: string, request: AiGenerationRequest) => Promise<unknown>;
   generateAiDraft: (request: AiGenerationRequest) => Promise<unknown>;
 };
@@ -302,6 +304,9 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       const result = await invoke("test_ai_connection", { request });
       if (!isAiConnectionStatus(result)) throw new Error("test_ai_connection returned an invalid response");
       return result;
+    },
+    async cancelAiGeneration(taskId) {
+      await invoke("cancel_ai_generation", { taskId });
     },
     optimizeAiPrompt(id, request) {
       return invoke("optimize_ai_prompt", { id, request });
