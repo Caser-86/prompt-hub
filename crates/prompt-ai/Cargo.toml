@@ -11,3 +11,5 @@ secrecy.workspace = true
 thiserror.workspace = true
 time.workspace = true
 prompt-security = { path = "../prompt-security" }
+reqwest.workspace = true
+serde_json.workspace = true
