@@ -11,6 +11,7 @@ use tauri::State;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
+use prompt_import::normalized_body_fingerprint;
 use prompt_import::parse_file;
 use prompt_store::{
     BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage,
@@ -116,6 +117,11 @@ pub struct PromptService {
     repository: Mutex<PromptRepository>,
 }
 
+pub struct FileImportOutcome {
+    pub drafts: Vec<Prompt>,
+    pub skipped_duplicates: usize,
+}
+
 pub struct BackupService {
     database_path: PathBuf,
 }
@@ -185,10 +191,20 @@ impl PromptService {
         &self,
         path: PathBuf,
         created_at: OffsetDateTime,
-    ) -> Result<Vec<Prompt>, String> {
+    ) -> Result<FileImportOutcome, String> {
         let candidates = parse_file(&path).map_err(|error| error.to_string())?;
+        let existing = self
+            .list()?
+            .into_iter()
+            .map(|prompt| normalized_body_fingerprint(prompt.current_version().content().body()))
+            .collect::<std::collections::HashSet<_>>();
         let mut drafts = Vec::with_capacity(candidates.len());
+        let mut skipped_duplicates = 0;
         for candidate in candidates {
+            if existing.contains(&normalized_body_fingerprint(&candidate.body)) {
+                skipped_duplicates += 1;
+                continue;
+            }
             let content =
                 PromptContent::new(candidate.title, candidate.body, None, None, Vec::new())
                     .map_err(|error| error.to_string())?;
@@ -203,7 +219,10 @@ impl PromptService {
             self.save(&prompt, AuditAction::Created)?;
             drafts.push(prompt);
         }
-        Ok(drafts)
+        Ok(FileImportOutcome {
+            drafts,
+            skipped_duplicates,
+        })
     }
 
     pub fn list(&self) -> Result<Vec<Prompt>, String> {
@@ -448,6 +467,7 @@ pub struct PromptHistoryItem {
 #[serde(rename_all = "camelCase")]
 pub struct ImportResult {
     imported: usize,
+    skipped_duplicates: usize,
 }
 
 impl PromptHistoryItem {
@@ -555,10 +575,11 @@ pub fn import_file_to_inbox(
     service: State<'_, PromptService>,
     path: String,
 ) -> Result<ImportResult, String> {
-    let imported = service
-        .import_file_to_inbox(PathBuf::from(path), OffsetDateTime::now_utc())?
-        .len();
-    Ok(ImportResult { imported })
+    let outcome = service.import_file_to_inbox(PathBuf::from(path), OffsetDateTime::now_utc())?;
+    Ok(ImportResult {
+        imported: outcome.drafts.len(),
+        skipped_duplicates: outcome.skipped_duplicates,
+    })
 }
 
 #[tauri::command]

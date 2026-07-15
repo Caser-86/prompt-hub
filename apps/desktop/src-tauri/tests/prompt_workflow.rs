@@ -15,12 +15,20 @@ fn file_import_creates_reviewable_inbox_drafts_without_publishing() {
         .import_file_to_inbox(path, datetime!(2026-07-15 00:00 UTC))
         .unwrap();
 
-    assert_eq!(drafts.len(), 1);
-    assert!(drafts[0].is_inbox());
+    assert_eq!(drafts.drafts.len(), 1);
+    assert!(drafts.drafts[0].is_inbox());
     assert_eq!(
-        drafts[0].sources()[0].kind(),
+        drafts.drafts[0].sources()[0].kind(),
         prompt_domain::SourceKind::FileImport
     );
+    let repeated = service
+        .import_file_to_inbox(
+            directory.path().join("review.md"),
+            datetime!(2026-07-15 00:01 UTC),
+        )
+        .unwrap();
+    assert_eq!(repeated.drafts.len(), 0);
+    assert_eq!(repeated.skipped_duplicates, 1);
 }
 
 #[test]
