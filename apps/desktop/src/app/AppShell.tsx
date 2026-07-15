@@ -137,7 +137,7 @@ export function AppShell() {
           ) : activeRoute === "search" ? (
             <PromptSearch searchPrompts={desktopCommands.searchPrompts} />
           ) : activeRoute === "inbox" ? (
-            <InboxImport importFile={desktopCommands.importFileToInbox} />
+            <InboxImport importFile={desktopCommands.importFileToInbox} loadPrompts={desktopCommands.listPrompts} onReview={(prompt) => { setSelectedPrompt(prompt); setActiveRoute("library"); }} />
           ) : activeRoute === "settings" ? (
             <SettingsPage
               createBackup={desktopCommands.createManualBackup}

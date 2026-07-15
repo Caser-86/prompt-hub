@@ -97,6 +97,13 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "搜索提示词" })).toBeVisible();
   });
 
+  it("shows the import and review inbox from navigation", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("link", { name: "收件箱" }));
+    expect(screen.getByRole("heading", { name: "收件箱" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "导入到收件箱" })).toBeDisabled();
+  });
+
   it("opens local backup, diagnostics, and onboarding guidance from settings", async () => {
     render(<App />);
     fireEvent.click(screen.getByRole("link", { name: "设置" }));
