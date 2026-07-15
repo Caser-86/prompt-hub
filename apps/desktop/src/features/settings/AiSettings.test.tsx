@@ -7,6 +7,7 @@ describe("AiSettings", () => {
   it("shows only configuration state and clears the submitted secret", async () => {
     const saveCredential = vi.fn().mockResolvedValue({ configured: true });
     render(<AiSettings getStatus={vi.fn().mockResolvedValue({ configured: false })} saveCredential={saveCredential} />);
+    expect(screen.getByRole("region", { name: "AI 设置" })).toHaveClass("ai-settings");
     expect(await screen.findByText("尚未配置 AI 凭据")).toBeVisible();
     const input = screen.getByLabelText("OpenAI 兼容 API 密钥");
     fireEvent.change(input, { target: { value: "do-not-display" } });

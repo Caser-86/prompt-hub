@@ -7,7 +7,7 @@ export function McpSettings({ getSetup }: { getSetup: () => Promise<McpSetupInfo
 
   useEffect(() => { void getSetup().then(setSetup).catch(() => setSetup(null)); }, [getSetup]);
 
-  return <section aria-labelledby="mcp-settings-title">
+  return <section aria-labelledby="mcp-settings-title" className="settings-card surface-card">
     <h2 id="mcp-settings-title">Codex MCP 设置</h2>
     <p>MCP 只读取本地库或将新内容写入收件箱；不会覆盖已发布提示词。</p>
     {setup ? <>

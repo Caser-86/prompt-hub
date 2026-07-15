@@ -35,5 +35,17 @@ export function SettingsPage({
   useEffect(() => { void recentImportJobs().then(setImportJobs).catch(() => setImportJobs([])); }, [recentImportJobs]);
   useEffect(() => { void getDiagnosticsStatus().then(setDiagnostics).catch(() => setDiagnostics(null)); }, [getDiagnosticsStatus]);
   useEffect(() => { void getRedactedDiagnosticEvents().then(setLogs).catch(() => setLogs([])); }, [getRedactedDiagnosticEvents]);
-  return <main className="settings-stack"><BackupSettings createBackup={createBackup} previewRestore={previewRestore} restoreBackup={restoreBackup} pruneBackups={pruneLocalBackups} /><AiSettings getStatus={getAiCredentialStatus} saveCredential={saveAiCredential} /><AiDraftGenerator cancelGeneration={cancelAiGeneration} generateDraft={generateAiDraft} testConnection={testAiConnection} /><McpSettings getSetup={getMcpSetup} /><DiagnosticsPanel diagnostics={diagnostics} importJobs={importJobs} logs={logs} rebuildSearchIndex={rebuildSearchIndex} status={status} /><OnboardingGuide /></main>;
+  return <main className="settings-stack">
+    <header className="page-header settings-page-header">
+      <p className="eyebrow">LOCAL WORKSPACE</p>
+      <h1>设置</h1>
+      <p>管理本地备份、AI 连接、Codex MCP 与诊断信息。</p>
+    </header>
+    <BackupSettings createBackup={createBackup} previewRestore={previewRestore} restoreBackup={restoreBackup} pruneBackups={pruneLocalBackups} />
+    <AiSettings getStatus={getAiCredentialStatus} saveCredential={saveAiCredential} />
+    <AiDraftGenerator cancelGeneration={cancelAiGeneration} generateDraft={generateAiDraft} testConnection={testAiConnection} />
+    <McpSettings getSetup={getMcpSetup} />
+    <DiagnosticsPanel diagnostics={diagnostics} importJobs={importJobs} logs={logs} rebuildSearchIndex={rebuildSearchIndex} status={status} />
+    <OnboardingGuide />
+  </main>;
 }

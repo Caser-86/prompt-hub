@@ -14,6 +14,9 @@ describe("PromptSearch", () => {
     render(<PromptSearch searchPrompts={vi.fn()} />);
 
     expect(screen.getByRole("searchbox", { name: "搜索提示词" })).toHaveValue("代码审查");
+    expect(screen.getByRole("searchbox", { name: "搜索提示词" }).closest("label")).toHaveClass("search-query-field");
+    expect(screen.getByRole("group", { name: "常用筛选" })).toBeVisible();
+    expect(screen.getByText("更多筛选")).toBeVisible();
     expect(screen.getByLabelText("分类")).toHaveValue("开发");
     expect(screen.getByLabelText("排序方式")).toHaveValue("rating");
     expect(screen.getByLabelText("仅看收藏")).toBeChecked();

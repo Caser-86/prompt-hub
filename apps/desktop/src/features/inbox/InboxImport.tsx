@@ -50,27 +50,45 @@ export function InboxImport({ importFile, importFolder, importUrl, loadPrompts, 
         <p>导入内容会先进入收件箱，审核并补齐信息后再发布。</p>
       </header>
       <section aria-label="导入操作" className="import-panel surface-card">
-      <label>
-        文件路径
-        <input onChange={(event) => setFilePath(event.target.value)} value={filePath} />
-      </label>
-      <button className="button-primary" disabled={!filePath || isImporting} onClick={() => void run("file")} type="button">
-        导入到收件箱
-      </button>
-      <label>
-        文件夹路径
-        <input onChange={(event) => setFolderPath(event.target.value)} value={folderPath} />
-      </label>
-      <button className="button-primary" disabled={!folderPath || isImporting} onClick={() => void run("folder")} type="button">
-        扫描文件夹到收件箱
-      </button>
-      <label>
-        网页 URL
-        <input onChange={(event) => setUrl(event.target.value)} type="url" value={url} />
-      </label>
-      <button className="button-primary" disabled={!url || isImporting} onClick={() => void run("url")} type="button">
-        导入网页到收件箱
-      </button>
+        <div className="import-action">
+          <div>
+            <h2>导入文件</h2>
+            <p>导入一个本地 Markdown、TXT、JSON 或 CSV 文件。</p>
+          </div>
+          <label>
+            文件路径
+            <input onChange={(event) => setFilePath(event.target.value)} value={filePath} />
+          </label>
+          <button className="button-primary" disabled={!filePath || isImporting} onClick={() => void run("file")} type="button">
+            导入到收件箱
+          </button>
+        </div>
+        <div className="import-action">
+          <div>
+            <h2>扫描文件夹</h2>
+            <p>批量扫描文件夹中的可导入文件。</p>
+          </div>
+          <label>
+            文件夹路径
+            <input onChange={(event) => setFolderPath(event.target.value)} value={folderPath} />
+          </label>
+          <button className="button-primary" disabled={!folderPath || isImporting} onClick={() => void run("folder")} type="button">
+            扫描文件夹到收件箱
+          </button>
+        </div>
+        <div className="import-action">
+          <div>
+            <h2>导入网页</h2>
+            <p>从单个网页 URL 提取内容并生成待审核草稿。</p>
+          </div>
+          <label>
+            网页 URL
+            <input onChange={(event) => setUrl(event.target.value)} type="url" value={url} />
+          </label>
+          <button className="button-primary" disabled={!url || isImporting} onClick={() => void run("url")} type="button">
+            导入网页到收件箱
+          </button>
+        </div>
       </section>
       {result ? (
         <p role="status">

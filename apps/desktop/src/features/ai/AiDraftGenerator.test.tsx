@@ -10,6 +10,7 @@ describe("AiDraftGenerator", () => {
     localStorage.setItem("prompt-hub.ai.draft-settings", JSON.stringify({ endpoint: "https://api.example.com", model: "gpt-test" }));
     render(<AiDraftGenerator generateDraft={vi.fn()} testConnection={vi.fn()} />);
 
+    expect(screen.getByRole("form", { name: "AI 草稿生成" })).toHaveClass("ai-draft-generator");
     expect(screen.getByLabelText("兼容 API 地址")).toHaveValue("https://api.example.com");
     expect(screen.getByLabelText("模型")).toHaveValue("gpt-test");
   });

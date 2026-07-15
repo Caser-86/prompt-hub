@@ -1,4 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import {
+  ArrowLeftIcon,
+  CalendarDaysIcon,
+  CircleStackIcon,
+  CubeIcon,
+  SparklesIcon,
+  StarIcon,
+  TagIcon,
+  WrenchScrewdriverIcon,
+} from "@heroicons/react/24/outline";
+import "./prompt-detail.css";
 
 import { CommandPalette } from "../components/CommandPalette";
 import { NotificationRegion } from "../components/NotificationRegion";
@@ -15,6 +26,25 @@ import { SettingsPage } from "../features/settings/SettingsPage";
 import { desktopCommands } from "../services/desktop";
 import { navigationItems, type AppRoute } from "./navigation";
 import type { PromptHistoryItem, PromptListItem } from "@prompt-hub/contracts";
+
+const effectivenessLabels = {
+  effective: "已验证",
+  ineffective: "已失效",
+  needs_retest: "待复测",
+  unverified: "未验证",
+} as const;
+
+function DetailInfoRow({ children, icon: Icon, label }: {
+  children: React.ReactNode;
+  icon: typeof CircleStackIcon;
+  label: string;
+}) {
+  return <div className="detail-info-row">
+    <Icon aria-hidden="true" />
+    <span>{label}</span>
+    <div>{children}</div>
+  </div>;
+}
 
 export function AppShell() {
   const [activeRoute, setActiveRoute] = useState<AppRoute>("library");
@@ -104,41 +134,52 @@ export function AppShell() {
           {activeRoute === "library" ? (
             selectedPrompt ? (
               <section aria-labelledby="prompt-details-title" className="prompt-details-layout">
-                <button onClick={() => setSelectedPrompt(null)} type="button">返回提示词库</button>
-                <h2 id="prompt-details-title">{selectedPrompt.title}</h2>
-                <p>来源：{selectedPrompt.sourceNames.join("、") || "未记录"}</p>
-                {selectedPrompt.sources?.length ? <section aria-label="完整来源证据"><h3>完整来源</h3><ul>{selectedPrompt.sources.map((source) => <li key={`${source.kind}-${source.name}-${source.collectedAt}`}>{source.name} · {source.location ?? "无位置记录"} · <time dateTime={source.collectedAt}>{source.collectedAt}</time></li>)}</ul></section> : null}
-                <time dateTime={selectedPrompt.createdAt}>创建于 {selectedPrompt.createdAt}</time>
-                <time dateTime={selectedPrompt.updatedAt}>最后更新于 {selectedPrompt.updatedAt}</time>
-                <p>适用工具：{selectedPrompt.applicableTools?.join("、") || "未记录"}</p>
-                <p>适用模型：{selectedPrompt.applicableModels?.join("、") || "未记录"}</p>
-                <p>有效性：{selectedPrompt.effectiveness}；评分：{selectedPrompt.rating ?? "未评分"}</p>
-                <PromptMetadataEditor
-                  promptId={selectedPrompt.id}
-                  saveCompatibility={desktopCommands.recordPromptCompatibility}
-                  saveValidation={desktopCommands.recordPromptValidation}
-                />
-                <PromptLifecycleActions
-                  archive={() => desktopCommands.archivePrompt(selectedPrompt.id)}
-                  initialStatus={selectedPrompt.status}
-                  permanentlyDelete={() => desktopCommands.permanentlyDeletePrompt(selectedPrompt.id)}
-                  onPermanentlyDeleted={() => { setSelectedPrompt(null); setLibraryKey((key) => key + 1); }}
-                  publish={() => desktopCommands.publishPrompt(selectedPrompt.id)}
-                  promptTitle={selectedPrompt.title}
-                  recover={() => desktopCommands.recoverPrompt(selectedPrompt.id)}
-                  softDelete={() => desktopCommands.softDeletePrompt(selectedPrompt.id)}
-                />
-                {history ? (
-                  <>
-                    <PromptHistory
-                      history={history}
-                      restoreVersion={(versionNumber) => desktopCommands.restorePromptVersion(
-                        selectedPrompt.id,
-                        versionNumber,
-                      )}
+                <header className="prompt-detail-header">
+                  <button className="prompt-detail-back" onClick={() => setSelectedPrompt(null)} type="button"><ArrowLeftIcon aria-hidden="true" /> 返回</button>
+                  <div>
+                    <p className="eyebrow">PROMPT DETAIL</p>
+                    <div className="prompt-detail-title-row">
+                      <h2 id="prompt-details-title">{selectedPrompt.title}</h2>
+                      <span className={`status-pill status-${selectedPrompt.effectiveness}`}>{effectivenessLabels[selectedPrompt.effectiveness as keyof typeof effectivenessLabels] ?? "未验证"}</span>
+                    </div>
+                  </div>
+                  <section aria-label="提示词主操作" className="prompt-detail-actions">
+                    {history ? <PromptContentActions body={history.at(-1)?.body ?? ""} title={selectedPrompt.title} /> : <p>正在准备提示词操作…</p>}
+                  </section>
+                </header>
+                <div className="prompt-detail-main">
+                  <article aria-label="提示词正文" className="prompt-detail-body surface-card">
+                    <h3>提示词正文</h3>
+                    {history ? <pre>{history.at(-1)?.body ?? ""}</pre> : <p>正在加载提示词正文…</p>}
+                  </article>
+                  <div className="prompt-detail-aside">
+                  <aside aria-label="提示词信息" className="prompt-detail-info surface-card">
+                    <h3>提示词信息</h3>
+                    <DetailInfoRow icon={CircleStackIcon} label="来源">{selectedPrompt.sourceNames.join("、") || "未记录"}</DetailInfoRow>
+                    <DetailInfoRow icon={WrenchScrewdriverIcon} label="适用工具">{selectedPrompt.applicableTools?.join("、") || "未记录"}</DetailInfoRow>
+                    <DetailInfoRow icon={CubeIcon} label="推荐模型">{selectedPrompt.applicableModels?.join("、") || "未记录"}</DetailInfoRow>
+                    <DetailInfoRow icon={StarIcon} label="效果评级"><span className="detail-rating" aria-label={`评分：${selectedPrompt.rating ?? "未评分"}`}>{selectedPrompt.rating ? "★".repeat(selectedPrompt.rating) : "未评分"}</span></DetailInfoRow>
+                    <DetailInfoRow icon={CalendarDaysIcon} label="创建时间"><time dateTime={selectedPrompt.createdAt}>{selectedPrompt.createdAt}</time></DetailInfoRow>
+                    <DetailInfoRow icon={CalendarDaysIcon} label="更新时间"><time dateTime={selectedPrompt.updatedAt}>{selectedPrompt.updatedAt}</time></DetailInfoRow>
+                    <DetailInfoRow icon={TagIcon} label="标签"><span className="detail-tags">{selectedPrompt.tags.length ? selectedPrompt.tags.map((tag) => <span className="detail-tag" key={tag}>{tag}</span>) : "未记录"}</span></DetailInfoRow>
+                    {selectedPrompt.sources?.length ? <details className="prompt-sources"><summary>完整来源</summary><ul>{selectedPrompt.sources.map((source) => <li key={`${source.kind}-${source.name}-${source.collectedAt}`}>{source.name} · {source.location ?? "无位置记录"} · <time dateTime={source.collectedAt}>{source.collectedAt}</time></li>)}</ul></details> : null}
+                    <PromptMetadataEditor
+                      promptId={selectedPrompt.id}
+                      saveCompatibility={desktopCommands.recordPromptCompatibility}
+                      saveValidation={desktopCommands.recordPromptValidation}
                     />
-                    <PromptContentActions body={history.at(-1)?.body ?? ""} title={selectedPrompt.title} />
-                    <AiOptimizationReview
+                  </aside>
+                  <section aria-label="更多操作" className="prompt-detail-more surface-card">
+                  {history ? <PromptHistory
+                    history={history}
+                    restoreVersion={(versionNumber) => desktopCommands.restorePromptVersion(
+                      selectedPrompt.id,
+                      versionNumber,
+                    )}
+                  /> : null}
+                  <details className="prompt-ai-disclosure">
+                    <summary><SparklesIcon aria-hidden="true" /> AI 优化</summary>
+                    {history ? <AiOptimizationReview
                       body={history.at(-1)?.body ?? ""}
                       cancel={desktopCommands.cancelAiGeneration}
                       promptId={selectedPrompt.id}
@@ -151,9 +192,21 @@ export function AppShell() {
                         }) as { current_version?: { content?: { body?: string } } };
                         return { body: result.current_version?.content?.body };
                       }}
-                    />
-                  </>
-                ) : <p>正在加载版本历史…</p>}
+                    /> : <p>正在加载 AI 优化…</p>}
+                  </details>
+                  <PromptLifecycleActions
+                    archive={() => desktopCommands.archivePrompt(selectedPrompt.id)}
+                    initialStatus={selectedPrompt.status}
+                    permanentlyDelete={() => desktopCommands.permanentlyDeletePrompt(selectedPrompt.id)}
+                    onPermanentlyDeleted={() => { setSelectedPrompt(null); setLibraryKey((key) => key + 1); }}
+                    publish={() => desktopCommands.publishPrompt(selectedPrompt.id)}
+                    promptTitle={selectedPrompt.title}
+                    recover={() => desktopCommands.recoverPrompt(selectedPrompt.id)}
+                    softDelete={() => desktopCommands.softDeletePrompt(selectedPrompt.id)}
+                  />
+                  </section>
+                  </div>
+                </div>
               </section>
             ) : isEditorOpen ? (
               <PromptEditor

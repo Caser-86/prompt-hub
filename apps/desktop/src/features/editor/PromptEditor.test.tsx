@@ -7,6 +7,9 @@ describe("PromptEditor", () => {
   it("submits a manual prompt as an inbox draft", async () => {
     const saveDraft = vi.fn().mockResolvedValue(undefined);
     render(<PromptEditor saveDraft={saveDraft} />);
+    expect(screen.getByRole("form", { name: "提示词编辑器" })).toHaveClass("prompt-editor");
+    expect(screen.getByLabelText("标题").closest("label")).toHaveClass("editor-title-field");
+    expect(screen.getByLabelText("正文").closest("label")).toHaveClass("editor-body-field");
 
     fireEvent.change(screen.getByLabelText("标题"), { target: { value: "代码审查" } });
     fireEvent.change(screen.getByLabelText("正文"), { target: { value: "审查当前变更" } });

@@ -67,15 +67,15 @@ export function AiDraftGenerator({ cancelGeneration, generateDraft, testConnecti
     }
   }
 
-  return <form aria-label="AI 草稿生成" onSubmit={submit}>
+  return <form aria-label="AI 草稿生成" className="settings-card surface-card ai-draft-generator" onSubmit={submit}>
     <h2>AI 草稿生成</h2>
     <p>成功结果只会创建收件箱草稿，绝不会覆盖已发布提示词。</p>
     <label>兼容 API 地址<input onChange={(event) => setEndpoint(event.target.value)} required type="url" value={endpoint} /></label>
     <label>模型<input onChange={(event) => setModel(event.target.value)} required value={model} /></label>
     <label>生成指令<textarea onChange={(event) => setInstruction(event.target.value)} required value={instruction} /></label>
     <label>输入摘要<textarea onChange={(event) => setInputSummary(event.target.value)} required value={inputSummary} /></label>
-    <button onClick={() => { void testConnectionRequest(); }} type="button">测试连接</button>
-    <button type="submit">生成收件箱草稿</button>
+    <button className="button-secondary" onClick={() => { void testConnectionRequest(); }} type="button">测试连接</button>
+    <button className="button-primary" type="submit">生成收件箱草稿</button>
     {activeTaskId !== null && cancelGeneration !== undefined ? <button onClick={() => { void cancelActiveGeneration(); }} type="button">取消生成</button> : null}
     {connectionComplete ? <p role="status">连接测试成功，未写入提示词库。</p> : null}
     {connectionError ? <p role="alert">连接测试失败。请检查 API 地址、密钥、模型和网络后重试。</p> : null}

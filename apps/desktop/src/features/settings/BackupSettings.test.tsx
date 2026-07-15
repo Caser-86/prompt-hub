@@ -7,6 +7,7 @@ describe("BackupSettings", () => {
   it("creates a backup and displays an integrity-checked confirmation", async () => {
     const createBackup = vi.fn().mockResolvedValue({ path: "C:/data/backups/manual.db", byteLen: 512, schemaVersion: 2 });
     render(<BackupSettings createBackup={createBackup} previewRestore={vi.fn()} pruneBackups={vi.fn()} restoreBackup={vi.fn()} />);
+    expect(screen.getByRole("region", { name: "备份与恢复" })).toHaveClass("backup-settings");
 
     fireEvent.click(screen.getByRole("button", { name: "立即创建备份" }));
 

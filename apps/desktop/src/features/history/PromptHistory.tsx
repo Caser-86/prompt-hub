@@ -62,8 +62,8 @@ export function PromptHistory({ history, restoreVersion }: PromptHistoryProps) {
   }
 
   return (
-    <section aria-labelledby="history-title">
-      <h2 id="history-title">版本历史</h2>
+    <details aria-labelledby="history-title" className="prompt-history-disclosure">
+      <summary><span aria-level={2} id="history-title" role="heading">版本历史</span></summary>
       <p>恢复不会覆盖历史版本，而是创建一个新的当前版本。</p>
       {baseVersion && currentVersion && baseVersion.number !== currentVersion.number ? (
         <section aria-labelledby="diff-title">
@@ -103,6 +103,6 @@ export function PromptHistory({ history, restoreVersion }: PromptHistoryProps) {
           <button onClick={() => void confirmRestore()} type="button">确认恢复版本 {pendingRestore}</button>
         </section>
       ) : null}
-    </section>
+    </details>
   );
 }

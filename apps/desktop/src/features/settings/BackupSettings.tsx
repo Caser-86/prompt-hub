@@ -41,7 +41,7 @@ export function BackupSettings({
     try { setPruned(await pruneBackups(Number(retain))); } catch { setError("无法清理备份，请检查备份目录权限。 "); }
   };
 
-  return <section aria-labelledby="backup-settings-title">
+  return <section aria-labelledby="backup-settings-title" className="settings-card surface-card backup-settings">
     <h2 id="backup-settings-title">备份与恢复</h2>
     <p>备份仅保存在本机。恢复前会先检查备份完整性并显示预览。</p>
     <label>备份目录（可选）<input onChange={(event) => setBackupDirectory(event.target.value)} placeholder="留空则保存到本机默认备份目录" value={backupDirectory} /></label>

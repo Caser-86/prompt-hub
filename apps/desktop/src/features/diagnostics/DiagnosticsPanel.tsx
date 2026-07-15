@@ -1,7 +1,7 @@
 import type { ApplicationStatus, DiagnosticsStatus, ImportJobSummary } from "@prompt-hub/contracts";
 
 export function DiagnosticsPanel({ status, importJobs, diagnostics, logs = [], rebuildSearchIndex }: { status: ApplicationStatus | null; importJobs: ImportJobSummary[] | null; diagnostics: DiagnosticsStatus | null; logs?: Array<{ occurredAt: string; event: string; recommendation: string }>; rebuildSearchIndex?: () => Promise<void> }) {
-  return <section aria-labelledby="diagnostics-title">
+  return <section aria-labelledby="diagnostics-title" className="settings-card diagnostics-card surface-card">
     <h2 id="diagnostics-title">诊断信息</h2>
     {status ? <dl>
       <dt>应用版本</dt><dd>{status.appVersion}</dd>

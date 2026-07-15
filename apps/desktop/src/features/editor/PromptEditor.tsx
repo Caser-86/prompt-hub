@@ -43,23 +43,23 @@ export function PromptEditor({ saveDraft, onSaved }: PromptEditorProps) {
   }
 
   return (
-    <form aria-label="提示词编辑器" onSubmit={submit}>
-      <label>
+    <form aria-label="提示词编辑器" className="prompt-editor" onSubmit={submit}>
+      <label className="editor-title-field">
         标题
         <input onChange={(event) => setTitle(event.target.value)} required value={title} />
       </label>
-      <label>
+      <label className="editor-body-field">
         正文
         <textarea onChange={(event) => setBody(event.target.value)} required value={body} />
       </label>
-      <label>
+      <label className="editor-category-field">
         分类
         <input onChange={(event) => setCategory(event.target.value)} value={category} />
       </label>
-      <fieldset>
+      <fieldset className="variable-editor">
         <legend>变量</legend>
         {variables.map((variable, index) => (
-          <div key={index}>
+          <div className="variable-row" key={index}>
             <label>
               变量名称
               <input
@@ -99,7 +99,7 @@ export function PromptEditor({ saveDraft, onSaved }: PromptEditorProps) {
         ))}
         <button onClick={addVariable} type="button">添加变量</button>
       </fieldset>
-      <section aria-label="渲染预览">
+      <section aria-label="渲染预览" className="prompt-preview surface-card">
         <h2>渲染预览</h2>
         {preview.missingRequired.length > 0 ? (
           <p role="alert">缺少必填变量：{preview.missingRequired.join("、")}</p>
@@ -110,7 +110,7 @@ export function PromptEditor({ saveDraft, onSaved }: PromptEditorProps) {
         <pre>{preview.body}</pre>
         <PromptContentActions body={preview.body} title={title} />
       </section>
-      <button type="submit">保存到收件箱</button>
+      <button className="button-primary" type="submit">保存到收件箱</button>
     </form>
   );
 }

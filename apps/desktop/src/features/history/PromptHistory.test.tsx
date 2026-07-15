@@ -4,6 +4,19 @@ import { describe, expect, it, vi } from "vitest";
 import { PromptHistory } from "./PromptHistory";
 
 describe("PromptHistory", () => {
+  it("keeps version history collapsed until the user requests it", () => {
+    render(
+      <PromptHistory
+        history={[{ number: 1, body: "版本正文", createdAt: "2026-07-15T00:00:00Z" }]}
+        restoreVersion={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    const disclosure = screen.getByText("版本历史").closest("details");
+    expect(disclosure).not.toBeNull();
+    expect(disclosure).not.toHaveAttribute("open");
+  });
+
   it("compares two immutable versions and restores only after confirmation", async () => {
     const restoreVersion = vi.fn().mockResolvedValue(undefined);
     render(
@@ -16,6 +29,7 @@ describe("PromptHistory", () => {
       />,
     );
 
+    fireEvent.click(screen.getByText("版本历史").closest("summary")!);
     expect(screen.getByText("第一版正文")).toBeVisible();
     expect(screen.getByText("第二版正文")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "恢复版本 1" }));
@@ -36,6 +50,7 @@ describe("PromptHistory", () => {
       />,
     );
 
+    fireEvent.click(screen.getByText("版本历史").closest("summary")!);
     const diff = screen.getByLabelText("版本正文差异");
     expect(diff).toHaveTextContent("- 删除行");
     expect(diff).toHaveTextContent("+ 新增行");

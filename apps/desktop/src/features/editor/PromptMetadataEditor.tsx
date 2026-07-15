@@ -42,6 +42,8 @@ export function PromptMetadataEditor({
   }
 
   return (
+    <details className="prompt-metadata-editor">
+      <summary>编辑提示词信息</summary>
     <form aria-label="提示词元数据" onSubmit={submit}>
       <label>
         适用工具
@@ -70,5 +72,6 @@ export function PromptMetadataEditor({
       {error ? <p role="alert">无法保存元数据，请重试。</p> : null}
       <button type="submit">保存元数据</button>
     </form>
+    </details>
   );
 }

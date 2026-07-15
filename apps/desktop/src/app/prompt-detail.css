@@ -1,0 +1,33 @@
+.prompt-details-layout {
+  margin-top: -1rem;
+}
+
+@media (min-width: 761px) {
+  .app-frame {
+    grid-template-columns: 14.5rem minmax(0, 1fr);
+  }
+
+  .content-frame:has(.prompt-details-layout) {
+    padding: 2rem;
+  }
+
+  .prompt-detail-main {
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 22rem);
+  }
+}
+
+.prompt-detail-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.prompt-detail-header .status-pill {
+  margin-top: 0;
+}
+
+.prompt-detail-body pre {
+  max-height: none;
+  overflow: visible;
+}

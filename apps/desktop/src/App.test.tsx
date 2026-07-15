@@ -128,11 +128,18 @@ describe("App", () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "打开提示词：代码审查" }));
-    expect(screen.getByRole("form", { name: "提示词元数据" })).toBeVisible();
+    expect(await screen.findByLabelText("提示词正文")).toHaveTextContent("第一版");
+    expect(screen.getByLabelText("提示词主操作")).toContainElement(
+      screen.getByRole("button", { name: "复制提示词正文" }),
+    );
+    expect(screen.getByText("编辑提示词信息")).toBeVisible();
     expect(await screen.findByRole("heading", { name: "版本历史" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "完整来源" })).toBeVisible();
+    fireEvent.click(screen.getByText("完整来源").closest("summary")!);
     expect(screen.getByText(/工程规范 · https:\/\/example.com\/guide/)).toBeVisible();
-    expect(screen.getAllByText("2026-07-15T00:00:00Z").at(-1)).toBeVisible();
+    expect(within(screen.getByLabelText("提示词信息")).getAllByText("2026-07-15T00:00:00Z").at(-1)).toBeVisible();
+    expect(within(screen.getByLabelText("提示词信息")).getByText("审查")).toBeVisible();
+    expect(screen.getByLabelText("提示词信息")).toHaveClass("prompt-detail-info");
+    expect(screen.getByLabelText("更多操作")).toHaveClass("prompt-detail-more");
     expect(screen.getByRole("button", { name: "软删除提示词" })).toBeVisible();
   });
 

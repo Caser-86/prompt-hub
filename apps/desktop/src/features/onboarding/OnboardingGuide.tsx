@@ -1,5 +1,5 @@
 export function OnboardingGuide() {
-  return <section aria-labelledby="onboarding-title">
+  return <section aria-labelledby="onboarding-title" className="settings-card surface-card onboarding-guide">
     <h2 id="onboarding-title">开始使用</h2>
     <ol>
       <li>提示词库与备份保存在此设备的数据目录，核心管理无需联网。</li>

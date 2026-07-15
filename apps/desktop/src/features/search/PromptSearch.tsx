@@ -92,34 +92,40 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
         <p>从标题、标签、来源与兼容性记录中快速定位可复用的提示词。</p>
       </header>
       <div className="filter-panel surface-card">
-      <label>
-        搜索提示词
-        <input
-          onChange={(event) => {
-            generation.current += 1;
-            setQuery(event.target.value);
-            resetPage();
-          }}
-          role="searchbox"
-          value={query}
-        />
-      </label>
+        <label className="search-query-field">
+          搜索提示词
+          <input
+            onChange={(event) => {
+              generation.current += 1;
+              setQuery(event.target.value);
+              resetPage();
+            }}
+            role="searchbox"
+            value={query}
+          />
+        </label>
+        <fieldset aria-label="常用筛选" className="primary-search-filters">
+          <legend>常用筛选</legend>
+          <label>分类<input onChange={(event) => { setCategory(event.target.value); resetPage(); }} value={category} /></label>
+          <label>适用工具<input onChange={(event) => { setTool(event.target.value); resetPage(); }} value={tool} /></label>
+          <label>适用模型<input onChange={(event) => { setModel(event.target.value); resetPage(); }} value={model} /></label>
+          <label>排序方式<select onChange={(event) => { setSort(event.target.value as PromptSearchSort); resetPage(); }} value={sort}>
+            <option value="relevance">相关度</option><option value="updated_at">最近更新</option><option value="rating">最高评分</option>
+          </select></label>
+        </fieldset>
+        <details className="advanced-search-filters">
+          <summary>更多筛选</summary>
+          <div>
       <label>生命周期<select onChange={(event) => { setStatus(event.target.value); resetPage(); }} value={status}>
         <option value="">全部</option><option value="inbox">收件箱</option><option value="published">已发布</option><option value="archived">已归档</option><option value="deleted">已删除</option>
       </select></label>
       <label>来源类型<select onChange={(event) => { setSourceKind(event.target.value); resetPage(); }} value={sourceKind}>
         <option value="">全部</option><option value="manual">手动录入</option><option value="file_import">文件导入</option><option value="web_url">网页链接</option><option value="ai_generated">AI 生成</option><option value="mcp">MCP</option>
       </select></label>
-      <label>分类<input onChange={(event) => { setCategory(event.target.value); resetPage(); }} value={category} /></label>
       <label>标签<input onChange={(event) => { setTagText(event.target.value); resetPage(); }} placeholder="多个标签用逗号分隔" value={tagText} /></label>
-      <label>适用工具<input onChange={(event) => { setTool(event.target.value); resetPage(); }} value={tool} /></label>
-      <label>适用模型<input onChange={(event) => { setModel(event.target.value); resetPage(); }} value={model} /></label>
       <label>更新开始日期<input onChange={(event) => { setUpdatedAfter(event.target.value); resetPage(); }} type="date" value={updatedAfter} /></label>
       <label>更新结束日期<input onChange={(event) => { setUpdatedBefore(event.target.value); resetPage(); }} type="date" value={updatedBefore} /></label>
       <label><input checked={favoritesOnly} onChange={(event) => { setFavoritesOnly(event.target.checked); resetPage(); }} type="checkbox" />仅看收藏</label>
-      <label>排序方式<select onChange={(event) => { setSort(event.target.value as PromptSearchSort); resetPage(); }} value={sort}>
-        <option value="relevance">相关度</option><option value="updated_at">最近更新</option><option value="rating">最高评分</option>
-      </select></label>
       <label>
         有效性筛选
         <select onChange={(event) => { setEffectiveness(event.target.value); resetPage(); }} value={effectiveness}>
@@ -141,7 +147,9 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
           <option value="5">5</option>
         </select>
       </label>
-      <button onClick={saveView} type="button">保存当前视图</button>
+          </div>
+        </details>
+        <button className="button-secondary save-search-view" onClick={saveView} type="button">保存当前视图</button>
       </div>
       {isLoading ? <p role="status">正在搜索本地提示词库…</p> : null}
       {hasError ? <p role="alert">搜索失败，请重试。</p> : null}

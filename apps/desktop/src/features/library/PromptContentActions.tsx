@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ClipboardDocumentIcon, EllipsisHorizontalIcon } from "@heroicons/react/24/outline";
 
 export function PromptContentActions({ body, title }: { body: string; title: string }) {
   const [copied, setCopied] = useState(false);
@@ -26,8 +27,11 @@ export function PromptContentActions({ body, title }: { body: string; title: str
   }
 
   return <section aria-label="提示词使用操作">
-    <button onClick={() => { void copy(); }} type="button">复制提示词正文</button>
-    <button onClick={exportMarkdown} type="button">导出 Markdown</button>
+    <button aria-label="复制提示词正文" className="button-primary prompt-copy-action" onClick={() => { void copy(); }} type="button"><ClipboardDocumentIcon aria-hidden="true" /> 复制提示词</button>
+    <details className="prompt-export-menu">
+      <summary aria-label="更多提示词操作"><EllipsisHorizontalIcon aria-hidden="true" /></summary>
+      <button onClick={exportMarkdown} type="button">导出 Markdown</button>
+    </details>
     {copied ? <p role="status">已复制提示词正文。</p> : null}
     {failed ? <p role="alert">无法复制提示词正文，请手动复制。</p> : null}
   </section>;
