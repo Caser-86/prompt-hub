@@ -232,6 +232,7 @@ export function AppShell() {
                 key={libraryKey}
                 batchArchive={async (ids) => { await desktopCommands.batchArchivePrompts(ids); }}
                 loadPrompts={desktopCommands.listPrompts}
+                onAdvancedSearch={() => setActiveRoute("search")}
                 onCreate={() => setEditorOpen(true)}
                 onFavorite={async (prompt, favorite) => { await desktopCommands.setPromptFavorite(prompt.id, favorite); }}
                 onSelect={setSelectedPrompt}

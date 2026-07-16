@@ -87,9 +87,9 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
   return (
     <section aria-labelledby="search-title">
       <header className="page-header">
-        <p className="eyebrow">LOCAL SEARCH</p>
-        <h1 id="search-title">搜索提示词</h1>
-        <p>从标题、标签、来源与兼容性记录中快速定位可复用的提示词。</p>
+        <p className="eyebrow">LIBRARY FILTERS</p>
+        <h1 id="search-title">高级筛选</h1>
+        <p>在提示词库内按来源、状态、工具、模型与时间精确筛选。</p>
       </header>
       <div className="filter-panel surface-card">
         <label className="search-query-field">

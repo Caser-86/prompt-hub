@@ -11,12 +11,13 @@ import "./prompt-library.css";
 type PromptLibraryProps = {
   loadPrompts: () => Promise<PromptListItem[]>;
   onCreate?: () => void;
+  onAdvancedSearch?: () => void;
   onSelect?: (prompt: PromptListItem) => void;
   onFavorite?: (prompt: PromptListItem, favorite: boolean) => Promise<void>;
   batchArchive?: (ids: string[]) => Promise<void>;
 };
 
-export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite, batchArchive }: PromptLibraryProps) {
+export function PromptLibrary({ loadPrompts, onCreate, onAdvancedSearch, onSelect, onFavorite, batchArchive }: PromptLibraryProps) {
   const [prompts, setPrompts] = useState<PromptListItem[] | null>(null);
   const [error, setError] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -60,7 +61,7 @@ export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite, bat
           <p className="eyebrow">LOCAL LIBRARY</p>
           <h1 id="library-title">提示词库</h1>
         </div>
-        <button className="button-primary" onClick={onCreate} type="button">创建提示词</button>
+        <div className="library-header-actions"><button className="button-secondary" onClick={onAdvancedSearch} type="button">高级筛选</button><button className="button-primary" onClick={onCreate} type="button">创建提示词</button></div>
       </div>
       {prompts?.length === 0 ? (
         <section aria-label="空提示词库" className="empty-library-state surface-card">

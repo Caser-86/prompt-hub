@@ -94,12 +94,8 @@ describe("App", () => {
     expect(trigger).toHaveFocus();
   });
 
-  it("uses command palette actions to open search and create a draft", () => {
+  it("uses command palette actions to create a draft", () => {
     render(<App />);
-
-    fireEvent.click(screen.getByRole("button", { name: "打开命令面板" }));
-    fireEvent.click(screen.getByRole("button", { name: "打开搜索" }));
-    expect(screen.getByRole("heading", { name: "搜索提示词" })).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "打开命令面板" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "命令面板" })).getByRole("button", { name: "新建提示词" }));
@@ -169,18 +165,19 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "软删除提示词" })).toBeVisible();
   });
 
-  it("opens local prompt search from navigation", () => {
+  it("opens advanced filters from the library instead of a separate navigation item", () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole("link", { name: "搜索" }));
-    expect(screen.getByRole("heading", { name: "搜索提示词" })).toBeVisible();
+    expect(screen.queryByRole("link", { name: "搜索" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "高级筛选" }));
+    expect(screen.getByRole("heading", { name: "高级筛选" })).toBeVisible();
   });
 
   it("uses page headers and grouped panels on secondary workspace routes", () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole("link", { name: "搜索" }));
-    expect(screen.getByRole("heading", { name: "搜索提示词" }).closest("header")).toHaveClass("page-header");
+    fireEvent.click(screen.getByRole("button", { name: "高级筛选" }));
+    expect(screen.getByRole("heading", { name: "高级筛选" }).closest("header")).toHaveClass("page-header");
 
     fireEvent.click(screen.getByRole("link", { name: "收件箱" }));
     expect(screen.getByLabelText("导入操作")).toHaveClass("import-panel");

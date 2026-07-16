@@ -6,6 +6,7 @@
 .library-toolbar {
   margin-bottom: 0;
 }
+.library-header-actions { display: flex; gap: 0.55rem; }
 
 .library-quick-filters {
   display: flex;

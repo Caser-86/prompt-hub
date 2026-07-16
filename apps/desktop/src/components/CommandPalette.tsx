@@ -16,7 +16,6 @@ const commands: Array<{ label: string; route?: AppRoute; type: "create" | "navig
   { label: "新建提示词", type: "create" },
   { label: "打开提示词库", route: "library", type: "navigate" },
   { label: "打开收件箱", route: "inbox", type: "navigate" },
-  { label: "打开搜索", route: "search", type: "navigate" },
   { label: "打开设置", route: "settings", type: "navigate" },
 ];
 
