@@ -14,6 +14,22 @@
 - Never store or log credentials, raw authorization headers, or unredacted prompt bodies.
 - Do not claim completion without fresh command output.
 
+## Skill library extension
+
+- Treat the Skill library as a first-class asset type alongside prompts, not as prompt text or an automatic installer.
+- Follow `docs/skill-library-design.md` before adding Skill collection, scanning, import, installation, update, or removal behavior.
+- Skills from local folders, Git repositories, archives, and URLs are untrusted: preview and audit them before installation; never execute bundled scripts during collection or preview.
+- Installation requires explicit user confirmation, a clear target directory, collision handling, and a rollback-capable backup. Never overwrite an installed Skill by default.
+- Keep the Skill library local-first and usable without model credentials. AI may classify or summarize only after the user enables it; it must never silently install, execute, publish, or delete a Skill.
+
+## Model allocation
+
+- Use **GPT-5.6 Sol, xhigh** for product architecture, database/security boundaries, untrusted Skill handling, destructive or installation flows, cross-crate changes, and final release review.
+- Use **GPT-5.6 Terra, high** for bounded implementation slices, UI integration, migrations already specified by the design, test repairs, and code review follow-up.
+- Use **GPT-5.6 Terra, medium** for documentation, test fixtures, metadata cleanup, small styling changes, and mechanical refactors with a clear acceptance test.
+- Use **GPT-5.6 Luna, medium** only for bulk non-authoritative work such as deduplicating candidate metadata or preparing import manifests; a Sol or Terra review is required before persistent writes.
+- If the active model cannot establish a fact from code, tests, or authoritative sources, it must state that it cannot confirm it and stop rather than inventing an answer or performing a risky action.
+
 ## Verification commands
 
 ```powershell
