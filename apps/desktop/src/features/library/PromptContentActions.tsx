@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ClipboardDocumentIcon, EllipsisHorizontalIcon } from "@heroicons/react/24/outline";
 
-export function PromptContentActions({ body, title }: { body: string; title: string }) {
+export function PromptContentActions({ body, onUsed, title }: { body: string; onUsed?: () => void; title: string }) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -10,6 +10,7 @@ export function PromptContentActions({ body, title }: { body: string; title: str
     setFailed(false);
     try {
       await navigator.clipboard.writeText(body);
+      onUsed?.();
       setCopied(true);
     } catch {
       setFailed(true);

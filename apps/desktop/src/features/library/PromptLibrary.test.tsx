@@ -12,6 +12,24 @@ describe("PromptLibrary", () => {
     expect(screen.getByLabelText("空提示词库")).toHaveClass("empty-library-state");
   });
 
+  it("uses a labeled favorite control instead of a standalone star glyph", async () => {
+    render(<PromptLibrary loadPrompts={async () => [{
+      id: "favorite", title: "收藏提示词", status: "published", effectiveness: "unverified", category: null,
+      tags: [], sourceNames: [], favorite: false, createdAt: "2026-07-15T00:00:00Z", updatedAt: "2026-07-15T00:00:00Z",
+    }]} />);
+
+    expect(await screen.findByRole("button", { name: "收藏提示词：收藏提示词" })).not.toHaveTextContent("收藏");
+  });
+
+  it("gives saved prompts a distinct favorite state", async () => {
+    render(<PromptLibrary loadPrompts={async () => [{
+      id: "favorite", title: "重点提示词", status: "published", effectiveness: "unverified", category: null,
+      tags: [], sourceNames: [], favorite: true, createdAt: "2026-07-15T00:00:00Z", updatedAt: "2026-07-15T00:00:00Z",
+    }]} />);
+
+    expect(await screen.findByRole("button", { name: "取消收藏提示词：重点提示词" })).toHaveClass("is-favorite");
+  });
+
   it("opens the editor from the creation entry point", async () => {
     const onCreate = vi.fn();
     render(<PromptLibrary loadPrompts={async () => []} onCreate={onCreate} />);
@@ -93,7 +111,9 @@ describe("PromptLibrary", () => {
       createdAt: "2026-07-15T00:00:00Z", updatedAt: "2026-07-15T00:00:00Z",
     }]} />);
     fireEvent.click(await screen.findByRole("checkbox", { name: "选择提示词：代码审查" }));
-    fireEvent.click(screen.getByRole("button", { name: "批量归档 1 条提示词" }));
+    expect(screen.getByRole("status", { name: "批量管理提示" })).toHaveTextContent("已选择 1 条提示词");
+    expect(screen.getByRole("status", { name: "批量管理提示" })).toHaveTextContent("归档不会删除");
+    fireEvent.click(screen.getByRole("button", { name: "归档已选 1 条提示词" }));
     expect(screen.getByText("批量归档可在提示词详情中恢复。" )).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "确认归档" }));
     await waitFor(() => expect(batchArchive).toHaveBeenCalledWith(["prompt-1"]));

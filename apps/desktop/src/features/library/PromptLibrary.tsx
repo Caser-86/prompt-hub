@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { StarIcon } from "@heroicons/react/24/outline";
+import { StarIcon as StarSolidIcon } from "@heroicons/react/24/solid";
 
 import type { PromptListItem } from "@prompt-hub/contracts";
 
 import { filterAndSortPrompts, formatLibraryUpdatedAt, type PromptLibraryFilter } from "./libraryView";
+import { readPromptUsage, recordPromptUsage } from "./promptUsage";
 import "./prompt-library.css";
 
 type PromptLibraryProps = {
@@ -19,6 +22,7 @@ export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite, bat
   const [selected, setSelected] = useState<string[]>([]);
   const [confirmBatchArchive, setConfirmBatchArchive] = useState(false);
   const [filter, setFilter] = useState<PromptLibraryFilter>("all");
+  const [usage, setUsage] = useState(readPromptUsage);
 
   useEffect(() => {
     void loadPrompts()
@@ -43,7 +47,11 @@ export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite, bat
       setConfirmBatchArchive(false);
     });
   };
-  const visiblePrompts = prompts ? filterAndSortPrompts(prompts, filter) : [];
+  const visiblePrompts = prompts ? filterAndSortPrompts(prompts, filter, usage) : [];
+  const openPrompt = (prompt: PromptListItem) => {
+    setUsage(recordPromptUsage(prompt.id));
+    onSelect?.(prompt);
+  };
 
   return (
     <section aria-labelledby="library-title" className="prompt-library">
@@ -80,11 +88,15 @@ export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite, bat
             </div>
             <p aria-live="polite" className="library-result-count">共 {visiblePrompts.length} 条提示词</p>
           </div>
+          {selected.length ? <section aria-label="批量管理提示" className="selection-notice" role="status">
+            <div><strong>已选择 {selected.length} 条提示词</strong><span>可批量归档；归档不会删除，之后可以恢复。</span></div>
+            <div className="selection-notice-actions"><button className="button-secondary" onClick={() => setSelected([])} type="button">取消选择</button><button className="button-primary" onClick={() => setConfirmBatchArchive(true)} type="button">归档已选 {selected.length} 条提示词</button></div>
+          </section> : null}
           <ul aria-label="提示词列表" className="prompt-list">
             {visiblePrompts.map((prompt) => (
               <li className="prompt-list-item surface-card" key={prompt.id}>
                 <div className="prompt-list-primary">
-                  <button aria-label={`打开提示词：${prompt.title}`} className="prompt-list-title" onClick={() => onSelect?.(prompt)} type="button">
+                  <button aria-label={`打开提示词：${prompt.title}`} className="prompt-list-title" onClick={() => openPrompt(prompt)} type="button">
                     <strong>{prompt.title}</strong>
                   </button>
                   {prompt.tags.length ? <div aria-label="标签" className="prompt-list-tags">{prompt.tags.map((tag) => <span key={tag}>{tag}</span>)}</div> : null}
@@ -99,15 +111,16 @@ export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite, bat
                 <label><input aria-label={`选择提示词：${prompt.title}`} checked={selected.includes(prompt.id)} onChange={() => toggleSelected(prompt.id)} type="checkbox" /></label>
                 <button
                   aria-label={`${prompt.favorite ? "取消收藏" : "收藏"}提示词：${prompt.title}`}
+                  className={`favorite-toggle${prompt.favorite ? " is-favorite" : ""}`}
                   onClick={() => toggleFavorite(prompt)}
                   type="button"
-                >{prompt.favorite ? "★" : "☆"}</button>
+                title={prompt.favorite ? "取消收藏" : "收藏"}
+                >{prompt.favorite ? <StarSolidIcon aria-hidden="true" /> : <StarIcon aria-hidden="true" />}</button>
                 </div>
             </li>
           ))}
         </ul>
         {selected.length ? <div>
-          <button onClick={() => setConfirmBatchArchive(true)} type="button">批量归档 {selected.length} 条提示词</button>
           {confirmBatchArchive ? <div role="dialog" aria-label="确认批量归档"><p>批量归档可在提示词详情中恢复。</p><button onClick={archiveSelected} type="button">确认归档</button><button onClick={() => setConfirmBatchArchive(false)} type="button">取消</button></div> : null}
         </div> : null}</>
       ) : null}

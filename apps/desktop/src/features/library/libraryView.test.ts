@@ -44,7 +44,10 @@ const fixtures: PromptListItem[] = [
 ];
 
 describe("library view helpers", () => {
-  it("filters favorites and verification states while preserving newest-first order", () => {
+  it("keeps favorites first, then ranks commonly used prompts before recency", () => {
+    expect(filterAndSortPrompts(fixtures, "all", { "new-effective": 8 }).map((prompt) => prompt.id)).toEqual([
+      "favorite", "new-effective", "old-effective",
+    ]);
     const visible = filterAndSortPrompts(fixtures, "effective");
 
     expect(visible.map((prompt) => prompt.id)).toEqual(["new-effective", "old-effective"]);

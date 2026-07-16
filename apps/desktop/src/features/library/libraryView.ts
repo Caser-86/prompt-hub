@@ -2,10 +2,16 @@ import type { PromptListItem } from "@prompt-hub/contracts";
 
 export type PromptLibraryFilter = "all" | "favorite" | "effective" | "needs_retest";
 
-export function filterAndSortPrompts(prompts: PromptListItem[], filter: PromptLibraryFilter) {
+export function filterAndSortPrompts(prompts: PromptListItem[], filter: PromptLibraryFilter, usage: Record<string, number> = {}) {
   return prompts
     .filter((prompt) => filter === "all" || (filter === "favorite" ? prompt.favorite : prompt.effectiveness === filter))
-    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+    .sort((left, right) => {
+      const favoriteDifference = Number(right.favorite) - Number(left.favorite);
+      if (favoriteDifference) return favoriteDifference;
+      const usageDifference = (usage[right.id] ?? 0) - (usage[left.id] ?? 0);
+      if (usageDifference) return usageDifference;
+      return Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+    });
 }
 
 export function formatLibraryUpdatedAt(value: string, now = new Date()) {

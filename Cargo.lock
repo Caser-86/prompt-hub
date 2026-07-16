@@ -3068,7 +3068,7 @@ dependencies = [
 
 [[package]]
 name = "prompt-ai"
-version = "0.1.6"
+version = "0.1.9"
 dependencies = [
  "async-trait",
  "prompt-security",
@@ -3083,7 +3083,7 @@ dependencies = [
 
 [[package]]
 name = "prompt-domain"
-version = "0.1.6"
+version = "0.1.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -3094,7 +3094,7 @@ dependencies = [
 
 [[package]]
 name = "prompt-hub-desktop"
-version = "0.1.6"
+version = "0.1.9"
 dependencies = [
  "prompt-ai",
  "prompt-domain",
@@ -3112,7 +3112,7 @@ dependencies = [
 
 [[package]]
 name = "prompt-import"
-version = "0.1.6"
+version = "0.1.9"
 dependencies = [
  "csv",
  "reqwest",
@@ -3127,7 +3127,7 @@ dependencies = [
 
 [[package]]
 name = "prompt-mcp"
-version = "0.1.6"
+version = "0.1.9"
 dependencies = [
  "jsonschema",
  "prompt-domain",
@@ -3140,7 +3140,7 @@ dependencies = [
 
 [[package]]
 name = "prompt-security"
-version = "0.1.6"
+version = "0.1.9"
 dependencies = [
  "keyring",
  "secrecy",
@@ -3150,7 +3150,7 @@ dependencies = [
 
 [[package]]
 name = "prompt-store"
-version = "0.1.6"
+version = "0.1.9"
 dependencies = [
  "prompt-domain",
  "rusqlite",

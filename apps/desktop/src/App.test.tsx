@@ -106,6 +106,21 @@ describe("App", () => {
     expect(screen.getByRole("form", { name: "提示词编辑器" })).toBeVisible();
   });
 
+  it("searches prompt titles from the command palette and opens the selected prompt", async () => {
+    desktopMock.listPrompts.mockResolvedValue([{
+      id: "prompt-1", title: "可复现故障排查", status: "inbox", effectiveness: "unverified", category: "开发",
+      tags: ["排查"], sourceNames: ["官方资料整理"], favorite: false,
+      createdAt: "2026-07-16T00:00:00Z", updatedAt: "2026-07-16T00:00:00Z",
+    }]);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "打开命令面板" }));
+    fireEvent.change(screen.getByLabelText("快速操作"), { target: { value: "排查" } });
+    fireEvent.click(await within(screen.getByRole("dialog", { name: "命令面板" })).findByRole("button", { name: "打开提示词：可复现故障排查" }));
+
+    expect(await screen.findByRole("heading", { name: "可复现故障排查" })).toBeVisible();
+  });
+
   it("opens metadata editing for a selected library prompt", async () => {
     desktopMock.listPrompts.mockResolvedValueOnce([
       {
