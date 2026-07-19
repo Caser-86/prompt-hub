@@ -10,6 +10,10 @@ pub fn run() {
             let database_path = data_directory.join("prompt-hub.db");
             let database = prompt_store::Database::open(&database_path)?;
             app.manage(commands::PromptService::new(database.into_repository()));
+            let skill_database = prompt_store::Database::open(&database_path)?;
+            app.manage(commands::SkillService::new(
+                skill_database.into_skill_repository(),
+            ));
             app.manage(commands::AiCancellationRegistry::default());
             app.manage(commands::BackupService::new(database_path));
             let credentials = prompt_ai::SystemCredentialAdapter::new("Prompt Hub", "default")?;
@@ -27,6 +31,11 @@ pub fn run() {
             commands::preview_backup_restore,
             commands::restore_backup,
             commands::list_prompts,
+            commands::collect_skill_folder,
+            commands::list_skills,
+            commands::get_skill,
+            commands::review_skill,
+            commands::set_skill_favorite,
             commands::prompt_history,
             commands::restore_prompt_version,
             commands::search_prompts,

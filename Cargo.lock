@@ -3099,6 +3099,7 @@ dependencies = [
  "prompt-ai",
  "prompt-domain",
  "prompt-import",
+ "prompt-skill",
  "prompt-store",
  "secrecy",
  "serde",

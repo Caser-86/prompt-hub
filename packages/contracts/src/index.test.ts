@@ -3,6 +3,28 @@ import { describe, expect, it } from "vitest";
 import { createDesktopCommandClient } from "./index";
 
 describe("desktop command client", () => {
+  it("collects and lists Skills through the approved command boundary", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      return command === "collect_skill_folder"
+        ? {
+          id: "skill-1", name: "审计 Skill", description: "本地审核", source: { kind: "local_directory", location: "C:/Skills/a", revision: null },
+          risks: ["contains_script"], reviewStatus: "pending_review", favorite: false, updatedAt: "2026-07-19T00:00:00Z",
+        }
+        : [{
+          id: "skill-1", name: "审计 Skill", description: "本地审核", source: { kind: "local_directory", location: "C:/Skills/a", revision: null },
+          risks: ["contains_script"], reviewStatus: "pending_review", favorite: false, updatedAt: "2026-07-19T00:00:00Z",
+        }];
+    });
+
+    await expect(client.collectSkillFolder("C:/Skills/a")).resolves.toMatchObject({ reviewStatus: "pending_review" });
+    await expect(client.listSkills()).resolves.toHaveLength(1);
+    expect(calls).toEqual([
+      { command: "collect_skill_folder", args: { path: "C:/Skills/a" } },
+      { command: "list_skills", args: undefined },
+    ]);
+  });
   it("uses the stable service command and returns its typed status payload", async () => {
     const calls: string[] = [];
     const client = createDesktopCommandClient(async (command) => {

@@ -22,10 +22,11 @@ use prompt_ai::{
 use prompt_import::{
     ImportCandidate, UrlPolicy, fetch_url, normalized_body_fingerprint, parse_file, scan_folder,
 };
+use prompt_skill::scan_skill;
 use prompt_store::{
     BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage,
-    SearchQuery, SearchSort, create_backup, create_backup_in_directory, preview_restore,
-    prune_backups,
+    SearchQuery, SearchSort, SkillRepository, SkillReviewStatus, SkillSource, StoredSkill,
+    create_backup, create_backup_in_directory, preview_restore, prune_backups,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
@@ -144,6 +145,17 @@ fn parse_optional_timestamp(value: Option<String>) -> Result<Option<OffsetDateTi
 
 pub struct PromptService {
     repository: Mutex<PromptRepository>,
+}
+
+pub struct SkillService {
+    repository: Mutex<SkillRepository>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillReviewInput {
+    pub status: String,
+    pub notes: Option<String>,
 }
 
 #[derive(Default)]
@@ -1089,6 +1101,79 @@ impl PromptService {
     }
 }
 
+impl SkillService {
+    #[must_use]
+    pub const fn new(repository: SkillRepository) -> Self {
+        Self {
+            repository: Mutex::new(repository),
+        }
+    }
+
+    pub fn collect_local_folder(&self, path: PathBuf) -> Result<SkillListItem, String> {
+        if !path.is_absolute() {
+            return Err("Skill folder path must be absolute".to_owned());
+        }
+        let path = path
+            .canonicalize()
+            .map_err(|_| "Skill folder is unavailable".to_owned())?;
+        let candidate = scan_skill(&path).map_err(|error| error.to_string())?;
+        let stored = self
+            .repository
+            .lock()
+            .map_err(|_| "Skill repository is unavailable".to_owned())?
+            .save_candidate(
+                &candidate,
+                &SkillSource::local_directory(path.to_string_lossy()),
+                OffsetDateTime::now_utc(),
+            )
+            .map_err(|error| error.to_string())?;
+        SkillListItem::from_stored(&stored)
+    }
+
+    pub fn list(&self) -> Result<Vec<SkillListItem>, String> {
+        self.repository
+            .lock()
+            .map_err(|_| "Skill repository is unavailable".to_owned())?
+            .list_skills()
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .map(SkillListItem::from_summary)
+            .collect()
+    }
+
+    pub fn get(&self, id: &str) -> Result<Option<SkillDetail>, String> {
+        self.repository
+            .lock()
+            .map_err(|_| "Skill repository is unavailable".to_owned())?
+            .get_skill(id)
+            .map_err(|error| error.to_string())?
+            .map(|skill| SkillDetail::from_stored(&skill))
+            .transpose()
+    }
+
+    pub fn review(&self, id: &str, input: SkillReviewInput) -> Result<(), String> {
+        let status = parse_skill_review_status(&input.status)?;
+        self.repository
+            .lock()
+            .map_err(|_| "Skill repository is unavailable".to_owned())?
+            .set_review(
+                id,
+                status,
+                input.notes.as_deref(),
+                OffsetDateTime::now_utc(),
+            )
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn set_favorite(&self, id: &str, favorite: bool) -> Result<(), String> {
+        self.repository
+            .lock()
+            .map_err(|_| "Skill repository is unavailable".to_owned())?
+            .set_favorite(id, favorite, OffsetDateTime::now_utc())
+            .map_err(|error| error.to_string())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptListItem {
@@ -1123,6 +1208,54 @@ pub struct PromptHistoryItem {
     number: u32,
     body: String,
     created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillSourceItem {
+    pub kind: String,
+    pub location: String,
+    pub revision: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillListItem {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub source: SkillSourceItem,
+    pub risks: Vec<String>,
+    pub review_status: String,
+    pub favorite: bool,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillFileItem {
+    pub relative_path: String,
+    pub bytes: u64,
+    pub sha256: String,
+    pub kind: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillDetail {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub source: SkillSourceItem,
+    pub risks: Vec<String>,
+    pub review_status: String,
+    pub review_notes: Option<String>,
+    pub favorite: bool,
+    pub skill_markdown: String,
+    pub files: Vec<SkillFileItem>,
+    pub content_hash: String,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1189,6 +1322,73 @@ impl PromptHistoryItem {
     }
 }
 
+impl SkillSourceItem {
+    fn from_source(source: &SkillSource) -> Self {
+        Self {
+            kind: source.kind().to_owned(),
+            location: source.location().to_owned(),
+            revision: source.revision().map(str::to_owned),
+        }
+    }
+}
+
+impl SkillListItem {
+    fn from_stored(skill: &StoredSkill) -> Result<Self, String> {
+        Ok(Self {
+            id: skill.id().to_owned(),
+            name: skill.name().to_owned(),
+            description: skill.description().to_owned(),
+            source: SkillSourceItem::from_source(skill.source()),
+            risks: skill.risks().to_vec(),
+            review_status: skill_review_status_name(skill.review_status()).to_owned(),
+            favorite: skill.favorite(),
+            updated_at: format_timestamp(skill.updated_at())?,
+        })
+    }
+
+    fn from_summary(skill: prompt_store::SkillSummary) -> Result<Self, String> {
+        Ok(Self {
+            id: skill.id().to_owned(),
+            name: skill.name().to_owned(),
+            description: skill.description().to_owned(),
+            source: SkillSourceItem::from_source(skill.source()),
+            risks: skill.risks().to_vec(),
+            review_status: skill_review_status_name(skill.review_status()).to_owned(),
+            favorite: skill.favorite(),
+            updated_at: format_timestamp(skill.updated_at())?,
+        })
+    }
+}
+
+impl SkillDetail {
+    fn from_stored(skill: &StoredSkill) -> Result<Self, String> {
+        Ok(Self {
+            id: skill.id().to_owned(),
+            name: skill.name().to_owned(),
+            description: skill.description().to_owned(),
+            source: SkillSourceItem::from_source(skill.source()),
+            risks: skill.risks().to_vec(),
+            review_status: skill_review_status_name(skill.review_status()).to_owned(),
+            review_notes: skill.review_notes().map(str::to_owned),
+            favorite: skill.favorite(),
+            skill_markdown: skill.skill_markdown().to_owned(),
+            files: skill
+                .files()
+                .iter()
+                .map(|file| SkillFileItem {
+                    relative_path: file.relative_path().to_owned(),
+                    bytes: file.bytes(),
+                    sha256: file.sha256().to_owned(),
+                    kind: file.kind().to_owned(),
+                })
+                .collect(),
+            content_hash: skill.content_hash().to_owned(),
+            created_at: format_timestamp(skill.created_at())?,
+            updated_at: format_timestamp(skill.updated_at())?,
+        })
+    }
+}
+
 impl PromptListItem {
     fn from_prompt(prompt: Prompt, favorite: bool) -> Result<Self, String> {
         let content = prompt.current_version().content();
@@ -1243,6 +1443,25 @@ fn format_timestamp(timestamp: OffsetDateTime) -> Result<String, String> {
         .map_err(|error| error.to_string())
 }
 
+fn parse_skill_review_status(value: &str) -> Result<SkillReviewStatus, String> {
+    match value {
+        "pending_review" => Ok(SkillReviewStatus::PendingReview),
+        "approved" => Ok(SkillReviewStatus::Approved),
+        "rejected" => Ok(SkillReviewStatus::Rejected),
+        "risk_pending_confirmation" => Ok(SkillReviewStatus::RiskPendingConfirmation),
+        _ => Err("invalid Skill review status".to_owned()),
+    }
+}
+
+fn skill_review_status_name(status: SkillReviewStatus) -> &'static str {
+    match status {
+        SkillReviewStatus::PendingReview => "pending_review",
+        SkillReviewStatus::Approved => "approved",
+        SkillReviewStatus::Rejected => "rejected",
+        SkillReviewStatus::RiskPendingConfirmation => "risk_pending_confirmation",
+    }
+}
+
 #[tauri::command]
 pub fn list_prompts(service: State<'_, PromptService>) -> Result<Vec<PromptListItem>, String> {
     let repository = service
@@ -1260,6 +1479,45 @@ pub fn list_prompts(service: State<'_, PromptService>) -> Result<Vec<PromptListI
             PromptListItem::from_prompt(prompt, favorite)
         })
         .collect()
+}
+
+#[tauri::command]
+pub fn collect_skill_folder(
+    service: State<'_, SkillService>,
+    path: String,
+) -> Result<SkillListItem, String> {
+    service.collect_local_folder(PathBuf::from(path))
+}
+
+#[tauri::command]
+pub fn list_skills(service: State<'_, SkillService>) -> Result<Vec<SkillListItem>, String> {
+    service.list()
+}
+
+#[tauri::command]
+pub fn get_skill(
+    service: State<'_, SkillService>,
+    id: String,
+) -> Result<Option<SkillDetail>, String> {
+    service.get(&id)
+}
+
+#[tauri::command]
+pub fn review_skill(
+    service: State<'_, SkillService>,
+    id: String,
+    review: SkillReviewInput,
+) -> Result<(), String> {
+    service.review(&id, review)
+}
+
+#[tauri::command]
+pub fn set_skill_favorite(
+    service: State<'_, SkillService>,
+    id: String,
+    favorite: bool,
+) -> Result<(), String> {
+    service.set_favorite(&id, favorite)
 }
 
 #[tauri::command]

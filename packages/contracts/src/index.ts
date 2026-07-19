@@ -105,6 +105,28 @@ export type PromptHistoryItem = {
   createdAt: string;
 };
 
+export type SkillReviewStatus = "pending_review" | "approved" | "rejected" | "risk_pending_confirmation";
+export type SkillSource = { kind: string; location: string; revision: string | null };
+export type SkillListItem = {
+  id: string;
+  name: string;
+  description: string;
+  source: SkillSource;
+  risks: string[];
+  reviewStatus: SkillReviewStatus;
+  favorite: boolean;
+  updatedAt: string;
+};
+export type SkillFileItem = { relativePath: string; bytes: number; sha256: string; kind: string };
+export type SkillDetail = SkillListItem & {
+  reviewNotes: string | null;
+  skillMarkdown: string;
+  files: SkillFileItem[];
+  contentHash: string;
+  createdAt: string;
+};
+export type SkillReviewDraft = { status: SkillReviewStatus; notes: string | null };
+
 export type PromptCompatibilityDraft = {
   tool: string;
   model: string | null;
@@ -128,6 +150,11 @@ export type DesktopCommandClient = {
   restoreBackup: (path: string) => Promise<BackupInfo>;
   pruneLocalBackups: (retain: number) => Promise<number>;
   listPrompts: () => Promise<PromptListItem[]>;
+  collectSkillFolder: (path: string) => Promise<SkillListItem>;
+  listSkills: () => Promise<SkillListItem[]>;
+  getSkill: (id: string) => Promise<SkillDetail | null>;
+  reviewSkill: (id: string, review: SkillReviewDraft) => Promise<void>;
+  setSkillFavorite: (id: string, favorite: boolean) => Promise<void>;
   promptHistory: (id: string) => Promise<PromptHistoryItem[]>;
   restorePromptVersion: (id: string, versionNumber: number) => Promise<unknown>;
   archivePrompt: (id: string) => Promise<unknown>;
@@ -210,6 +237,27 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
         throw new Error("list_prompts returned an invalid response");
       }
       return result;
+    },
+    async collectSkillFolder(path) {
+      const result = await invoke("collect_skill_folder", { path });
+      if (!isSkillListItem(result)) throw new Error("collect_skill_folder returned an invalid response");
+      return result;
+    },
+    async listSkills() {
+      const result = await invoke("list_skills");
+      if (!Array.isArray(result) || !result.every(isSkillListItem)) throw new Error("list_skills returned an invalid response");
+      return result;
+    },
+    async getSkill(id) {
+      const result = await invoke("get_skill", { id });
+      if (result !== null && !isSkillDetail(result)) throw new Error("get_skill returned an invalid response");
+      return result;
+    },
+    async reviewSkill(id, review) {
+      await invoke("review_skill", { id, review });
+    },
+    async setSkillFavorite(id, favorite) {
+      await invoke("set_skill_favorite", { id, favorite });
     },
     async promptHistory(id) {
       const result = await invoke("prompt_history", { id });
@@ -350,6 +398,35 @@ function isPromptListItem(value: unknown): value is PromptListItem {
     typeof item.createdAt === "string" &&
     typeof item.updatedAt === "string"
   );
+}
+
+function isSkillSource(value: unknown): value is SkillSource {
+  if (typeof value !== "object" || value === null) return false;
+  const source = value as Record<string, unknown>;
+  return typeof source.kind === "string" && typeof source.location === "string"
+    && (typeof source.revision === "string" || source.revision === null);
+}
+
+function isSkillListItem(value: unknown): value is SkillListItem {
+  if (typeof value !== "object" || value === null) return false;
+  const skill = value as Record<string, unknown>;
+  return typeof skill.id === "string" && typeof skill.name === "string" && typeof skill.description === "string"
+    && isSkillSource(skill.source) && Array.isArray(skill.risks) && skill.risks.every((risk) => typeof risk === "string")
+    && ["pending_review", "approved", "rejected", "risk_pending_confirmation"].includes(skill.reviewStatus as string)
+    && typeof skill.favorite === "boolean" && typeof skill.updatedAt === "string";
+}
+
+function isSkillDetail(value: unknown): value is SkillDetail {
+  if (!isSkillListItem(value)) return false;
+  const skill = value as Record<string, unknown>;
+  return (typeof skill.reviewNotes === "string" || skill.reviewNotes === null)
+    && typeof skill.skillMarkdown === "string" && typeof skill.contentHash === "string"
+    && typeof skill.createdAt === "string" && Array.isArray(skill.files)
+    && skill.files.every((file) => typeof file === "object" && file !== null
+      && typeof (file as Record<string, unknown>).relativePath === "string"
+      && typeof (file as Record<string, unknown>).bytes === "number"
+      && typeof (file as Record<string, unknown>).sha256 === "string"
+      && typeof (file as Record<string, unknown>).kind === "string");
 }
 
 function isPromptSourceEvidence(value: unknown): value is { kind: string; name: string; location: string | null; collectedAt: string } {
