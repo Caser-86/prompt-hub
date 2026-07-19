@@ -6,6 +6,7 @@ members = [
   "crates/prompt-import",
   "crates/prompt-mcp",
   "crates/prompt-security",
+  "crates/prompt-skill",
   "crates/prompt-store",
 ]
 resolver = "2"
