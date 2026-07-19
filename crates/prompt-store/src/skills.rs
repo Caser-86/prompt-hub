@@ -118,6 +118,7 @@ pub struct StoredSkill {
     name: String,
     description: String,
     source: SkillSource,
+    snapshot_path: Option<String>,
     content_hash: String,
     skill_markdown: String,
     risks: Vec<String>,
@@ -145,6 +146,10 @@ impl StoredSkill {
     #[must_use]
     pub fn source(&self) -> &SkillSource {
         &self.source
+    }
+    #[must_use]
+    pub fn snapshot_path(&self) -> Option<&str> {
+        self.snapshot_path.as_deref()
     }
     #[must_use]
     pub fn content_hash(&self) -> &str {
@@ -288,6 +293,16 @@ impl SkillRepository {
         source: &SkillSource,
         created_at: OffsetDateTime,
     ) -> Result<StoredSkill, StoreError> {
+        self.save_candidate_with_snapshot(candidate, source, None, created_at)
+    }
+
+    pub fn save_candidate_with_snapshot(
+        &mut self,
+        candidate: &SkillCandidate,
+        source: &SkillSource,
+        snapshot_path: Option<&str>,
+        created_at: OffsetDateTime,
+    ) -> Result<StoredSkill, StoreError> {
         validate_source(source)?;
         if let Some(existing) = self
             .connection
@@ -306,9 +321,9 @@ impl SkillRepository {
         let risks = candidate.risks().iter().map(risk_name).collect::<Vec<_>>();
         let transaction = self.connection.transaction()?;
         transaction.execute(
-            "INSERT INTO skills(id, name, description, tool_kind, source_kind, source_location, source_revision, content_hash, skill_markdown, risk_flags, review_status, review_notes, reviewed_at, favorite, created_at, updated_at)
-             VALUES (?1, ?2, ?3, 'codex', ?4, ?5, ?6, ?7, ?8, ?9, 'pending_review', NULL, NULL, 0, ?10, ?10)",
-            params![id, candidate.name(), candidate.description(), source.kind(), source.location(), source.revision(), candidate.content_hash(), candidate.skill_markdown(), serde_json::to_string(&risks)?, created_at.unix_timestamp()],
+            "INSERT INTO skills(id, name, description, tool_kind, source_kind, source_location, source_revision, content_hash, skill_markdown, risk_flags, review_status, review_notes, reviewed_at, favorite, created_at, updated_at, snapshot_path)
+             VALUES (?1, ?2, ?3, 'codex', ?4, ?5, ?6, ?7, ?8, ?9, 'pending_review', NULL, NULL, 0, ?10, ?10, ?11)",
+            params![id, candidate.name(), candidate.description(), source.kind(), source.location(), source.revision(), candidate.content_hash(), candidate.skill_markdown(), serde_json::to_string(&risks)?, created_at.unix_timestamp(), snapshot_path],
         )?;
         for file in candidate.files() {
             transaction.execute(
@@ -358,10 +373,10 @@ impl SkillRepository {
 
     pub fn get_skill(&self, id: &str) -> Result<Option<StoredSkill>, StoreError> {
         let row = self.connection.query_row(
-            "SELECT id, name, description, source_kind, source_location, source_revision, content_hash, skill_markdown, risk_flags, review_status, review_notes, favorite, created_at, updated_at FROM skills WHERE id = ?1", [id],
+            "SELECT id, name, description, source_kind, source_location, source_revision, content_hash, skill_markdown, risk_flags, review_status, review_notes, favorite, created_at, updated_at, snapshot_path FROM skills WHERE id = ?1", [id],
             |row| {
                 let risks: Vec<String> = serde_json::from_str(&row.get::<_, String>(8)?).map_err(|error| rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(error)))?;
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, SkillSource { kind: row.get(3)?, location: row.get(4)?, revision: row.get(5)? }, row.get::<_, String>(6)?, row.get::<_, String>(7)?, risks, row.get::<_, String>(9)?, row.get::<_, Option<String>>(10)?, row.get::<_, i64>(11)? != 0, row.get::<_, i64>(12)?, row.get::<_, i64>(13)?))
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, SkillSource { kind: row.get(3)?, location: row.get(4)?, revision: row.get(5)? }, row.get::<_, String>(6)?, row.get::<_, String>(7)?, risks, row.get::<_, String>(9)?, row.get::<_, Option<String>>(10)?, row.get::<_, i64>(11)? != 0, row.get::<_, i64>(12)?, row.get::<_, i64>(13)?, row.get::<_, Option<String>>(14)?))
             },
         ).optional()?;
         let Some((
@@ -377,6 +392,7 @@ impl SkillRepository {
             favorite,
             created_at,
             updated_at,
+            snapshot_path,
         )) = row
         else {
             return Ok(None);
@@ -398,6 +414,7 @@ impl SkillRepository {
             name,
             description,
             source,
+            snapshot_path,
             content_hash,
             skill_markdown,
             risks,
@@ -466,6 +483,23 @@ impl SkillRepository {
             "SELECT skill_id, target_root, install_path, installed_hash, backup_path, installed_at, last_verified_at FROM skill_installations WHERE skill_id = ?1", [skill_id],
             |row| Ok(SkillInstallation { skill_id: row.get(0)?, target_root: row.get(1)?, install_path: row.get(2)?, installed_hash: row.get(3)?, backup_path: row.get(4)?, installed_at: timestamp(row.get(5)?).map_err(domain_to_sql_error)?, last_verified_at: row.get::<_, Option<i64>>(6)?.map(|value| timestamp(value).map_err(domain_to_sql_error)).transpose()? }),
         ).optional().map_err(StoreError::from)
+    }
+
+    pub fn mark_installation_verified(
+        &mut self,
+        skill_id: &str,
+        verified_at: OffsetDateTime,
+    ) -> Result<(), StoreError> {
+        let changed = self.connection.execute(
+            "UPDATE skill_installations SET last_verified_at = ?2 WHERE skill_id = ?1",
+            params![skill_id, verified_at.unix_timestamp()],
+        )?;
+        if changed == 0 {
+            return Err(StoreError::Domain(
+                "Skill installation was not found".to_owned(),
+            ));
+        }
+        Ok(())
     }
 }
 

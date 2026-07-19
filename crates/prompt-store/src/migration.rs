@@ -11,15 +11,17 @@ const SEARCH_SCHEMA: &str = include_str!("../migrations/0002_search.sql");
 const FAVORITES_SCHEMA: &str = include_str!("../migrations/0003_favorites.sql");
 const IMPORT_JOBS_SCHEMA: &str = include_str!("../migrations/0004_import_jobs.sql");
 const SKILLS_SCHEMA: &str = include_str!("../migrations/0005_skills.sql");
+const SKILL_SNAPSHOTS_SCHEMA: &str = include_str!("../migrations/0006_skill_snapshots.sql");
 const MIGRATIONS: &[(u32, &str)] = &[
     (1, INITIAL_SCHEMA),
     (2, SEARCH_SCHEMA),
     (3, FAVORITES_SCHEMA),
     (4, IMPORT_JOBS_SCHEMA),
     (5, SKILLS_SCHEMA),
+    (6, SKILL_SNAPSHOTS_SCHEMA),
 ];
 
-pub const LATEST_SCHEMA_VERSION: u32 = 5;
+pub const LATEST_SCHEMA_VERSION: u32 = 6;
 
 #[derive(Debug, Clone, Default)]
 pub struct MigrationReport {

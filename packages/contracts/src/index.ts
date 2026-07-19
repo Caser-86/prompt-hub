@@ -128,6 +128,8 @@ export type SkillDetail = SkillListItem & {
 export type SkillReviewDraft = { status: SkillReviewStatus; notes: string | null };
 export type SkillInstallDraft = { targetRoot: string; destinationName: string; replaceAfterBackup: boolean };
 export type SkillInstallation = { installPath: string; backupPath: string | null; installedHash: string };
+export type SkillInstallationVerification = { state: "matching" | "drifted" | "unavailable" };
+export type GitSkillCollectionDraft = { repositoryUrl: string; commit: string; subdirectory: string };
 
 export type PromptCompatibilityDraft = {
   tool: string;
@@ -152,12 +154,14 @@ export type DesktopCommandClient = {
   restoreBackup: (path: string) => Promise<BackupInfo>;
   pruneLocalBackups: (retain: number) => Promise<number>;
   listPrompts: () => Promise<PromptListItem[]>;
-  collectSkillFolder: (path: string) => Promise<SkillListItem>;
+    collectSkillFolder: (path: string) => Promise<SkillListItem>;
+    collectGitSkill: (source: GitSkillCollectionDraft) => Promise<SkillListItem>;
   listSkills: () => Promise<SkillListItem[]>;
   getSkill: (id: string) => Promise<SkillDetail | null>;
     reviewSkill: (id: string, review: SkillReviewDraft) => Promise<void>;
     setSkillFavorite: (id: string, favorite: boolean) => Promise<void>;
     installSkill: (id: string, installation: SkillInstallDraft) => Promise<SkillInstallation>;
+    verifySkillInstallation: (id: string) => Promise<SkillInstallationVerification>;
   promptHistory: (id: string) => Promise<PromptHistoryItem[]>;
   restorePromptVersion: (id: string, versionNumber: number) => Promise<unknown>;
   archivePrompt: (id: string) => Promise<unknown>;
@@ -241,7 +245,7 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       }
       return result;
     },
-    async collectSkillFolder(path) {
+      async collectSkillFolder(path) {
       const result = await invoke("collect_skill_folder", { path });
       if (!isSkillListItem(result)) throw new Error("collect_skill_folder returned an invalid response");
       return result;
@@ -265,6 +269,16 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       async installSkill(id, installation) {
         const result = await invoke("install_skill", { id, installation });
         if (!isSkillInstallation(result)) throw new Error("install_skill returned an invalid response");
+        return result;
+      },
+      async verifySkillInstallation(id) {
+        const result = await invoke("verify_skill_installation", { id });
+        if (!isSkillInstallationVerification(result)) throw new Error("verify_skill_installation returned an invalid response");
+        return result;
+      },
+      async collectGitSkill(source) {
+        const result = await invoke("collect_git_skill", { source });
+        if (!isSkillListItem(result)) throw new Error("collect_git_skill returned an invalid response");
         return result;
       },
     async promptHistory(id) {
@@ -442,6 +456,12 @@ function isSkillInstallation(value: unknown): value is SkillInstallation {
   const installation = value as Record<string, unknown>;
   return typeof installation.installPath === "string" && typeof installation.installedHash === "string"
     && (typeof installation.backupPath === "string" || installation.backupPath === null);
+}
+
+function isSkillInstallationVerification(value: unknown): value is SkillInstallationVerification {
+  if (typeof value !== "object" || value === null) return false;
+  const verification = value as Record<string, unknown>;
+  return verification.state === "matching" || verification.state === "drifted" || verification.state === "unavailable";
 }
 
 function isPromptSourceEvidence(value: unknown): value is { kind: string; name: string; location: string | null; collectedAt: string } {

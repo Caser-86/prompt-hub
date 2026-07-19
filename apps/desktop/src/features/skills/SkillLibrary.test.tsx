@@ -13,7 +13,7 @@ const skill = {
 describe("SkillLibrary", () => {
   it("collects a local folder into pending review and makes its risk visible", async () => {
     const collectSkillFolder = vi.fn().mockResolvedValue(skill);
-    render(<SkillLibrary collectSkillFolder={collectSkillFolder} getSkill={vi.fn()} installSkill={vi.fn()} listSkills={async () => []} reviewSkill={vi.fn()} setSkillFavorite={vi.fn()} />);
+    render(<SkillLibrary collectGitSkill={vi.fn()} collectSkillFolder={collectSkillFolder} getSkill={vi.fn()} installSkill={vi.fn()} listSkills={async () => []} reviewSkill={vi.fn()} setSkillFavorite={vi.fn()} verifySkillInstallation={vi.fn()} />);
 
     fireEvent.change(screen.getByLabelText("Skill 文件夹路径"), { target: { value: "C:/Skills/audit" } });
     fireEvent.click(screen.getByRole("button", { name: "扫描本地 Skill" }));
@@ -28,11 +28,13 @@ describe("SkillLibrary", () => {
     const reviewSkill = vi.fn().mockResolvedValue(undefined);
     render(<SkillLibrary
       collectSkillFolder={vi.fn()}
+      collectGitSkill={vi.fn()}
       getSkill={async () => ({ ...skill, reviewNotes: null, skillMarkdown: "# 本地审计\n正文", files: [], contentHash: "a".repeat(64), createdAt: "2026-07-19T00:00:00Z" })}
       listSkills={async () => [skill]}
       reviewSkill={reviewSkill}
       setSkillFavorite={vi.fn()}
       installSkill={vi.fn()}
+      verifySkillInstallation={vi.fn()}
     />);
 
     fireEvent.click(await screen.findByRole("button", { name: "打开 Skill：本地审计" }));

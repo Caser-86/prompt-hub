@@ -23,13 +23,15 @@ use prompt_import::{
     ImportCandidate, UrlPolicy, fetch_url, normalized_body_fingerprint, parse_file, scan_folder,
 };
 use prompt_skill::{
-    InstallMode, InstallRequest, install_skill as install_reviewed_skill, scan_skill,
+    GitSkillSource, InstallMode, InstallRequest, install_skill as install_reviewed_skill,
+    scan_skill, snapshot_git_skill,
 };
 use prompt_store::{
     BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage,
     SearchQuery, SearchSort, SkillRepository, SkillReviewStatus, SkillSource, StoredSkill,
     create_backup, create_backup_in_directory, preview_restore, prune_backups,
 };
+use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -152,6 +154,7 @@ pub struct PromptService {
 pub struct SkillService {
     repository: Mutex<SkillRepository>,
     backup_root: PathBuf,
+    snapshot_root: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
@@ -167,6 +170,14 @@ pub struct SkillInstallInput {
     pub target_root: String,
     pub destination_name: String,
     pub replace_after_backup: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitSkillCollectionInput {
+    pub repository_url: String,
+    pub commit: String,
+    pub subdirectory: String,
 }
 
 #[derive(Default)]
@@ -1118,14 +1129,20 @@ impl SkillService {
         Self {
             repository: Mutex::new(repository),
             backup_root: PathBuf::new(),
+            snapshot_root: PathBuf::new(),
         }
     }
 
     #[must_use]
-    pub fn with_backup_root(repository: SkillRepository, backup_root: PathBuf) -> Self {
+    pub fn with_storage_roots(
+        repository: SkillRepository,
+        backup_root: PathBuf,
+        snapshot_root: PathBuf,
+    ) -> Self {
         Self {
             repository: Mutex::new(repository),
             backup_root,
+            snapshot_root,
         }
     }
 
@@ -1144,6 +1161,38 @@ impl SkillService {
             .save_candidate(
                 &candidate,
                 &SkillSource::local_directory(path.to_string_lossy()),
+                OffsetDateTime::now_utc(),
+            )
+            .map_err(|error| error.to_string())?;
+        SkillListItem::from_stored(&stored)
+    }
+
+    pub fn collect_git_candidate(
+        &self,
+        input: GitSkillCollectionInput,
+    ) -> Result<SkillListItem, String> {
+        if self.snapshot_root.as_os_str().is_empty() {
+            return Err("Skill snapshot storage is unavailable".to_owned());
+        }
+        let source = GitSkillSource::new(
+            &input.repository_url,
+            &input.commit,
+            PathBuf::from(input.subdirectory),
+        )
+        .map_err(|error| error.to_string())?;
+        std::fs::create_dir_all(&self.snapshot_root)
+            .map_err(|_| "Skill snapshot storage is unavailable".to_owned())?;
+        let snapshot = self.snapshot_root.join(Uuid::now_v7().to_string());
+        let candidate =
+            snapshot_git_skill(&source, &snapshot).map_err(|error| error.to_string())?;
+        let stored = self
+            .repository
+            .lock()
+            .map_err(|_| "Skill repository is unavailable".to_owned())?
+            .save_candidate_with_snapshot(
+                &candidate,
+                &SkillSource::git_repository(source.repository_url(), source.commit()),
+                Some(&snapshot.to_string_lossy()),
                 OffsetDateTime::now_utc(),
             )
             .map_err(|error| error.to_string())?;
@@ -1213,10 +1262,8 @@ impl SkillService {
         if skill.review_status() != SkillReviewStatus::Approved {
             return Err("Skill must be approved before installation".to_owned());
         }
-        if skill.source().kind() != "local_directory" {
-            return Err("Only verified local Skill sources can be installed currently".to_owned());
-        }
-        let source = PathBuf::from(skill.source().location());
+        let source = skill.snapshot_path().unwrap_or(skill.source().location());
+        let source = PathBuf::from(source);
         let backup_root = if self.backup_root.as_os_str().is_empty() {
             target_root.join(".prompt-hub-skill-backups")
         } else {
@@ -1253,6 +1300,30 @@ impl SkillService {
             install_path: receipt.install_path().display().to_string(),
             backup_path: receipt.backup_path().map(|path| path.display().to_string()),
             installed_hash: receipt.installed_hash().to_owned(),
+        })
+    }
+
+    pub fn verify_installation(&self, id: &str) -> Result<SkillInstallationVerification, String> {
+        let mut repository = self
+            .repository
+            .lock()
+            .map_err(|_| "Skill repository is unavailable".to_owned())?;
+        let installation = repository
+            .installation(id)
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "Skill installation was not found".to_owned())?;
+        let state = match scan_skill(&PathBuf::from(installation.install_path())) {
+            Ok(candidate) if candidate.content_hash() == installation.installed_hash() => {
+                "matching"
+            }
+            Ok(_) => "drifted",
+            Err(_) => "unavailable",
+        };
+        repository
+            .mark_installation_verified(id, OffsetDateTime::now_utc())
+            .map_err(|error| error.to_string())?;
+        Ok(SkillInstallationVerification {
+            state: state.to_owned(),
         })
     }
 }
@@ -1347,6 +1418,12 @@ pub struct SkillInstallationItem {
     pub install_path: String,
     pub backup_path: Option<String>,
     pub installed_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillInstallationVerification {
+    pub state: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1581,6 +1658,14 @@ pub fn collect_skill_folder(
 }
 
 #[tauri::command]
+pub fn collect_git_skill(
+    service: State<'_, SkillService>,
+    source: GitSkillCollectionInput,
+) -> Result<SkillListItem, String> {
+    service.collect_git_candidate(source)
+}
+
+#[tauri::command]
 pub fn list_skills(service: State<'_, SkillService>) -> Result<Vec<SkillListItem>, String> {
     service.list()
 }
@@ -1618,6 +1703,14 @@ pub fn install_skill(
     installation: SkillInstallInput,
 ) -> Result<SkillInstallationItem, String> {
     service.install(&id, installation)
+}
+
+#[tauri::command]
+pub fn verify_skill_installation(
+    service: State<'_, SkillService>,
+    id: String,
+) -> Result<SkillInstallationVerification, String> {
+    service.verify_installation(&id)
 }
 
 #[tauri::command]

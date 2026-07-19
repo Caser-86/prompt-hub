@@ -93,3 +93,46 @@ fn only_approved_skills_can_be_installed_after_their_source_is_rechecked() {
             .is_file()
     );
 }
+
+#[test]
+fn installed_skill_verification_detects_local_content_drift() {
+    let source = tempdir().unwrap();
+    fs::write(source.path().join("SKILL.md"), "# Drift check\n").unwrap();
+    let target = tempdir().unwrap();
+    let service = SkillService::new(Database::open_in_memory().unwrap().into_skill_repository());
+    let collected = service
+        .collect_local_folder(source.path().to_path_buf())
+        .unwrap();
+    service
+        .review(
+            &collected.id,
+            SkillReviewInput {
+                status: "approved".to_owned(),
+                notes: None,
+            },
+        )
+        .unwrap();
+    let installed = service
+        .install(
+            &collected.id,
+            SkillInstallInput {
+                target_root: target.path().display().to_string(),
+                destination_name: "drift-check".to_owned(),
+                replace_after_backup: false,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        service.verify_installation(&collected.id).unwrap().state,
+        "matching"
+    );
+    fs::write(
+        std::path::Path::new(&installed.install_path).join("SKILL.md"),
+        "# Changed\n",
+    )
+    .unwrap();
+    assert_eq!(
+        service.verify_installation(&collected.id).unwrap().state,
+        "drifted"
+    );
+}

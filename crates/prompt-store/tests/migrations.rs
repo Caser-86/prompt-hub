@@ -145,3 +145,35 @@ fn upgrades_a_v4_database_with_skill_asset_tables() {
         .unwrap();
     assert_eq!(table_exists, 1);
 }
+
+#[test]
+fn upgrades_a_v5_database_with_skill_snapshot_tracking() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("v5.db");
+    let connection = Connection::open(&path).unwrap();
+    for migration in [
+        include_str!("../migrations/0001_initial.sql"),
+        include_str!("../migrations/0002_search.sql"),
+        include_str!("../migrations/0003_favorites.sql"),
+        include_str!("../migrations/0004_import_jobs.sql"),
+        include_str!("../migrations/0005_skills.sql"),
+    ] {
+        connection.execute_batch(migration).unwrap();
+    }
+    connection
+        .execute_batch("PRAGMA user_version = 5;")
+        .unwrap();
+    drop(connection);
+
+    let database = Database::open(&path).unwrap();
+    assert_eq!(database.schema_version().unwrap(), LATEST_SCHEMA_VERSION);
+    let upgraded = Connection::open(&path).unwrap();
+    let snapshot_column: String = upgraded
+        .query_row(
+            "SELECT name FROM pragma_table_info('skills') WHERE name = 'snapshot_path'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(snapshot_column, "snapshot_path");
+}

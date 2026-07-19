@@ -244,11 +244,13 @@ export function AppShell() {
           ) : activeRoute === "skills" ? (
             <SkillLibrary
               collectSkillFolder={desktopCommands.collectSkillFolder}
+              collectGitSkill={desktopCommands.collectGitSkill}
               getSkill={desktopCommands.getSkill}
               listSkills={desktopCommands.listSkills}
               reviewSkill={desktopCommands.reviewSkill}
               setSkillFavorite={desktopCommands.setSkillFavorite}
               installSkill={desktopCommands.installSkill}
+              verifySkillInstallation={desktopCommands.verifySkillInstallation}
             />
           ) : activeRoute === "inbox" ? (
             <InboxImport importFile={desktopCommands.importFileToInbox} importFolder={desktopCommands.importFolderToInbox} importUrl={desktopCommands.importUrlToInbox} loadPrompts={desktopCommands.listPrompts} onReview={(prompt) => { setSelectedPrompt(prompt); setActiveRoute("library"); }} />
