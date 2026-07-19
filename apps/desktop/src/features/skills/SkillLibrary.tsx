@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ShieldCheckIcon, StarIcon } from "@heroicons/react/24/outline";
 import { StarIcon as StarSolidIcon } from "@heroicons/react/24/solid";
 
-import type { SkillDetail, SkillListItem, SkillReviewDraft, SkillReviewStatus } from "@prompt-hub/contracts";
+import type { SkillDetail, SkillInstallDraft, SkillInstallation, SkillListItem, SkillReviewDraft, SkillReviewStatus } from "@prompt-hub/contracts";
 
 import "./skill-library.css";
 
@@ -12,6 +12,7 @@ type SkillLibraryProps = {
   listSkills: () => Promise<SkillListItem[]>;
   reviewSkill: (id: string, review: SkillReviewDraft) => Promise<void>;
   setSkillFavorite: (id: string, favorite: boolean) => Promise<void>;
+  installSkill: (id: string, installation: SkillInstallDraft) => Promise<SkillInstallation>;
 };
 
 type SkillFilter = "all" | "favorite" | "pending" | "approved" | "risk";
@@ -29,13 +30,16 @@ const riskLabels: Record<string, string> = {
   contains_hidden_file: "含隐藏文件",
 };
 
-export function SkillLibrary({ collectSkillFolder, getSkill, listSkills, reviewSkill, setSkillFavorite }: SkillLibraryProps) {
+export function SkillLibrary({ collectSkillFolder, getSkill, listSkills, reviewSkill, setSkillFavorite, installSkill }: SkillLibraryProps) {
   const [skills, setSkills] = useState<SkillListItem[] | null>(null);
   const [selected, setSelected] = useState<SkillDetail | null>(null);
   const [folderPath, setFolderPath] = useState("");
   const [filter, setFilter] = useState<SkillFilter>("all");
   const [isCollecting, setCollecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [installTarget, setInstallTarget] = useState("");
+  const [replaceAfterBackup, setReplaceAfterBackup] = useState(false);
+  const [installation, setInstallation] = useState<SkillInstallation | null>(null);
 
   useEffect(() => {
     void listSkills().then(setSkills).catch(() => setError("无法读取本地 Skill 库，请重试。"));
@@ -93,6 +97,17 @@ export function SkillLibrary({ collectSkillFolder, getSkill, listSkills, reviewS
     setSelected((current) => current?.id === skill.id ? { ...current, favorite } : current);
   };
 
+  const install = async () => {
+    if (!selected || !installTarget.trim()) return;
+    setError(null);
+    try {
+      const result = await installSkill(selected.id, { targetRoot: installTarget.trim(), destinationName: selected.name, replaceAfterBackup });
+      setInstallation(result);
+    } catch {
+      setError("无法安装 Skill。请检查目标路径、同名冲突和原始文件是否发生变化。");
+    }
+  };
+
   if (selected) {
     return <section aria-labelledby="skill-detail-title" className="skill-library skill-detail-layout">
       <header className="skill-detail-header">
@@ -113,6 +128,7 @@ export function SkillLibrary({ collectSkillFolder, getSkill, listSkills, reviewS
           </section>
           <section className="surface-card skill-facts-card"><h2>收集记录</h2><dl><dt>来源</dt><dd>{selected.source.location}</dd><dt>内容校验</dt><dd><code>{selected.contentHash.slice(0, 12)}…</code></dd><dt>文件数</dt><dd>{selected.files.length} 个</dd><dt>更新时间</dt><dd><time dateTime={selected.updatedAt}>{formatDate(selected.updatedAt)}</time></dd></dl></section>
           <section className="surface-card skill-files-card"><h2>已收集文件</h2><ul>{selected.files.map((file) => <li key={file.relativePath}><span>{file.relativePath}</span><small>{file.kind} · {formatBytes(file.bytes)}</small></li>)}</ul></section>
+          {selected.reviewStatus === "approved" ? <section aria-label="安装 Skill" className="surface-card skill-install-card"><h2>安装到 Codex</h2><p>安装只复制已审核文件，并再次核对内容；不会执行任何脚本。</p><label htmlFor="skill-install-target">目标目录</label><input id="skill-install-target" onChange={(event) => setInstallTarget(event.target.value)} placeholder="例如 C:\\Users\\you\\.codex\\skills" value={installTarget} /><label className="skill-replace-choice"><input checked={replaceAfterBackup} onChange={(event) => setReplaceAfterBackup(event.target.checked)} type="checkbox" />同名时先备份再替换</label><button className="button-primary" disabled={!installTarget.trim()} onClick={() => void install()} type="button">安装 Skill</button>{installation ? <p className="skill-install-success">已安装到 {installation.installPath}{installation.backupPath ? "；原版本已备份。" : "。"}</p> : null}</section> : <section className="surface-card skill-install-card skill-install-locked"><h2>安装</h2><p>审核通过后才能安装。安装始终是显式操作，不会自动执行或覆盖文件。</p></section>}
         </aside>
       </div>
     </section>;

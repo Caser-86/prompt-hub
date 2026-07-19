@@ -12,5 +12,6 @@ pub use migration::{Database, LATEST_SCHEMA_VERSION, MigrationReport};
 pub use repository::{ImportJob, ImportJobItemRecord, PromptRepository, StoreError};
 pub use search::{SearchFilters, SearchHit, SearchPage, SearchQuery, SearchSort};
 pub use skills::{
-    SkillRepository, SkillReviewStatus, SkillSource, SkillSummary, StoredSkill, StoredSkillFile,
+    SkillInstallation, SkillRepository, SkillReviewStatus, SkillSource, SkillSummary, StoredSkill,
+    StoredSkillFile,
 };

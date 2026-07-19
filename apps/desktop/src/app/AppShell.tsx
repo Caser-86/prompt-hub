@@ -248,6 +248,7 @@ export function AppShell() {
               listSkills={desktopCommands.listSkills}
               reviewSkill={desktopCommands.reviewSkill}
               setSkillFavorite={desktopCommands.setSkillFavorite}
+              installSkill={desktopCommands.installSkill}
             />
           ) : activeRoute === "inbox" ? (
             <InboxImport importFile={desktopCommands.importFileToInbox} importFolder={desktopCommands.importFolderToInbox} importUrl={desktopCommands.importUrlToInbox} loadPrompts={desktopCommands.listPrompts} onReview={(prompt) => { setSelectedPrompt(prompt); setActiveRoute("library"); }} />

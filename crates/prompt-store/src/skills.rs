@@ -196,6 +196,48 @@ pub struct SkillSummary {
     updated_at: OffsetDateTime,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkillInstallation {
+    skill_id: String,
+    target_root: String,
+    install_path: String,
+    installed_hash: String,
+    backup_path: Option<String>,
+    installed_at: OffsetDateTime,
+    last_verified_at: Option<OffsetDateTime>,
+}
+
+impl SkillInstallation {
+    #[must_use]
+    pub fn skill_id(&self) -> &str {
+        &self.skill_id
+    }
+    #[must_use]
+    pub fn target_root(&self) -> &str {
+        &self.target_root
+    }
+    #[must_use]
+    pub fn install_path(&self) -> &str {
+        &self.install_path
+    }
+    #[must_use]
+    pub fn installed_hash(&self) -> &str {
+        &self.installed_hash
+    }
+    #[must_use]
+    pub fn backup_path(&self) -> Option<&str> {
+        self.backup_path.as_deref()
+    }
+    #[must_use]
+    pub const fn installed_at(&self) -> OffsetDateTime {
+        self.installed_at
+    }
+    #[must_use]
+    pub const fn last_verified_at(&self) -> Option<OffsetDateTime> {
+        self.last_verified_at
+    }
+}
+
 impl SkillSummary {
     #[must_use]
     pub fn id(&self) -> &str {
@@ -396,6 +438,34 @@ impl SkillRepository {
             return Err(StoreError::Domain("Skill was not found".to_owned()));
         }
         Ok(())
+    }
+
+    pub fn record_installation(
+        &mut self,
+        skill_id: &str,
+        target_root: &str,
+        install_path: &str,
+        installed_hash: &str,
+        backup_path: Option<&str>,
+        installed_at: OffsetDateTime,
+    ) -> Result<(), StoreError> {
+        if self.get_skill(skill_id)?.is_none() {
+            return Err(StoreError::Domain("Skill was not found".to_owned()));
+        }
+        self.connection.execute(
+            "INSERT INTO skill_installations(id, skill_id, target_root, install_path, installed_hash, backup_path, installed_at, last_verified_at)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+             ON CONFLICT(skill_id) DO UPDATE SET target_root = excluded.target_root, install_path = excluded.install_path, installed_hash = excluded.installed_hash, backup_path = excluded.backup_path, installed_at = excluded.installed_at, last_verified_at = excluded.last_verified_at",
+            params![Uuid::now_v7().to_string(), skill_id, target_root, install_path, installed_hash, backup_path, installed_at.unix_timestamp()],
+        )?;
+        Ok(())
+    }
+
+    pub fn installation(&self, skill_id: &str) -> Result<Option<SkillInstallation>, StoreError> {
+        self.connection.query_row(
+            "SELECT skill_id, target_root, install_path, installed_hash, backup_path, installed_at, last_verified_at FROM skill_installations WHERE skill_id = ?1", [skill_id],
+            |row| Ok(SkillInstallation { skill_id: row.get(0)?, target_root: row.get(1)?, install_path: row.get(2)?, installed_hash: row.get(3)?, backup_path: row.get(4)?, installed_at: timestamp(row.get(5)?).map_err(domain_to_sql_error)?, last_verified_at: row.get::<_, Option<i64>>(6)?.map(|value| timestamp(value).map_err(domain_to_sql_error)).transpose()? }),
+        ).optional().map_err(StoreError::from)
     }
 }
 

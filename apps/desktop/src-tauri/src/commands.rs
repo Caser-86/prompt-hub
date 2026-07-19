@@ -22,7 +22,9 @@ use prompt_ai::{
 use prompt_import::{
     ImportCandidate, UrlPolicy, fetch_url, normalized_body_fingerprint, parse_file, scan_folder,
 };
-use prompt_skill::scan_skill;
+use prompt_skill::{
+    InstallMode, InstallRequest, install_skill as install_reviewed_skill, scan_skill,
+};
 use prompt_store::{
     BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage,
     SearchQuery, SearchSort, SkillRepository, SkillReviewStatus, SkillSource, StoredSkill,
@@ -149,6 +151,7 @@ pub struct PromptService {
 
 pub struct SkillService {
     repository: Mutex<SkillRepository>,
+    backup_root: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
@@ -156,6 +159,14 @@ pub struct SkillService {
 pub struct SkillReviewInput {
     pub status: String,
     pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillInstallInput {
+    pub target_root: String,
+    pub destination_name: String,
+    pub replace_after_backup: bool,
 }
 
 #[derive(Default)]
@@ -1106,6 +1117,15 @@ impl SkillService {
     pub const fn new(repository: SkillRepository) -> Self {
         Self {
             repository: Mutex::new(repository),
+            backup_root: PathBuf::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn with_backup_root(repository: SkillRepository, backup_root: PathBuf) -> Self {
+        Self {
+            repository: Mutex::new(repository),
+            backup_root,
         }
     }
 
@@ -1171,6 +1191,69 @@ impl SkillService {
             .map_err(|_| "Skill repository is unavailable".to_owned())?
             .set_favorite(id, favorite, OffsetDateTime::now_utc())
             .map_err(|error| error.to_string())
+    }
+
+    pub fn install(
+        &self,
+        id: &str,
+        input: SkillInstallInput,
+    ) -> Result<SkillInstallationItem, String> {
+        let target_root = PathBuf::from(&input.target_root);
+        if !target_root.is_absolute() {
+            return Err("Skill installation target must be an absolute path".to_owned());
+        }
+        let mut repository = self
+            .repository
+            .lock()
+            .map_err(|_| "Skill repository is unavailable".to_owned())?;
+        let skill = repository
+            .get_skill(id)
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "Skill was not found".to_owned())?;
+        if skill.review_status() != SkillReviewStatus::Approved {
+            return Err("Skill must be approved before installation".to_owned());
+        }
+        if skill.source().kind() != "local_directory" {
+            return Err("Only verified local Skill sources can be installed currently".to_owned());
+        }
+        let source = PathBuf::from(skill.source().location());
+        let backup_root = if self.backup_root.as_os_str().is_empty() {
+            target_root.join(".prompt-hub-skill-backups")
+        } else {
+            self.backup_root.clone()
+        };
+        let receipt = install_reviewed_skill(InstallRequest {
+            source: &source,
+            target_root: &target_root,
+            backup_root: &backup_root,
+            destination_name: &input.destination_name,
+            expected_content_hash: skill.content_hash(),
+            mode: if input.replace_after_backup {
+                InstallMode::ReplaceAfterBackup
+            } else {
+                InstallMode::FailIfExists
+            },
+        })
+        .map_err(|error| error.to_string())?;
+        let now = OffsetDateTime::now_utc();
+        repository
+            .record_installation(
+                id,
+                &input.target_root,
+                &receipt.install_path().display().to_string(),
+                receipt.installed_hash(),
+                receipt
+                    .backup_path()
+                    .map(|path| path.display().to_string())
+                    .as_deref(),
+                now,
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(SkillInstallationItem {
+            install_path: receipt.install_path().display().to_string(),
+            backup_path: receipt.backup_path().map(|path| path.display().to_string()),
+            installed_hash: receipt.installed_hash().to_owned(),
+        })
     }
 }
 
@@ -1256,6 +1339,14 @@ pub struct SkillDetail {
     pub content_hash: String,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillInstallationItem {
+    pub install_path: String,
+    pub backup_path: Option<String>,
+    pub installed_hash: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1518,6 +1609,15 @@ pub fn set_skill_favorite(
     favorite: bool,
 ) -> Result<(), String> {
     service.set_favorite(&id, favorite)
+}
+
+#[tauri::command]
+pub fn install_skill(
+    service: State<'_, SkillService>,
+    id: String,
+    installation: SkillInstallInput,
+) -> Result<SkillInstallationItem, String> {
+    service.install(&id, installation)
 }
 
 #[tauri::command]

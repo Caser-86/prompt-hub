@@ -11,8 +11,9 @@ pub fn run() {
             let database = prompt_store::Database::open(&database_path)?;
             app.manage(commands::PromptService::new(database.into_repository()));
             let skill_database = prompt_store::Database::open(&database_path)?;
-            app.manage(commands::SkillService::new(
+            app.manage(commands::SkillService::with_backup_root(
                 skill_database.into_skill_repository(),
+                data_directory.join("skill-backups"),
             ));
             app.manage(commands::AiCancellationRegistry::default());
             app.manage(commands::BackupService::new(database_path));
@@ -36,6 +37,7 @@ pub fn run() {
             commands::get_skill,
             commands::review_skill,
             commands::set_skill_favorite,
+            commands::install_skill,
             commands::prompt_history,
             commands::restore_prompt_version,
             commands::search_prompts,

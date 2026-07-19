@@ -1,6 +1,6 @@
 use std::fs;
 
-use prompt_hub_desktop_lib::commands::{SkillReviewInput, SkillService};
+use prompt_hub_desktop_lib::commands::{SkillInstallInput, SkillReviewInput, SkillService};
 use prompt_store::Database;
 use tempfile::tempdir;
 
@@ -55,4 +55,41 @@ fn review_and_favorite_use_the_skill_service_boundary() {
     assert_eq!(detail.review_status, "approved");
     assert_eq!(detail.review_notes.as_deref(), Some("reviewed"));
     assert!(detail.favorite);
+}
+
+#[test]
+fn only_approved_skills_can_be_installed_after_their_source_is_rechecked() {
+    let source = tempdir().unwrap();
+    fs::write(source.path().join("SKILL.md"), "# Install boundary\n").unwrap();
+    let target = tempdir().unwrap();
+    let service = SkillService::new(Database::open_in_memory().unwrap().into_skill_repository());
+    let collected = service
+        .collect_local_folder(source.path().to_path_buf())
+        .unwrap();
+    let request = SkillInstallInput {
+        target_root: target.path().display().to_string(),
+        destination_name: "install-boundary".to_owned(),
+        replace_after_backup: false,
+    };
+    assert!(
+        service
+            .install(&collected.id, request.clone())
+            .unwrap_err()
+            .contains("approved")
+    );
+    service
+        .review(
+            &collected.id,
+            SkillReviewInput {
+                status: "approved".to_owned(),
+                notes: None,
+            },
+        )
+        .unwrap();
+    let installed = service.install(&collected.id, request).unwrap();
+    assert!(
+        std::path::Path::new(&installed.install_path)
+            .join("SKILL.md")
+            .is_file()
+    );
 }

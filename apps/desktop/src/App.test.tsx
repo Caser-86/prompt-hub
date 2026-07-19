@@ -16,6 +16,7 @@ const desktopMock = vi.hoisted(() => ({
   getSkill: vi.fn(),
   reviewSkill: vi.fn(),
   setSkillFavorite: vi.fn(),
+  installSkill: vi.fn(),
   promptHistory: vi.fn(),
   restorePromptVersion: vi.fn(),
   recordPromptCompatibility: vi.fn(),

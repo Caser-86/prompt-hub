@@ -126,6 +126,8 @@ export type SkillDetail = SkillListItem & {
   createdAt: string;
 };
 export type SkillReviewDraft = { status: SkillReviewStatus; notes: string | null };
+export type SkillInstallDraft = { targetRoot: string; destinationName: string; replaceAfterBackup: boolean };
+export type SkillInstallation = { installPath: string; backupPath: string | null; installedHash: string };
 
 export type PromptCompatibilityDraft = {
   tool: string;
@@ -153,8 +155,9 @@ export type DesktopCommandClient = {
   collectSkillFolder: (path: string) => Promise<SkillListItem>;
   listSkills: () => Promise<SkillListItem[]>;
   getSkill: (id: string) => Promise<SkillDetail | null>;
-  reviewSkill: (id: string, review: SkillReviewDraft) => Promise<void>;
-  setSkillFavorite: (id: string, favorite: boolean) => Promise<void>;
+    reviewSkill: (id: string, review: SkillReviewDraft) => Promise<void>;
+    setSkillFavorite: (id: string, favorite: boolean) => Promise<void>;
+    installSkill: (id: string, installation: SkillInstallDraft) => Promise<SkillInstallation>;
   promptHistory: (id: string) => Promise<PromptHistoryItem[]>;
   restorePromptVersion: (id: string, versionNumber: number) => Promise<unknown>;
   archivePrompt: (id: string) => Promise<unknown>;
@@ -256,9 +259,14 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
     async reviewSkill(id, review) {
       await invoke("review_skill", { id, review });
     },
-    async setSkillFavorite(id, favorite) {
-      await invoke("set_skill_favorite", { id, favorite });
-    },
+      async setSkillFavorite(id, favorite) {
+        await invoke("set_skill_favorite", { id, favorite });
+      },
+      async installSkill(id, installation) {
+        const result = await invoke("install_skill", { id, installation });
+        if (!isSkillInstallation(result)) throw new Error("install_skill returned an invalid response");
+        return result;
+      },
     async promptHistory(id) {
       const result = await invoke("prompt_history", { id });
       if (!Array.isArray(result) || !result.every(isPromptHistoryItem)) {
@@ -427,6 +435,13 @@ function isSkillDetail(value: unknown): value is SkillDetail {
       && typeof (file as Record<string, unknown>).bytes === "number"
       && typeof (file as Record<string, unknown>).sha256 === "string"
       && typeof (file as Record<string, unknown>).kind === "string");
+}
+
+function isSkillInstallation(value: unknown): value is SkillInstallation {
+  if (typeof value !== "object" || value === null) return false;
+  const installation = value as Record<string, unknown>;
+  return typeof installation.installPath === "string" && typeof installation.installedHash === "string"
+    && (typeof installation.backupPath === "string" || installation.backupPath === null);
 }
 
 function isPromptSourceEvidence(value: unknown): value is { kind: string; name: string; location: string | null; collectedAt: string } {
