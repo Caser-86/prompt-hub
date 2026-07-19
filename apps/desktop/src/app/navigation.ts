@@ -1,5 +1,6 @@
 export const navigationItems = [
   { id: "library", label: "提示词库" },
+  { id: "skills", label: "Skill 库" },
   { id: "inbox", label: "收件箱" },
   { id: "settings", label: "设置" },
 ] as const;

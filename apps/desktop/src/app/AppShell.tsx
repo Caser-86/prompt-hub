@@ -25,6 +25,7 @@ import { PromptLifecycleActions } from "../features/library/PromptLifecycleActio
 import { PromptSearch } from "../features/search/PromptSearch";
 import { InboxImport } from "../features/inbox/InboxImport";
 import { SettingsPage } from "../features/settings/SettingsPage";
+import { SkillLibrary } from "../features/skills/SkillLibrary";
 import { desktopCommands } from "../services/desktop";
 import { navigationItems, type AppRoute } from "./navigation";
 import type { PromptHistoryItem, PromptListItem } from "@prompt-hub/contracts";
@@ -240,6 +241,14 @@ export function AppShell() {
             )
           ) : activeRoute === "search" ? (
             <PromptSearch searchPrompts={desktopCommands.searchPrompts} />
+          ) : activeRoute === "skills" ? (
+            <SkillLibrary
+              collectSkillFolder={desktopCommands.collectSkillFolder}
+              getSkill={desktopCommands.getSkill}
+              listSkills={desktopCommands.listSkills}
+              reviewSkill={desktopCommands.reviewSkill}
+              setSkillFavorite={desktopCommands.setSkillFavorite}
+            />
           ) : activeRoute === "inbox" ? (
             <InboxImport importFile={desktopCommands.importFileToInbox} importFolder={desktopCommands.importFolderToInbox} importUrl={desktopCommands.importUrlToInbox} loadPrompts={desktopCommands.listPrompts} onReview={(prompt) => { setSelectedPrompt(prompt); setActiveRoute("library"); }} />
           ) : activeRoute === "settings" ? (

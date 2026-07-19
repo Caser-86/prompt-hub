@@ -15,6 +15,7 @@ type CommandPaletteProps = {
 const commands: Array<{ label: string; route?: AppRoute; type: "create" | "navigate" }> = [
   { label: "新建提示词", type: "create" },
   { label: "打开提示词库", route: "library", type: "navigate" },
+  { label: "打开 Skill 库", route: "skills", type: "navigate" },
   { label: "打开收件箱", route: "inbox", type: "navigate" },
   { label: "打开设置", route: "settings", type: "navigate" },
 ];

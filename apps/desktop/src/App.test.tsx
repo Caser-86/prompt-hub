@@ -11,6 +11,11 @@ const desktopMock = vi.hoisted(() => ({
   importUrlToInbox: vi.fn(),
   recentImportJobs: vi.fn(),
   listPrompts: vi.fn(),
+  collectSkillFolder: vi.fn(),
+  listSkills: vi.fn(),
+  getSkill: vi.fn(),
+  reviewSkill: vi.fn(),
+  setSkillFavorite: vi.fn(),
   promptHistory: vi.fn(),
   restorePromptVersion: vi.fn(),
   recordPromptCompatibility: vi.fn(),
@@ -50,6 +55,7 @@ describe("App", () => {
     desktopMock.getAiCredentialStatus.mockResolvedValue({ configured: false });
     desktopMock.recentImportJobs.mockResolvedValue([]);
     desktopMock.getMcpSetup.mockResolvedValue({ databasePath: "C:/data/prompt-hub.db", databaseAvailable: true, configuration: "{}" });
+    desktopMock.listSkills.mockResolvedValue([]);
   });
 
   it("loads the global application stylesheet from the React entry point", () => {
@@ -181,6 +187,12 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("link", { name: "收件箱" }));
     expect(screen.getByLabelText("导入操作")).toHaveClass("import-panel");
+  });
+
+  it("opens the Skill library from primary navigation", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("link", { name: "Skill 库" }));
+    expect(await screen.findByRole("heading", { name: "Skill 库" })).toBeVisible();
   });
 
   it("shows the import and review inbox from navigation", () => {
