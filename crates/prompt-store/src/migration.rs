@@ -4,20 +4,22 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rusqlite::Connection;
 
-use crate::{PromptRepository, StoreError};
+use crate::{PromptRepository, SkillRepository, StoreError};
 
 const INITIAL_SCHEMA: &str = include_str!("../migrations/0001_initial.sql");
 const SEARCH_SCHEMA: &str = include_str!("../migrations/0002_search.sql");
 const FAVORITES_SCHEMA: &str = include_str!("../migrations/0003_favorites.sql");
 const IMPORT_JOBS_SCHEMA: &str = include_str!("../migrations/0004_import_jobs.sql");
+const SKILLS_SCHEMA: &str = include_str!("../migrations/0005_skills.sql");
 const MIGRATIONS: &[(u32, &str)] = &[
     (1, INITIAL_SCHEMA),
     (2, SEARCH_SCHEMA),
     (3, FAVORITES_SCHEMA),
     (4, IMPORT_JOBS_SCHEMA),
+    (5, SKILLS_SCHEMA),
 ];
 
-pub const LATEST_SCHEMA_VERSION: u32 = 4;
+pub const LATEST_SCHEMA_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Default)]
 pub struct MigrationReport {
@@ -78,6 +80,11 @@ impl Database {
     #[must_use]
     pub fn into_repository(self) -> PromptRepository {
         PromptRepository::new(self.connection)
+    }
+
+    #[must_use]
+    pub fn into_skill_repository(self) -> SkillRepository {
+        SkillRepository::new(self.connection)
     }
 }
 

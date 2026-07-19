@@ -3162,6 +3162,7 @@ name = "prompt-store"
 version = "0.1.9"
 dependencies = [
  "prompt-domain",
+ "prompt-skill",
  "rusqlite",
  "serde",
  "serde_json",
