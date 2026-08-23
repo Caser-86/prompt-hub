@@ -177,3 +177,52 @@ fn upgrades_a_v5_database_with_skill_snapshot_tracking() {
         .unwrap();
     assert_eq!(snapshot_column, "snapshot_path");
 }
+
+#[test]
+fn upgrades_the_legacy_v5_prompt_usage_schema_without_losing_usage_data() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("legacy-v5-prompt-usage.db");
+    let connection = Connection::open(&path).unwrap();
+    for migration in [
+        include_str!("../migrations/0001_initial.sql"),
+        include_str!("../migrations/0002_search.sql"),
+        include_str!("../migrations/0003_favorites.sql"),
+        include_str!("../migrations/0004_import_jobs.sql"),
+    ] {
+        connection.execute_batch(migration).unwrap();
+    }
+    connection
+        .execute_batch(
+            "ALTER TABLE prompts ADD COLUMN last_used_at INTEGER;
+             INSERT INTO prompts(
+                id, status, effectiveness, current_version, entity_json, created_at, updated_at, deleted_at
+             ) VALUES ('legacy-prompt', 'inbox', 'unverified', 1, '{}', 1, 1, NULL);
+             UPDATE prompts SET last_used_at = 42 WHERE id = 'legacy-prompt';
+             PRAGMA user_version = 5;",
+        )
+        .unwrap();
+    drop(connection);
+
+    let database = Database::open(&path)
+        .expect("legacy prompt-usage v5 database should upgrade to the skill schema");
+    assert_eq!(database.schema_version().unwrap(), LATEST_SCHEMA_VERSION);
+    drop(database);
+
+    let upgraded = Connection::open(&path).unwrap();
+    let skills_table_exists: i64 = upgraded
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'skills'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(skills_table_exists, 1);
+    let last_used_at: i64 = upgraded
+        .query_row(
+            "SELECT last_used_at FROM prompts WHERE id = 'legacy-prompt'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(last_used_at, 42);
+}

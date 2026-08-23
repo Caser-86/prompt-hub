@@ -141,6 +141,15 @@ fn apply_migrations(
     let current_version =
         connection.pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))?;
     let transaction = connection.transaction()?;
+
+    // Version 0.1.2 used migration number 5 for `prompts.last_used_at`.
+    // This branch later used the same number for the Skill tables. Detect that
+    // released schema by structure, rather than treating its user_version as
+    // the Skill migration, then create the missing tables before migration 6.
+    if current_version == 5 && has_legacy_prompt_usage_schema(&transaction)? {
+        transaction.execute_batch(SKILLS_SCHEMA)?;
+    }
+
     for (version, sql) in migrations
         .iter()
         .copied()
@@ -155,6 +164,24 @@ fn apply_migrations(
     }
     transaction.commit()?;
     Ok(())
+}
+
+fn has_legacy_prompt_usage_schema(connection: &Connection) -> Result<bool, StoreError> {
+    let has_skills_table: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'skills'",
+        [],
+        |row| row.get(0),
+    )?;
+    if has_skills_table != 0 {
+        return Ok(false);
+    }
+
+    let has_last_used_at: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('prompts') WHERE name = 'last_used_at'",
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(has_last_used_at != 0)
 }
 
 #[cfg(test)]
