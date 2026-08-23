@@ -205,6 +205,13 @@ fn upgrades_the_legacy_v5_prompt_usage_schema_without_losing_usage_data() {
 
     let database = Database::open(&path)
         .expect("legacy prompt-usage v5 database should upgrade to the skill schema");
+    assert!(
+        database
+            .migration_ledger()
+            .unwrap()
+            .iter()
+            .any(|entry| entry.migration_id() == "legacy/0.1.2-prompt-usage")
+    );
     assert_eq!(database.schema_version().unwrap(), LATEST_SCHEMA_VERSION);
     drop(database);
 
@@ -331,4 +338,37 @@ fn restores_a_legacy_backup_only_after_migrating_it_to_the_current_schema() {
         .unwrap();
     assert_eq!(version, LATEST_SCHEMA_VERSION);
     assert_eq!(has_skills_table, 1);
+}
+
+#[test]
+fn rejects_an_ambiguous_nonzero_schema_without_writing_new_tables() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("ambiguous.db");
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute_batch(
+            "CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL) STRICT;
+             PRAGMA user_version = 5;",
+        )
+        .unwrap();
+    drop(connection);
+
+    let error = match Database::open(&path) {
+        Ok(_) => panic!("ambiguous schema must fail closed"),
+        Err(error) => error,
+    };
+    assert!(
+        error
+            .to_string()
+            .contains("not a supported Prompt Hub history")
+    );
+    let unchanged = Connection::open(&path).unwrap();
+    let skills: i64 = unchanged
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'skills'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(skills, 0);
 }
