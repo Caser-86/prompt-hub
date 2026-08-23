@@ -3163,11 +3163,13 @@ dependencies = [
 name = "prompt-store"
 version = "0.1.10"
 dependencies = [
+ "hex",
  "prompt-domain",
  "prompt-skill",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 2.0.18",
  "time",

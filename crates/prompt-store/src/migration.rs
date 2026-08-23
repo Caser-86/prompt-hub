@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rusqlite::Connection;
+use sha2::{Digest, Sha256};
 
 use crate::{PromptRepository, SkillRepository, StoreError};
 
@@ -12,6 +13,7 @@ const FAVORITES_SCHEMA: &str = include_str!("../migrations/0003_favorites.sql");
 const IMPORT_JOBS_SCHEMA: &str = include_str!("../migrations/0004_import_jobs.sql");
 const SKILLS_SCHEMA: &str = include_str!("../migrations/0005_skills.sql");
 const SKILL_SNAPSHOTS_SCHEMA: &str = include_str!("../migrations/0006_skill_snapshots.sql");
+const MIGRATION_LEDGER_SCHEMA: &str = include_str!("../migrations/0007_migration_ledger.sql");
 const MIGRATIONS: &[(u32, &str)] = &[
     (1, INITIAL_SCHEMA),
     (2, SEARCH_SCHEMA),
@@ -19,9 +21,47 @@ const MIGRATIONS: &[(u32, &str)] = &[
     (4, IMPORT_JOBS_SCHEMA),
     (5, SKILLS_SCHEMA),
     (6, SKILL_SNAPSHOTS_SCHEMA),
+    (7, MIGRATION_LEDGER_SCHEMA),
 ];
 
-pub const LATEST_SCHEMA_VERSION: u32 = 6;
+const MIGRATION_IDS: &[(&str, &str)] = &[
+    ("legacy/0001-initial", INITIAL_SCHEMA),
+    ("legacy/0002-search", SEARCH_SCHEMA),
+    ("legacy/0003-favorites", FAVORITES_SCHEMA),
+    ("legacy/0004-import-jobs", IMPORT_JOBS_SCHEMA),
+    ("legacy/0005-skills", SKILLS_SCHEMA),
+    ("legacy/0006-skill-snapshots", SKILL_SNAPSHOTS_SCHEMA),
+    ("20260824_01_migration_ledger", MIGRATION_LEDGER_SCHEMA),
+];
+
+pub const LATEST_SCHEMA_VERSION: u32 = 7;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MigrationLedgerEntry {
+    migration_id: String,
+    checksum_sha256: String,
+    applied_at: i64,
+    provenance: String,
+}
+
+impl MigrationLedgerEntry {
+    #[must_use]
+    pub fn migration_id(&self) -> &str {
+        &self.migration_id
+    }
+    #[must_use]
+    pub fn checksum_sha256(&self) -> &str {
+        &self.checksum_sha256
+    }
+    #[must_use]
+    pub const fn applied_at(&self) -> i64 {
+        self.applied_at
+    }
+    #[must_use]
+    pub fn provenance(&self) -> &str {
+        &self.provenance
+    }
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct MigrationReport {
@@ -88,6 +128,23 @@ impl Database {
     pub fn into_skill_repository(self) -> SkillRepository {
         SkillRepository::new(self.connection)
     }
+
+    pub fn migration_ledger(&self) -> Result<Vec<MigrationLedgerEntry>, StoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT migration_id, checksum_sha256, applied_at, provenance
+             FROM migration_ledger ORDER BY migration_id ASC",
+        )?;
+        let rows = statement.query_map([], |row| {
+            Ok(MigrationLedgerEntry {
+                migration_id: row.get(0)?,
+                checksum_sha256: row.get(1)?,
+                applied_at: row.get(2)?,
+                provenance: row.get(3)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::from)
+    }
 }
 
 fn configure(connection: &Connection) -> Result<(), StoreError> {
@@ -140,13 +197,24 @@ fn apply_migrations(
 ) -> Result<(), StoreError> {
     let current_version =
         connection.pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))?;
+
+    let has_ledger = table_exists(connection, "migration_ledger")?;
+    let legacy_prompt_usage = current_version == 5 && has_legacy_prompt_usage_schema(connection)?;
+    if has_ledger {
+        validate_ledger(connection)?;
+    } else if current_version > 0 && !has_supported_legacy_schema(connection)? {
+        return Err(StoreError::UnsupportedSchema {
+            reason: "required Prompt Hub tables are missing or ambiguous".to_owned(),
+        });
+    }
+
     let transaction = connection.transaction()?;
 
     // Version 0.1.2 used migration number 5 for `prompts.last_used_at`.
     // This branch later used the same number for the Skill tables. Detect that
     // released schema by structure, rather than treating its user_version as
     // the Skill migration, then create the missing tables before migration 6.
-    if current_version == 5 && has_legacy_prompt_usage_schema(&transaction)? {
+    if legacy_prompt_usage {
         transaction.execute_batch(SKILLS_SCHEMA)?;
     }
 
@@ -162,7 +230,76 @@ fn apply_migrations(
         )?;
         transaction.pragma_update(None, "user_version", version)?;
     }
+
+    if !has_ledger {
+        backfill_ledger(&transaction, legacy_prompt_usage)?;
+    }
     transaction.commit()?;
+    Ok(())
+}
+
+fn table_exists(connection: &Connection, name: &str) -> Result<bool, StoreError> {
+    let count: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+        [name],
+        |row| row.get(0),
+    )?;
+    Ok(count == 1)
+}
+
+fn has_supported_legacy_schema(connection: &Connection) -> Result<bool, StoreError> {
+    let prompts = table_exists(connection, "prompts")?;
+    let migrations = table_exists(connection, "schema_migrations")?;
+    Ok(prompts && migrations)
+}
+
+fn checksum(sql: &str) -> String {
+    let digest = Sha256::digest(sql.as_bytes());
+    hex::encode(digest)
+}
+
+fn backfill_ledger(
+    transaction: &rusqlite::Transaction<'_>,
+    legacy_prompt_usage: bool,
+) -> Result<(), StoreError> {
+    for (id, sql) in MIGRATION_IDS {
+        transaction.execute(
+            "INSERT INTO migration_ledger(migration_id, checksum_sha256, applied_at, provenance)
+             VALUES (?1, ?2, unixepoch(), 'canonical')",
+            rusqlite::params![id, checksum(sql)],
+        )?;
+    }
+
+    if legacy_prompt_usage {
+        transaction.execute(
+            "INSERT INTO migration_ledger(migration_id, checksum_sha256, applied_at, provenance)
+             VALUES (?1, ?2, unixepoch(), 'legacy_recovery')",
+            rusqlite::params![
+                "legacy/0.1.2-prompt-usage",
+                checksum("ALTER TABLE prompts ADD COLUMN last_used_at INTEGER;")
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_ledger(connection: &Connection) -> Result<(), StoreError> {
+    let mut statement =
+        connection.prepare("SELECT migration_id, checksum_sha256 FROM migration_ledger")?;
+    let rows = statement.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
+    for row in rows {
+        let (migration_id, stored_checksum) = row?;
+        let Some((_, sql)) = MIGRATION_IDS.iter().find(|(id, _)| *id == migration_id) else {
+            return Err(StoreError::UnsupportedSchema {
+                reason: format!("unknown migration id {migration_id}"),
+            });
+        };
+        if checksum(sql) != stored_checksum {
+            return Err(StoreError::MigrationChecksumConflict { migration_id });
+        }
+    }
     Ok(())
 }
 

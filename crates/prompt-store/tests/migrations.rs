@@ -226,3 +226,73 @@ fn upgrades_the_legacy_v5_prompt_usage_schema_without_losing_usage_data() {
         .unwrap();
     assert_eq!(last_used_at, 42);
 }
+
+#[test]
+fn records_an_immutable_migration_ledger_for_a_fresh_database() {
+    let database = Database::open_in_memory().expect("fresh database should create a ledger");
+    let ledger = database
+        .migration_ledger()
+        .expect("fresh database should expose its migration ledger");
+
+    assert!(
+        ledger
+            .iter()
+            .any(|entry| entry.migration_id() == "legacy/0001-initial")
+    );
+    assert!(
+        ledger
+            .iter()
+            .any(|entry| entry.migration_id() == "20260824_01_migration_ledger")
+    );
+    assert!(
+        ledger
+            .iter()
+            .all(|entry| !entry.checksum_sha256().is_empty())
+    );
+}
+
+#[test]
+fn rejects_a_changed_checksum_before_executing_new_sql() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("checksum-conflict.db");
+    let database = Database::open(&path).expect("database should initialize");
+    drop(database);
+
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute(
+            "UPDATE migration_ledger SET checksum_sha256 = 'tampered' WHERE migration_id = ?1",
+            ["20260824_01_migration_ledger"],
+        )
+        .unwrap();
+    drop(connection);
+
+    let error = match Database::open(&path) {
+        Ok(_) => panic!("tampered ledger must fail closed"),
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("migration checksum conflict"));
+}
+
+#[test]
+fn rejects_an_unknown_migration_id_before_opening_the_database() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("unknown-migration.db");
+    drop(Database::open(&path).unwrap());
+
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute(
+            "INSERT INTO migration_ledger(migration_id, checksum_sha256, applied_at, provenance)
+             VALUES ('future/unknown', 'abc', 1, 'canonical')",
+            [],
+        )
+        .unwrap();
+    drop(connection);
+
+    let error = match Database::open(&path) {
+        Ok(_) => panic!("unknown migration must fail closed"),
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("unknown migration id"));
+}

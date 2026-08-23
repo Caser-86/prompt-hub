@@ -546,4 +546,10 @@ pub enum StoreError {
     VersionConflict { stored: u32, incoming: u32 },
     #[error("import job was not found after it was created")]
     ImportJobMissing,
+    #[error("migration checksum conflict for {migration_id}")]
+    MigrationChecksumConflict { migration_id: String },
+    #[error("database schema is not a supported Prompt Hub history: {reason}")]
+    UnsupportedSchema { reason: String },
+    #[error("database recovery is required ({code})")]
+    RecoveryRequired { code: String, safe_message: String },
 }
