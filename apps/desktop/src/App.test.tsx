@@ -40,7 +40,7 @@ describe("App", () => {
   beforeEach(() => {
     desktopMock.listPrompts.mockImplementation(() => new Promise<never[]>(() => undefined));
     desktopMock.promptHistory.mockResolvedValue([]);
-    desktopMock.getApplicationStatus.mockResolvedValue({ appVersion: "0.1.1", databaseSchemaVersion: 2, offlineCapable: true });
+    desktopMock.getApplicationStatus.mockResolvedValue({ appVersion: "0.1.2", databaseSchemaVersion: 2, offlineCapable: true });
     desktopMock.getAiCredentialStatus.mockResolvedValue({ configured: false });
     desktopMock.recentImportJobs.mockResolvedValue([]);
     desktopMock.getMcpSetup.mockResolvedValue({ databasePath: "C:/data/prompt-hub.db", databaseAvailable: true, configuration: "{}" });
