@@ -26,6 +26,7 @@
   "bundle": {
     "active": true,
     "icon": ["icons/icon.ico"],
+    "resources": ["../../../target/release/build-info.json"],
     "targets": "all"
   }
 }
