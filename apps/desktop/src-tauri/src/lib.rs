@@ -23,6 +23,7 @@ pub fn run() {
             commands::preview_backup_restore,
             commands::restore_backup,
             commands::list_prompts,
+            commands::record_prompt_use,
             commands::prompt_history,
             commands::restore_prompt_version,
             commands::search_prompts,

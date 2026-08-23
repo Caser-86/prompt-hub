@@ -90,7 +90,10 @@ export type PromptListItem = {
   favorite: boolean;
   createdAt: string;
   updatedAt: string;
+  lastUsedAt?: string | null;
 };
+
+export type PromptSort = "last_used" | "created_at";
 
 export type PromptHistoryItem = {
   number: number;
@@ -117,7 +120,8 @@ export type DesktopCommandClient = {
   previewBackupRestore: (path: string) => Promise<BackupRestorePreview>;
   restoreBackup: (path: string) => Promise<BackupInfo>;
   pruneLocalBackups: (retain: number) => Promise<number>;
-  listPrompts: () => Promise<PromptListItem[]>;
+  listPrompts: (sort?: PromptSort) => Promise<PromptListItem[]>;
+  recordPromptUse: (id: string) => Promise<unknown>;
   promptHistory: (id: string) => Promise<PromptHistoryItem[]>;
   restorePromptVersion: (id: string, versionNumber: number) => Promise<unknown>;
   archivePrompt: (id: string) => Promise<unknown>;
@@ -176,12 +180,17 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       if (typeof result !== "number") throw new Error("prune_local_backups returned an invalid response");
       return result;
     },
-    async listPrompts() {
-      const result = await invoke("list_prompts");
+    async listPrompts(sort) {
+      const result = sort === undefined
+        ? await invoke("list_prompts")
+        : await invoke("list_prompts", { sort });
       if (!Array.isArray(result) || !result.every(isPromptListItem)) {
         throw new Error("list_prompts returned an invalid response");
       }
       return result;
+    },
+    recordPromptUse(id) {
+      return invoke("record_prompt_use", { id });
     },
     async promptHistory(id) {
       const result = await invoke("prompt_history", { id });
@@ -294,7 +303,8 @@ function isPromptListItem(value: unknown): value is PromptListItem {
     (item.rating === undefined || item.rating === null || typeof item.rating === "number") &&
     typeof item.favorite === "boolean" &&
     typeof item.createdAt === "string" &&
-    typeof item.updatedAt === "string"
+    typeof item.updatedAt === "string" &&
+    (item.lastUsedAt === undefined || item.lastUsedAt === null || typeof item.lastUsedAt === "string")
   );
 }
 

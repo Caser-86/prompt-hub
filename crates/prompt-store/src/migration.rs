@@ -10,14 +10,16 @@ const INITIAL_SCHEMA: &str = include_str!("../migrations/0001_initial.sql");
 const SEARCH_SCHEMA: &str = include_str!("../migrations/0002_search.sql");
 const FAVORITES_SCHEMA: &str = include_str!("../migrations/0003_favorites.sql");
 const IMPORT_JOBS_SCHEMA: &str = include_str!("../migrations/0004_import_jobs.sql");
+const PROMPT_USAGE_SCHEMA: &str = include_str!("../migrations/0005_prompt_usage.sql");
 const MIGRATIONS: &[(u32, &str)] = &[
     (1, INITIAL_SCHEMA),
     (2, SEARCH_SCHEMA),
     (3, FAVORITES_SCHEMA),
     (4, IMPORT_JOBS_SCHEMA),
+    (5, PROMPT_USAGE_SCHEMA),
 ];
 
-pub const LATEST_SCHEMA_VERSION: u32 = 4;
+pub const LATEST_SCHEMA_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Default)]
 pub struct MigrationReport {
@@ -46,7 +48,7 @@ impl Database {
         let backup_path = backup_before_migration(path, LATEST_SCHEMA_VERSION)?;
         let mut connection = Connection::open(path)?;
         configure(&connection)?;
-        apply_migrations(&mut connection, MIGRATIONS)?;
+        apply_latest_migrations(&mut connection)?;
         Ok(Self {
             connection,
             migration_report: MigrationReport { backup_path },
@@ -56,7 +58,7 @@ impl Database {
     pub fn open_in_memory() -> Result<Self, StoreError> {
         let mut connection = Connection::open_in_memory()?;
         configure(&connection)?;
-        apply_migrations(&mut connection, MIGRATIONS)?;
+        apply_latest_migrations(&mut connection)?;
         Ok(Self {
             connection,
             migration_report: MigrationReport::default(),
@@ -123,6 +125,10 @@ fn backup_before_migration(
         return Err(StoreError::BackupIntegrity(integrity));
     }
     Ok(Some(backup_path))
+}
+
+pub(crate) fn apply_latest_migrations(connection: &mut Connection) -> Result<(), StoreError> {
+    apply_migrations(connection, MIGRATIONS)
 }
 
 fn apply_migrations(

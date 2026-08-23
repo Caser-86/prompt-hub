@@ -1,6 +1,6 @@
 {
   "name": "prompt-hub",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "engines": {
@@ -22,4 +22,3 @@
     "typescript-eslint": "8.64.0"
   }
 }
-

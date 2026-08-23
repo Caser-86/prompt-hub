@@ -21,8 +21,8 @@ use prompt_import::{
     ImportCandidate, UrlPolicy, fetch_url, normalized_body_fingerprint, parse_file, scan_folder,
 };
 use prompt_store::{
-    BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage,
-    SearchQuery, create_backup, preview_restore, prune_backups,
+    BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, PromptSort, SearchFilters,
+    SearchPage, SearchQuery, create_backup, preview_restore, prune_backups,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
@@ -132,6 +132,13 @@ fn parse_optional_timestamp(value: Option<String>) -> Result<Option<OffsetDateTi
 
 pub struct PromptService {
     repository: Mutex<PromptRepository>,
+}
+
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptListSort {
+    LastUsed,
+    CreatedAt,
 }
 
 pub struct FileImportOutcome {
@@ -919,6 +926,7 @@ pub struct PromptListItem {
     favorite: bool,
     created_at: String,
     updated_at: String,
+    last_used_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -994,7 +1002,11 @@ impl PromptHistoryItem {
 }
 
 impl PromptListItem {
-    fn from_prompt(prompt: Prompt, favorite: bool) -> Result<Self, String> {
+    fn from_prompt(
+        prompt: Prompt,
+        favorite: bool,
+        last_used_at: Option<OffsetDateTime>,
+    ) -> Result<Self, String> {
         let content = prompt.current_version().content();
         Ok(Self {
             id: prompt.id().value().to_string(),
@@ -1025,6 +1037,7 @@ impl PromptListItem {
             favorite,
             created_at: format_timestamp(prompt.created_at())?,
             updated_at: format_timestamp(prompt.updated_at())?,
+            last_used_at: last_used_at.map(format_timestamp).transpose()?,
         })
     }
 }
@@ -1036,22 +1049,36 @@ fn format_timestamp(timestamp: OffsetDateTime) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn list_prompts(service: State<'_, PromptService>) -> Result<Vec<PromptListItem>, String> {
+pub fn list_prompts(
+    service: State<'_, PromptService>,
+    sort: Option<PromptListSort>,
+) -> Result<Vec<PromptListItem>, String> {
     let repository = service
         .repository
         .lock()
         .map_err(|_| "prompt repository is unavailable".to_owned())?;
+    let sort = match sort.unwrap_or(PromptListSort::LastUsed) {
+        PromptListSort::LastUsed => PromptSort::LastUsed,
+        PromptListSort::CreatedAt => PromptSort::CreatedAt,
+    };
     repository
-        .list()
+        .list_sorted_with_metadata(sort)
         .map_err(|error| error.to_string())?
         .into_iter()
-        .map(|prompt| {
-            let favorite = repository
-                .is_favorite(prompt.id())
-                .map_err(|error| error.to_string())?;
-            PromptListItem::from_prompt(prompt, favorite)
+        .map(|(prompt, favorite, last_used_at)| {
+            PromptListItem::from_prompt(prompt, favorite, last_used_at)
         })
         .collect()
+}
+
+#[tauri::command]
+pub fn record_prompt_use(service: State<'_, PromptService>, id: PromptId) -> Result<(), String> {
+    service
+        .repository
+        .lock()
+        .map_err(|_| "prompt repository is unavailable".to_owned())?
+        .record_usage(id, OffsetDateTime::now_utc())
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

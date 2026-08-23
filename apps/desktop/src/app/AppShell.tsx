@@ -136,7 +136,10 @@ export function AppShell() {
                 loadPrompts={desktopCommands.listPrompts}
                 onCreate={() => setEditorOpen(true)}
                 onFavorite={async (prompt, favorite) => { await desktopCommands.setPromptFavorite(prompt.id, favorite); }}
-                onSelect={setSelectedPrompt}
+                onSelect={async (prompt) => {
+                  await Promise.resolve(desktopCommands.recordPromptUse(prompt.id)).catch(() => undefined);
+                  setSelectedPrompt({ ...prompt, lastUsedAt: new Date().toISOString() });
+                }}
               />
             )
           ) : activeRoute === "search" ? (

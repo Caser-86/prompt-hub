@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 
-import type { PromptListItem } from "@prompt-hub/contracts";
+import type { PromptListItem, PromptSort } from "@prompt-hub/contracts";
 
 type PromptLibraryProps = {
-  loadPrompts: () => Promise<PromptListItem[]>;
+  loadPrompts: (sort?: PromptSort) => Promise<PromptListItem[]>;
   onCreate?: () => void;
-  onSelect?: (prompt: PromptListItem) => void;
+  onSelect?: (prompt: PromptListItem) => void | Promise<void>;
   onFavorite?: (prompt: PromptListItem, favorite: boolean) => Promise<void>;
   batchArchive?: (ids: string[]) => Promise<void>;
 };
@@ -15,12 +15,16 @@ export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite, bat
   const [error, setError] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [confirmBatchArchive, setConfirmBatchArchive] = useState(false);
+  const [sort, setSort] = useState<PromptSort>("last_used");
 
   useEffect(() => {
-    void loadPrompts()
-      .then(setPrompts)
-      .catch(() => setError(true));
-  }, [loadPrompts]);
+    let active = true;
+    setError(false);
+    void loadPrompts(sort)
+      .then((items) => { if (active) setPrompts(items); })
+      .catch(() => { if (active) setError(true); });
+    return () => { active = false; };
+  }, [loadPrompts, sort]);
 
   const toggleFavorite = (prompt: PromptListItem) => {
     if (!onFavorite) return;
@@ -49,13 +53,18 @@ export function PromptLibrary({ loadPrompts, onCreate, onSelect, onFavorite, bat
         </div>
         <button onClick={onCreate} type="button">创建提示词</button>
       </div>
+      <label htmlFor="prompt-sort">提示词排序</label>
+      <select id="prompt-sort" onChange={(event) => setSort(event.target.value as PromptSort)} value={sort}>
+        <option value="last_used">最近使用优先</option>
+        <option value="created_at">最近添加优先</option>
+      </select>
       {prompts?.length === 0 ? <p>还没有提示词资产</p> : null}
       {prompts?.length ? (
         <><ul aria-label="提示词列表">
           {prompts.map((prompt) => (
             <li key={prompt.id}>
               <label><input aria-label={`选择提示词：${prompt.title}`} checked={selected.includes(prompt.id)} onChange={() => toggleSelected(prompt.id)} type="checkbox" /></label>
-              <button aria-label={`打开提示词：${prompt.title}`} onClick={() => onSelect?.(prompt)} type="button">
+              <button aria-label={`打开提示词：${prompt.title}`} onClick={() => void Promise.resolve(onSelect?.(prompt))} type="button">
                 <strong>{prompt.title}</strong>
               </button>
               <button

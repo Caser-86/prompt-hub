@@ -109,6 +109,44 @@ fn restores_an_open_repository_from_a_verified_backup() {
 }
 
 #[test]
+fn restores_a_legacy_open_repository_and_reapplies_latest_migrations() {
+    let directory = tempdir().unwrap();
+    let legacy_path = directory.path().join("legacy-v4.db");
+    let legacy = Connection::open(&legacy_path).unwrap();
+    legacy
+        .execute_batch(include_str!("../migrations/0001_initial.sql"))
+        .unwrap();
+    legacy
+        .execute_batch(include_str!("../migrations/0002_search.sql"))
+        .unwrap();
+    legacy
+        .execute_batch(include_str!("../migrations/0003_favorites.sql"))
+        .unwrap();
+    legacy
+        .execute_batch(include_str!("../migrations/0004_import_jobs.sql"))
+        .unwrap();
+    legacy.execute_batch("PRAGMA user_version = 4;").unwrap();
+    drop(legacy);
+
+    let current_path = directory.path().join("current.db");
+    let database = prompt_store::Database::open(&current_path).unwrap();
+    let mut repository = database.into_repository();
+    repository.restore_from_backup(&legacy_path).unwrap();
+
+    assert_eq!(
+        repository
+            .last_used_at(prompt_domain::PromptId::new())
+            .unwrap(),
+        None
+    );
+    let raw = Connection::open(&current_path).unwrap();
+    let schema_version: u32 = raw
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .unwrap();
+    assert_eq!(schema_version, prompt_store::LATEST_SCHEMA_VERSION);
+}
+
+#[test]
 fn retention_prunes_only_application_named_backups_beyond_the_requested_count() {
     let directory = tempdir().unwrap();
     let source = directory.path().join("library.db");

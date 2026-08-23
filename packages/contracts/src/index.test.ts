@@ -33,6 +33,22 @@ describe("desktop command client", () => {
     expect(calls).toEqual(["list_prompts"]);
   });
 
+  it("passes prompt sort choices and records prompt usage through explicit commands", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      return command === "list_prompts" ? [] : undefined;
+    });
+
+    await client.listPrompts("created_at");
+    await client.recordPromptUse("prompt-1");
+
+    expect(calls).toEqual([
+      { command: "list_prompts", args: { sort: "created_at" } },
+      { command: "record_prompt_use", args: { id: "prompt-1" } },
+    ]);
+  });
+
   it("rejects malformed list entries instead of leaking an unstable backend shape", async () => {
     const client = createDesktopCommandClient(async () => [{ id: "prompt-1" }]);
 

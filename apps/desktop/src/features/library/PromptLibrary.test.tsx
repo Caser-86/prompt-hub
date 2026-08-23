@@ -20,6 +20,15 @@ describe("PromptLibrary", () => {
     expect(onCreate).toHaveBeenCalledOnce();
   });
 
+  it("offers recent-use and recent-added sorting and reloads the selected order", async () => {
+    const loadPrompts = vi.fn().mockResolvedValue([]);
+    render(<PromptLibrary loadPrompts={loadPrompts} />);
+
+    fireEvent.change(await screen.findByLabelText("提示词排序"), { target: { value: "created_at" } });
+
+    await waitFor(() => expect(loadPrompts).toHaveBeenCalledWith("created_at"));
+  });
+
   it("shows prompt provenance and opens a selected prompt", async () => {
     const onSelect = vi.fn();
     render(

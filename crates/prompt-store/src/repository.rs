@@ -14,6 +14,13 @@ pub struct PromptRepository {
     pub(crate) connection: Connection,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptSort {
+    LastUsed,
+    CreatedAt,
+    UpdatedAt,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportJob {
     id: String,
@@ -152,16 +159,87 @@ impl PromptRepository {
     }
 
     pub fn list(&self) -> Result<Vec<Prompt>, StoreError> {
-        let mut statement = self
-            .connection
-            .prepare("SELECT entity_json FROM prompts ORDER BY updated_at DESC, id ASC")?;
-        let serialized = statement.query_map([], |row| row.get::<_, String>(0))?;
+        self.list_sorted(PromptSort::UpdatedAt)
+    }
+
+    pub fn list_sorted(&self, sort: PromptSort) -> Result<Vec<Prompt>, StoreError> {
+        self.list_sorted_with_metadata(sort)
+            .map(|items| items.into_iter().map(|(prompt, _, _)| prompt).collect())
+    }
+
+    pub fn list_sorted_with_metadata(
+        &self,
+        sort: PromptSort,
+    ) -> Result<Vec<(Prompt, bool, Option<OffsetDateTime>)>, StoreError> {
+        let order = match sort {
+            PromptSort::LastUsed => {
+                "prompts.last_used_at DESC, prompts.created_at DESC, prompts.id ASC"
+            }
+            PromptSort::CreatedAt => "prompts.created_at DESC, prompts.id ASC",
+            PromptSort::UpdatedAt => "prompts.updated_at DESC, prompts.id ASC",
+        };
+        let query = format!(
+            "SELECT prompts.entity_json, prompt_favorites.prompt_id IS NOT NULL, prompts.last_used_at
+             FROM prompts
+             LEFT JOIN prompt_favorites ON prompt_favorites.prompt_id = prompts.id
+             ORDER BY {order}"
+        );
+        let mut statement = self.connection.prepare(&query)?;
+        let serialized = statement.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, bool>(1)?,
+                row.get::<_, Option<i64>>(2)?,
+            ))
+        })?;
         serialized
             .map(|value| {
-                let value = value?;
-                serde_json::from_str(&value).map_err(StoreError::from)
+                let (serialized, favorite, last_used_at) = value?;
+                let prompt = serde_json::from_str(&serialized).map_err(StoreError::from)?;
+                let last_used_at = last_used_at
+                    .map(|value| {
+                        OffsetDateTime::from_unix_timestamp(value)
+                            .map_err(|error| StoreError::Clock(error.to_string()))
+                    })
+                    .transpose()?;
+                Ok((prompt, favorite, last_used_at))
             })
             .collect()
+    }
+
+    pub fn record_usage(
+        &mut self,
+        id: PromptId,
+        used_at: OffsetDateTime,
+    ) -> Result<(), StoreError> {
+        let changed = self.connection.execute(
+            "UPDATE prompts
+             SET last_used_at = MAX(COALESCE(last_used_at, ?2), ?2)
+             WHERE id = ?1",
+            params![id.value().to_string(), used_at.unix_timestamp()],
+        )?;
+        if changed == 0 {
+            return Err(StoreError::Domain("prompt was not found".to_owned()));
+        }
+        Ok(())
+    }
+
+    pub fn last_used_at(&self, id: PromptId) -> Result<Option<OffsetDateTime>, StoreError> {
+        let stored = self
+            .connection
+            .query_row(
+                "SELECT last_used_at FROM prompts WHERE id = ?1",
+                [id.value().to_string()],
+                |row| row.get::<_, Option<i64>>(0),
+            )
+            .optional()?;
+        stored
+            .flatten()
+            .map(|value| {
+                OffsetDateTime::from_unix_timestamp(value)
+                    .map_err(|error| StoreError::Clock(error.to_string()))
+            })
+            .transpose()
     }
 
     pub fn history(&self, id: PromptId) -> Result<Vec<PromptVersion>, StoreError> {
@@ -237,6 +315,9 @@ impl PromptRepository {
         let source = Connection::open(backup_path)?;
         let backup = Backup::new(&source, &mut self.connection)?;
         backup.run_to_completion(64, std::time::Duration::from_millis(5), None)?;
+        drop(backup);
+        drop(source);
+        crate::migration::apply_latest_migrations(&mut self.connection)?;
         Ok(())
     }
 

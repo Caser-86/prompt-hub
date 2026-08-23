@@ -1,12 +1,17 @@
 use prompt_domain::{
-    Actor, AuditAction, EffectivenessStatus, Prompt, PromptContent, PromptSource, SourceKind,
+    Actor, AuditAction, EffectivenessStatus, Prompt, PromptContent, PromptId, PromptSource,
+    SourceKind,
 };
-use prompt_store::{Database, ImportJobItemRecord, StoreError};
+use prompt_store::{Database, ImportJobItemRecord, PromptSort, StoreError};
 use rusqlite::Connection;
 use tempfile::tempdir;
 use time::macros::datetime;
 
 fn prompt(body: &str) -> Prompt {
+    prompt_at(body, datetime!(2026-07-15 00:00 UTC))
+}
+
+fn prompt_at(body: &str, created_at: time::OffsetDateTime) -> Prompt {
     Prompt::new_inbox(
         PromptContent::new(
             "代码审查助手",
@@ -16,16 +21,82 @@ fn prompt(body: &str) -> Prompt {
             vec!["代码审查".to_owned()],
         )
         .unwrap(),
-        PromptSource::new(
-            SourceKind::Manual,
-            "手动录入",
-            None,
-            datetime!(2026-07-15 00:00 UTC),
-        )
-        .unwrap(),
+        PromptSource::new(SourceKind::Manual, "手动录入", None, created_at).unwrap(),
         Actor::User,
-        datetime!(2026-07-15 00:00 UTC),
+        created_at,
     )
+}
+
+#[test]
+fn sorts_prompts_by_last_use_with_never_used_items_after_used_items() {
+    let database = Database::open_in_memory().unwrap();
+    let mut repository = database.into_repository();
+    let older = prompt_at("older", datetime!(2026-07-15 00:00 UTC));
+    let newer = prompt_at("newer", datetime!(2026-07-15 00:01 UTC));
+    repository.save(&older, AuditAction::Created).unwrap();
+    repository.save(&newer, AuditAction::Created).unwrap();
+    repository
+        .record_usage(older.id(), datetime!(2026-07-15 00:02 UTC))
+        .unwrap();
+
+    assert_eq!(
+        repository.last_used_at(older.id()).unwrap(),
+        Some(datetime!(2026-07-15 00:02 UTC))
+    );
+    assert_eq!(repository.last_used_at(newer.id()).unwrap(), None);
+
+    let listed = repository.list_sorted(PromptSort::LastUsed).unwrap();
+
+    assert_eq!(listed[0].id(), older.id());
+    assert_eq!(listed[1].id(), newer.id());
+}
+
+#[test]
+fn last_use_never_moves_backwards_when_an_older_event_arrives() {
+    let database = Database::open_in_memory().unwrap();
+    let mut repository = database.into_repository();
+    let prompt = prompt("monotonic usage");
+    repository.save(&prompt, AuditAction::Created).unwrap();
+
+    repository
+        .record_usage(prompt.id(), datetime!(2026-07-15 00:02 UTC))
+        .unwrap();
+    repository
+        .record_usage(prompt.id(), datetime!(2026-07-15 00:01 UTC))
+        .unwrap();
+
+    assert_eq!(
+        repository.last_used_at(prompt.id()).unwrap(),
+        Some(datetime!(2026-07-15 00:02 UTC))
+    );
+}
+
+#[test]
+fn reports_no_last_use_for_a_missing_prompt() {
+    let database = Database::open_in_memory().unwrap();
+    let mut repository = database.into_repository();
+    let missing = PromptId::new();
+
+    assert_eq!(repository.last_used_at(missing).unwrap(), None);
+    assert!(matches!(
+        repository.record_usage(missing, datetime!(2026-07-15 00:02 UTC)),
+        Err(StoreError::Domain(message)) if message == "prompt was not found"
+    ));
+}
+
+#[test]
+fn sorts_prompts_by_created_time_with_newest_items_first() {
+    let database = Database::open_in_memory().unwrap();
+    let mut repository = database.into_repository();
+    let older = prompt_at("older", datetime!(2026-07-15 00:00 UTC));
+    let newer = prompt_at("newer", datetime!(2026-07-15 00:01 UTC));
+    repository.save(&older, AuditAction::Created).unwrap();
+    repository.save(&newer, AuditAction::Created).unwrap();
+
+    let listed = repository.list_sorted(PromptSort::CreatedAt).unwrap();
+
+    assert_eq!(listed[0].id(), newer.id());
+    assert_eq!(listed[1].id(), older.id());
 }
 
 #[test]

@@ -9,6 +9,7 @@ const desktopMock = vi.hoisted(() => ({
   importUrlToInbox: vi.fn(),
   recentImportJobs: vi.fn(),
   listPrompts: vi.fn(),
+  recordPromptUse: vi.fn(),
   promptHistory: vi.fn(),
   restorePromptVersion: vi.fn(),
   recordPromptCompatibility: vi.fn(),
@@ -39,10 +40,11 @@ describe("App", () => {
   beforeEach(() => {
     desktopMock.listPrompts.mockImplementation(() => new Promise<never[]>(() => undefined));
     desktopMock.promptHistory.mockResolvedValue([]);
-    desktopMock.getApplicationStatus.mockResolvedValue({ appVersion: "0.1.0", databaseSchemaVersion: 2, offlineCapable: true });
+    desktopMock.getApplicationStatus.mockResolvedValue({ appVersion: "0.1.1", databaseSchemaVersion: 2, offlineCapable: true });
     desktopMock.getAiCredentialStatus.mockResolvedValue({ configured: false });
     desktopMock.recentImportJobs.mockResolvedValue([]);
     desktopMock.getMcpSetup.mockResolvedValue({ databasePath: "C:/data/prompt-hub.db", databaseAvailable: true, configuration: "{}" });
+    desktopMock.recordPromptUse.mockResolvedValue(undefined);
   });
   it("provides accessible primary navigation and a command palette", () => {
     render(<App />);
@@ -94,7 +96,7 @@ describe("App", () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "打开提示词：代码审查" }));
-    expect(screen.getByRole("form", { name: "提示词元数据" })).toBeVisible();
+    expect(await screen.findByRole("form", { name: "提示词元数据" })).toBeVisible();
     expect(await screen.findByRole("heading", { name: "版本历史" })).toBeVisible();
     expect(screen.getByRole("button", { name: "软删除提示词" })).toBeVisible();
   });
@@ -104,6 +106,35 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("link", { name: "搜索" }));
     expect(screen.getByRole("heading", { name: "搜索提示词" })).toBeVisible();
+  });
+
+  it("waits for usage recording before opening a prompt", async () => {
+    let releaseUsage!: () => void;
+    desktopMock.recordPromptUse.mockImplementation(() => new Promise<void>((resolve) => {
+      releaseUsage = resolve;
+    }));
+    desktopMock.listPrompts.mockResolvedValueOnce([
+      {
+        id: "prompt-1",
+        title: "代码审查",
+        status: "published",
+        effectiveness: "effective",
+        category: "开发",
+        tags: ["审查"],
+        sourceNames: ["手动录入"],
+        favorite: false,
+        createdAt: "2026-07-15T00:00:00Z",
+        updatedAt: "2026-07-15T00:01:00Z",
+      },
+    ]);
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "打开提示词：代码审查" }));
+    expect(screen.queryByRole("form", { name: "提示词元数据" })).not.toBeInTheDocument();
+    expect(desktopMock.recordPromptUse).toHaveBeenCalledWith("prompt-1");
+
+    releaseUsage();
+    expect(await screen.findByRole("form", { name: "提示词元数据" })).toBeVisible();
   });
 
   it("shows the import and review inbox from navigation", () => {
