@@ -3,6 +3,8 @@ import { expect, test } from "@playwright/test";
 test("previews a verified backup before restoring and shows its safety copy", async ({ page }) => {
   await page.addInitScript(() => {
     const invoke = async (command: string) => {
+      if (command === "get_bootstrap_status" || command === "retry_database_bootstrap") return { state: "ready", code: null, safeMessage: null, backupName: null };
+      if (command === "export_bootstrap_diagnostics") return '{"state":"ready"}';
       if (command === "preview_backup_restore") {
         return { targetExists: true, backupSchemaVersion: 4, backupByteLen: 2048, promptCount: 3 };
       }
