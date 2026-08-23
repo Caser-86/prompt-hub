@@ -234,9 +234,7 @@ fn apply_migrations(
         transaction.pragma_update(None, "user_version", version)?;
     }
 
-    if !has_ledger {
-        backfill_ledger(&transaction, legacy_prompt_usage)?;
-    }
+    backfill_ledger(&transaction, legacy_prompt_usage)?;
     transaction.commit()?;
     Ok(())
 }
@@ -267,7 +265,7 @@ fn backfill_ledger(
 ) -> Result<(), StoreError> {
     for (id, sql) in MIGRATION_IDS {
         transaction.execute(
-            "INSERT INTO migration_ledger(migration_id, checksum_sha256, applied_at, provenance)
+            "INSERT OR IGNORE INTO migration_ledger(migration_id, checksum_sha256, applied_at, provenance)
              VALUES (?1, ?2, unixepoch(), 'canonical')",
             rusqlite::params![id, checksum(sql)],
         )?;
@@ -275,7 +273,7 @@ fn backfill_ledger(
 
     if legacy_prompt_usage {
         transaction.execute(
-            "INSERT INTO migration_ledger(migration_id, checksum_sha256, applied_at, provenance)
+            "INSERT OR IGNORE INTO migration_ledger(migration_id, checksum_sha256, applied_at, provenance)
              VALUES (?1, ?2, unixepoch(), 'legacy_recovery')",
             rusqlite::params![
                 "legacy/0.1.2-prompt-usage",
