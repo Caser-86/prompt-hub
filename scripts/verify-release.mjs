@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { join, relative, resolve } from "node:path";
+import process from "node:process";
 
 function git(root, args) {
   try {
