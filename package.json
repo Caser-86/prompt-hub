@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "verify:release": "node scripts/verify-release.mjs --channel=candidate",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

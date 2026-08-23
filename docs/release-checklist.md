@@ -4,6 +4,8 @@
 
 ## 构建与自动化
 
+- [ ] 运行 `node scripts/verify-release.mjs --channel=candidate`；正式 tag 构建必须使用 `--channel=release`，并通过版本一致、干净工作树、注释 tag 及 `origin/main` 血缘校验。
+- [ ] 保存构建生成的 `target/release/build-info.json`，核对版本、通道、Git commit 与迁移清单 SHA-256。
 - [ ] 在干净检出运行 `pnpm install --frozen-lockfile`。
 - [ ] 运行 lint、类型检查、前端/端到端测试、Rust fmt/Clippy/workspace 测试。
 - [ ] 运行 `pnpm --filter @prompt-hub/desktop exec tauri build` 并记录生成的 NSIS/MSI 文件与 SHA-256。

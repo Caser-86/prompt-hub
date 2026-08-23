@@ -21,6 +21,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -35,6 +37,12 @@ jobs:
         with:
           toolchain: 1.97.0
           components: rustfmt, clippy
+
+      - name: Verify release provenance
+        shell: pwsh
+        run: |
+          $channel = if ('${{ github.event_name }}' -eq 'push') { 'release' } else { 'candidate' }
+          node scripts/verify-release.mjs --channel=$channel --json-out=target/release/build-info.json
 
       - name: Verify and build candidate
         run: |
@@ -58,7 +66,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: prompt-hub-windows-candidate
+          name: prompt-hub-windows-${{ github.event_name == 'push' && 'release' || 'candidate' }}-${{ github.sha }}
           path: |
             target/release/bundle/**
           if-no-files-found: error
