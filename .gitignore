@@ -14,5 +14,6 @@ test-results/
 .env.*
 !.env.example
 apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/resources/build-info.json
 apps/desktop/vite.config.js
 apps/desktop/vite.config.d.ts

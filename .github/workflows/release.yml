@@ -42,7 +42,7 @@ jobs:
         shell: pwsh
         run: |
           $channel = if ('${{ github.event_name }}' -eq 'push') { 'release' } else { 'candidate' }
-          node scripts/verify-release.mjs --channel=$channel --json-out=target/release/build-info.json
+          node scripts/verify-release.mjs --channel=$channel --json-out=apps/desktop/src-tauri/resources/build-info.json
 
       - name: Verify and build candidate
         run: |
