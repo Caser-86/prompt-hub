@@ -33,6 +33,8 @@ use prompt_store::{
 };
 use uuid::Uuid;
 
+use crate::bootstrap::{self, BootstrapRuntime, BootstrapStatus};
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ManualPromptDraft {
@@ -2054,6 +2056,39 @@ pub fn get_application_status() -> ApplicationStatus {
         database_schema_version: LATEST_SCHEMA_VERSION,
         offline_capable: true,
     }
+}
+
+#[tauri::command]
+pub fn get_bootstrap_status(runtime: State<'_, BootstrapRuntime>) -> BootstrapStatus {
+    runtime.status()
+}
+
+#[tauri::command]
+pub fn retry_database_bootstrap(
+    app: tauri::AppHandle,
+    runtime: State<'_, BootstrapRuntime>,
+) -> Result<BootstrapStatus, String> {
+    if runtime.status().state == "ready" {
+        return Ok(runtime.status());
+    }
+    let services = bootstrap::prepare_services(&runtime).map_err(|failure| {
+        runtime.mark_recovery(
+            failure.code.clone(),
+            failure.safe_message.clone(),
+            failure.backup_name.clone(),
+        );
+        failure.safe_message
+    })?;
+    bootstrap::attach_services(&app, services);
+    runtime.mark_ready();
+    Ok(runtime.status())
+}
+
+#[tauri::command]
+pub fn export_bootstrap_diagnostics(
+    runtime: State<'_, BootstrapRuntime>,
+) -> Result<String, String> {
+    serde_json::to_string_pretty(&runtime.status()).map_err(|_| "无法导出诊断摘要".to_owned())
 }
 
 #[tauri::command]

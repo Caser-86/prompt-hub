@@ -296,3 +296,39 @@ fn rejects_an_unknown_migration_id_before_opening_the_database() {
     };
     assert!(error.to_string().contains("unknown migration id"));
 }
+
+#[test]
+fn restores_a_legacy_backup_only_after_migrating_it_to_the_current_schema() {
+    let directory = tempdir().unwrap();
+    let legacy_path = directory.path().join("legacy-v4.db");
+    let legacy = Connection::open(&legacy_path).unwrap();
+    for migration in [
+        include_str!("../migrations/0001_initial.sql"),
+        include_str!("../migrations/0002_search.sql"),
+        include_str!("../migrations/0003_favorites.sql"),
+        include_str!("../migrations/0004_import_jobs.sql"),
+    ] {
+        legacy.execute_batch(migration).unwrap();
+    }
+    legacy.execute_batch("PRAGMA user_version = 4;").unwrap();
+    drop(legacy);
+
+    let current_path = directory.path().join("current.db");
+    let mut repository = Database::open(&current_path).unwrap().into_repository();
+    repository.restore_from_backup(&legacy_path).unwrap();
+    drop(repository);
+
+    let restored = Connection::open(&current_path).unwrap();
+    let version: u32 = restored
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .unwrap();
+    let has_skills_table: i64 = restored
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'skills'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(version, LATEST_SCHEMA_VERSION);
+    assert_eq!(has_skills_table, 1);
+}

@@ -26,9 +26,10 @@ import { PromptSearch } from "../features/search/PromptSearch";
 import { InboxImport } from "../features/inbox/InboxImport";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { SkillLibrary } from "../features/skills/SkillLibrary";
+import { RecoveryScreen } from "../features/recovery/RecoveryScreen";
 import { desktopCommands } from "../services/desktop";
 import { navigationItems, type AppRoute } from "./navigation";
-import type { PromptHistoryItem, PromptListItem } from "@prompt-hub/contracts";
+import type { BootstrapStatus, PromptHistoryItem, PromptListItem } from "@prompt-hub/contracts";
 
 const effectivenessLabels = {
   effective: "已验证",
@@ -56,6 +57,7 @@ export function AppShell() {
   const [selectedPrompt, setSelectedPrompt] = useState<PromptListItem | null>(null);
   const [history, setHistory] = useState<PromptHistoryItem[] | null>(null);
   const [libraryKey, setLibraryKey] = useState(0);
+  const [bootstrapStatus, setBootstrapStatus] = useState<BootstrapStatus>({ state: "ready", code: null, safeMessage: null, backupName: null });
   const commandTriggerRef = useRef<HTMLButtonElement>(null);
   const promptContent = separatePromptProvenance(history?.at(-1)?.body ?? "");
   const displayedSources = selectedPrompt
@@ -94,6 +96,21 @@ export function AppShell() {
     }
     void desktopCommands.promptHistory(selectedPrompt.id).then(setHistory).catch(() => setHistory([]));
   }, [selectedPrompt]);
+
+  useEffect(() => {
+    void desktopCommands.getBootstrapStatus()
+      .then(setBootstrapStatus)
+      .catch(() => setBootstrapStatus({ state: "recovery", code: "bootstrap_status_unavailable", safeMessage: "应用启动状态不可用，请重试。", backupName: null }));
+  }, []);
+
+  if (bootstrapStatus.state === "recovery") {
+    return <RecoveryScreen
+      exportDiagnostics={desktopCommands.exportBootstrapDiagnostics}
+      onRecovered={() => { setBootstrapStatus({ state: "ready", code: null, safeMessage: null, backupName: null }); }}
+      retry={desktopCommands.retryDatabaseBootstrap}
+      status={bootstrapStatus}
+    />;
+  }
 
   return (
     <div className="app-shell">

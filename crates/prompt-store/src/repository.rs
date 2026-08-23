@@ -256,8 +256,18 @@ impl PromptRepository {
 
     pub fn restore_from_backup(&mut self, backup_path: &std::path::Path) -> Result<(), StoreError> {
         let source = Connection::open(backup_path)?;
-        let backup = Backup::new(&source, &mut self.connection)?;
-        backup.run_to_completion(64, std::time::Duration::from_millis(5), None)?;
+        let mut migrated = Connection::open_in_memory()?;
+        Backup::new(&source, &mut migrated)?.run_to_completion(
+            64,
+            std::time::Duration::from_millis(5),
+            None,
+        )?;
+        crate::migration::migrate_connection(&mut migrated)?;
+        Backup::new(&migrated, &mut self.connection)?.run_to_completion(
+            64,
+            std::time::Duration::from_millis(5),
+            None,
+        )?;
         Ok(())
     }
 

@@ -3,6 +3,12 @@ export type ApplicationStatus = {
   databaseSchemaVersion: number;
   offlineCapable: boolean;
 };
+export type BootstrapStatus = {
+  state: "ready" | "recovery";
+  code: string | null;
+  safeMessage: string | null;
+  backupName: string | null;
+};
 
 export type BackupInfo = { path: string; byteLen: number; schemaVersion: number };
 export type BackupRestorePreview = { targetExists: boolean; backupSchemaVersion: number; backupByteLen: number; promptCount: number };
@@ -145,6 +151,9 @@ export type PromptValidationDraft = {
 };
 
 export type DesktopCommandClient = {
+  getBootstrapStatus: () => Promise<BootstrapStatus>;
+  retryDatabaseBootstrap: () => Promise<BootstrapStatus>;
+  exportBootstrapDiagnostics: () => Promise<string>;
   getApplicationStatus: () => Promise<ApplicationStatus>;
   getDiagnosticsStatus: () => Promise<DiagnosticsStatus>;
   getRedactedDiagnosticEvents: () => Promise<RedactedDiagnosticEvent[]>;
@@ -196,6 +205,21 @@ export type DesktopCommandClient = {
 
 export function createDesktopCommandClient(invoke: CommandInvoker): DesktopCommandClient {
   return {
+    async getBootstrapStatus() {
+      const result = await invoke("get_bootstrap_status");
+      if (!isBootstrapStatus(result)) throw new Error("get_bootstrap_status returned an invalid response");
+      return result;
+    },
+    async retryDatabaseBootstrap() {
+      const result = await invoke("retry_database_bootstrap");
+      if (!isBootstrapStatus(result)) throw new Error("retry_database_bootstrap returned an invalid response");
+      return result;
+    },
+    async exportBootstrapDiagnostics() {
+      const result = await invoke("export_bootstrap_diagnostics");
+      if (typeof result !== "string") throw new Error("export_bootstrap_diagnostics returned an invalid response");
+      return result;
+    },
     async getApplicationStatus() {
       const result = await invoke("get_application_status");
       if (!isApplicationStatus(result)) {
@@ -521,6 +545,15 @@ function isApplicationStatus(value: unknown): value is ApplicationStatus {
     typeof status.databaseSchemaVersion === "number" &&
     typeof status.offlineCapable === "boolean"
   );
+}
+
+function isBootstrapStatus(value: unknown): value is BootstrapStatus {
+  if (typeof value !== "object" || value === null) return false;
+  const status = value as Record<string, unknown>;
+  return (status.state === "ready" || status.state === "recovery")
+    && (typeof status.code === "string" || status.code === null)
+    && (typeof status.safeMessage === "string" || status.safeMessage === null)
+    && (typeof status.backupName === "string" || status.backupName === null);
 }
 
 function isDiagnosticsStatus(value: unknown): value is DiagnosticsStatus {

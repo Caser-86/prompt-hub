@@ -89,8 +89,7 @@ impl Database {
 
         let backup_path = backup_before_migration(path, LATEST_SCHEMA_VERSION)?;
         let mut connection = Connection::open(path)?;
-        configure(&connection)?;
-        apply_migrations(&mut connection, MIGRATIONS)?;
+        migrate_connection(&mut connection)?;
         Ok(Self {
             connection,
             migration_report: MigrationReport { backup_path },
@@ -99,8 +98,7 @@ impl Database {
 
     pub fn open_in_memory() -> Result<Self, StoreError> {
         let mut connection = Connection::open_in_memory()?;
-        configure(&connection)?;
-        apply_migrations(&mut connection, MIGRATIONS)?;
+        migrate_connection(&mut connection)?;
         Ok(Self {
             connection,
             migration_report: MigrationReport::default(),
@@ -145,6 +143,11 @@ impl Database {
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(StoreError::from)
     }
+}
+
+pub(crate) fn migrate_connection(connection: &mut Connection) -> Result<(), StoreError> {
+    configure(connection)?;
+    apply_migrations(connection, MIGRATIONS)
 }
 
 fn configure(connection: &Connection) -> Result<(), StoreError> {
