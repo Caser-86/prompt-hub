@@ -918,9 +918,16 @@ impl PromptService {
             .repository
             .lock()
             .map_err(|_| "prompt repository is unavailable".to_owned())?;
+        let known_ids = repository
+            .list()
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .map(|prompt| prompt.id().value().to_string())
+            .collect::<std::collections::HashSet<_>>();
         entries
             .into_iter()
             .filter(|(_, count)| *count > 0)
+            .filter(|(id, _)| known_ids.contains(&id.value().to_string()))
             .map(|(id, count)| {
                 repository
                     .merge_legacy_usage(id, count)

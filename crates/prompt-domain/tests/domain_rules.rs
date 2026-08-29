@@ -139,6 +139,21 @@ fn provenance_source_keeps_excerpt_and_import_job_outside_prompt_content() {
 }
 
 #[test]
+fn provenance_source_rejects_unbounded_excerpt_data() {
+    let error = PromptSource::with_provenance(
+        SourceKind::FileImport,
+        "文件导入",
+        Some("C:/提示词/导入.md".to_owned()),
+        datetime!(2026-08-29 08:00 UTC),
+        Some("x".repeat(4097)),
+        Some("import-job-1".to_owned()),
+    )
+    .expect_err("source evidence must have a bounded excerpt");
+
+    assert_eq!(error, DomainError::SourceExcerptTooLong);
+}
+
+#[test]
 fn imported_prompt_tracks_import_and_last_validation_times() {
     let imported_at = datetime!(2026-08-29 08:00 UTC);
     let mut prompt = Prompt::new_imported_inbox(

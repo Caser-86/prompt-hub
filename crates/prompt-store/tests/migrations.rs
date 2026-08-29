@@ -45,6 +45,30 @@ fn latest_schema_keeps_source_evidence_and_usage_in_dedicated_tables() {
 }
 
 #[test]
+fn upgrades_a_v7_database_to_the_metadata_and_usage_schema() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("v7-to-v8.db");
+    drop(Database::open(&path).unwrap());
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute_batch(
+            "DROP INDEX idx_prompt_usage_last_used_at;
+             DROP TABLE prompt_usage;
+             ALTER TABLE prompt_sources DROP COLUMN raw_excerpt;
+             ALTER TABLE prompt_sources DROP COLUMN import_job_id;
+             ALTER TABLE prompts DROP COLUMN imported_at;
+             ALTER TABLE prompts DROP COLUMN last_validated_at;
+             DELETE FROM migration_ledger WHERE migration_id = '20260829_01_prompt_metadata_and_usage';
+             DELETE FROM schema_migrations WHERE version = 8;
+             PRAGMA user_version = 7;",
+        )
+        .unwrap();
+    drop(connection);
+    let upgraded = Database::open(&path).unwrap();
+    assert_eq!(upgraded.schema_version().unwrap(), LATEST_SCHEMA_VERSION);
+}
+
+#[test]
 fn reopening_the_latest_schema_is_read_only_during_another_write_transaction() {
     let directory = tempdir().unwrap();
     let path = directory.path().join("latest-read-only-open.db");
@@ -317,6 +341,14 @@ fn upgrades_the_legacy_v5_prompt_usage_schema_without_losing_usage_data() {
         )
         .unwrap();
     assert_eq!(last_used_at, 42);
+    let migrated_usage: (i64, i64) = upgraded
+        .query_row(
+            "SELECT use_count, last_used_at FROM prompt_usage WHERE prompt_id = 'legacy-prompt'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(migrated_usage, (1, 42));
     drop(upgraded);
 
     let reopened = Database::open(&path)

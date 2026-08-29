@@ -14,7 +14,7 @@ pub struct PromptRepository {
     pub(crate) connection: Connection,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PromptUsageStats {
     use_count: i64,
     last_used_at: Option<OffsetDateTime>,
@@ -647,15 +647,6 @@ fn usage_stats_for(
             })
         })
         .map_err(StoreError::from)
-}
-
-impl Default for PromptUsageStats {
-    fn default() -> Self {
-        Self {
-            use_count: 0,
-            last_used_at: None,
-        }
-    }
 }
 
 fn prompt_usage_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PromptUsageStats> {

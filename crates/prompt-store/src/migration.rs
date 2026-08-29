@@ -430,6 +430,13 @@ fn apply_migrations(
     if !has_ledger {
         backfill_ledger(&transaction, legacy_prompt_usage)?;
     }
+    if legacy_prompt_usage {
+        transaction.execute(
+            "INSERT OR IGNORE INTO prompt_usage(prompt_id, use_count, last_used_at)
+             SELECT id, 1, last_used_at FROM prompts WHERE last_used_at IS NOT NULL",
+            [],
+        )?;
+    }
     validate_latest_schema(&transaction)?;
     transaction.commit()?;
     Ok(())

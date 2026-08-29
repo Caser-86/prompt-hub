@@ -100,12 +100,48 @@ fn service_persists_use_history_and_merges_legacy_browser_counts_once() {
     assert_eq!(used.use_count(), 1);
     assert_eq!(used.last_used_at(), Some(datetime!(2026-08-29 09:00 UTC)));
 
-    let migrated = service.merge_legacy_usage(vec![(created.id(), 7)]).unwrap();
+    let migrated = service
+        .merge_legacy_usage(vec![
+            (created.id(), 7),
+            (prompt_domain::PromptId::new(), 99),
+        ])
+        .unwrap();
     assert_eq!(migrated[0].use_count(), 7);
     assert_eq!(
         migrated[0].last_used_at(),
         Some(datetime!(2026-08-29 09:00 UTC))
     );
+}
+
+#[test]
+fn usage_history_survives_a_real_database_restart() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("restart.db");
+    let service = PromptService::new(Database::open(&path).unwrap().into_repository());
+    let created = service
+        .create_manual_draft(
+            ManualPromptDraft {
+                title: "重启验证".to_owned(),
+                body: "持久化正文".to_owned(),
+                description: None,
+                category: Some("测试".to_owned()),
+                tags: vec![],
+                variables: vec![],
+            },
+            datetime!(2026-08-29 08:00 UTC),
+        )
+        .unwrap();
+    service
+        .record_use(created.id(), datetime!(2026-08-29 08:01 UTC))
+        .unwrap();
+    drop(service);
+
+    let reopened = PromptService::new(Database::open(&path).unwrap().into_repository());
+    let usage = reopened
+        .record_use(created.id(), datetime!(2026-08-29 08:02 UTC))
+        .unwrap();
+    assert_eq!(usage.use_count(), 2);
+    assert_eq!(usage.last_used_at(), Some(datetime!(2026-08-29 08:02 UTC)));
 }
 
 #[test]
@@ -129,6 +165,37 @@ fn folder_import_creates_reviewable_inbox_drafts_from_supported_files() {
 
     assert_eq!(outcome.drafts.len(), 2);
     assert!(outcome.drafts.iter().all(prompt_domain::Prompt::is_inbox));
+}
+
+#[test]
+fn offline_import_accepts_txt_json_csv_and_rejects_invalid_json_without_publishing() {
+    let directory = tempfile::tempdir().unwrap();
+    let txt = directory.path().join("plain.txt");
+    let json = directory.path().join("structured.json");
+    let csv = directory.path().join("table.csv");
+    let markdown = directory.path().join("notes.md");
+    let invalid = directory.path().join("invalid.json");
+    std::fs::write(&txt, "文本提示词正文").unwrap();
+    std::fs::write(&json, r#"[{"title":"JSON 提示词","body":"JSON 正文"}]"#).unwrap();
+    std::fs::write(&csv, "title,body\nCSV 提示词,CSV 正文\n").unwrap();
+    std::fs::write(&markdown, "# Markdown 提示词\n\nMarkdown 正文").unwrap();
+    std::fs::write(&invalid, "{not-json").unwrap();
+    let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
+
+    for path in [&txt, &json, &csv, &markdown] {
+        let outcome = service
+            .import_file_to_inbox(path.to_path_buf(), datetime!(2026-08-29 08:00 UTC))
+            .unwrap();
+        assert_eq!(outcome.drafts.len(), 1);
+        assert!(outcome.drafts[0].is_inbox());
+    }
+    let invalid_error = match service.import_file_to_inbox(invalid, datetime!(2026-08-29 08:01 UTC))
+    {
+        Ok(_) => panic!("invalid JSON must be reported without creating a draft"),
+        Err(error) => error,
+    };
+    assert!(invalid_error.contains("invalid JSON"));
+    assert_eq!(service.list().unwrap().len(), 4);
 }
 
 #[test]
@@ -318,6 +385,10 @@ fn service_records_tool_model_compatibility_and_effectiveness_metadata() {
         prompt_domain::EffectivenessStatus::Effective
     );
     assert_eq!(validated.validations()[0].rating, Some(5));
+    assert_eq!(
+        validated.last_validated_at(),
+        Some(datetime!(2026-07-15 00:02 UTC))
+    );
 }
 
 #[test]

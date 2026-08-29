@@ -301,7 +301,14 @@ impl PromptSource {
         import_job_id: Option<String>,
     ) -> Result<Self, DomainError> {
         let mut source = Self::new(kind, name, location, collected_at)?;
-        source.raw_excerpt = normalize_optional(raw_excerpt);
+        let raw_excerpt = normalize_optional(raw_excerpt);
+        if raw_excerpt
+            .as_deref()
+            .is_some_and(|excerpt| excerpt.chars().count() > 4096)
+        {
+            return Err(DomainError::SourceExcerptTooLong);
+        }
+        source.raw_excerpt = raw_excerpt;
         source.import_job_id = normalize_optional(import_job_id);
         Ok(source)
     }
@@ -743,6 +750,8 @@ pub enum DomainError {
     SourceNameRequired,
     #[error("file and URL sources require a location")]
     SourceLocationRequired,
+    #[error("source excerpt is too long")]
+    SourceExcerptTooLong,
     #[error("tool name is required")]
     ToolNameRequired,
     #[error("confirmed compatibility requires a confirmation time")]

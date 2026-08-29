@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("creates, reviews, and searches a local prompt through the desktop command boundary", async ({ page }) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.addInitScript(() => {
     const prompts: Array<Record<string, unknown>> = [];
     const history = new Map<string, Array<Record<string, unknown>>>();
@@ -20,6 +21,8 @@ test("creates, reviews, and searches a local prompt through the desktop command 
         return prompt;
       }
       if (command === "prompt_history") return history.get(args?.id as string) ?? [];
+      if (command === "record_prompt_use") return { useCount: 1, lastUsedAt: timestamp };
+      if (command === "migrate_legacy_prompt_usage") return undefined;
       if (command === "search_prompts") {
         const text = String(args?.text ?? "").toLowerCase();
         const hits = prompts.filter((prompt) => String(prompt.title).toLowerCase().includes(text)).map((prompt) => ({
@@ -50,6 +53,10 @@ test("creates, reviews, and searches a local prompt through the desktop command 
   await page.getByRole("button", { name: "打开提示词：本地代码审查" }).click();
   await expect(page.getByRole("heading", { name: "本地代码审查" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "版本历史" })).toBeVisible();
+  await page.getByRole("button", { name: "复制提示词正文" }).click();
+  await expect(page.getByText("已复制提示词正文。", { exact: true })).toBeVisible();
+  await page.locator(".prompt-export-menu summary").click();
+  await expect(page.getByRole("button", { name: "导出 Markdown" })).toBeVisible();
 
   await page.getByRole("button", { name: "返回" }).click();
   await page.getByRole("button", { name: "高级筛选" }).click();
