@@ -12,7 +12,7 @@
 | MCP 写入 | STDIO MCP 只有四个版本化工具；写工具只能创建收件箱草稿，不能发布、覆盖或永久清除。 | `crates/prompt-mcp/tests/schema_contract.rs`、`stdio.rs`、`tools.rs` |
 | 破坏性操作 | 恢复和永久清除前创建完整性校验备份；恢复预览先校验数据库；软删除才能进入永久清除确认。 | `crates/prompt-store/tests/backup.rs`、桌面命令测试 |
 | 并发基础 | SQLite 启用外键、WAL 与 5 秒 busy timeout。 | `crates/prompt-store/src/migration.rs` |
-| 迁移血缘 | 拒绝未来架构版本、空或缺项的已提交迁移账本、未知迁移与校验和冲突；旧 0.1.2 prompt-usage 血缘可升级并再次打开。 | `crates/prompt-store/tests/migrations.rs` |
+| 迁移血缘 | 拒绝未来架构版本、空或缺项的已提交迁移账本、未知迁移与校验和冲突；旧 0.1.2 prompt-usage 血缘可升级并再次打开；完整最新数据库的重开保持只读。 | `crates/prompt-store/tests/migrations.rs` |
 | 架构完整性 | 迁移提交前验证版本 7 的全部应用表和关键字段；账本完整但实际结构缺损时 fail closed。 | `crates/prompt-store/tests/migrations.rs` |
 | 迁移备份 | 迁移前使用 SQLite 在线备份 API 创建一致快照，包含尚在 WAL 中的已提交记录。 | `pre_migration_backup_includes_committed_rows_still_in_the_wal` |
 | 启动数据路径 | 系统应用数据目录无法解析或为空时进入恢复状态；准备服务与重试不会打开相对路径数据库。 | `apps/desktop/src-tauri/tests/bootstrap.rs` |

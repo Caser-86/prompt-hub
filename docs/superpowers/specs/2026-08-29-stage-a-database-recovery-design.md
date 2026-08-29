@@ -13,6 +13,7 @@ This design hardens the self-use Windows product against ambiguous, partially mi
 5. The known legacy 0.1.2 prompt-usage schema remains upgradeable and reopenable.
 6. Failure to resolve the operating-system application-data directory enters recovery state and never opens a relative database path.
 7. Recovery diagnostics contain safe codes and messages, not prompt bodies or private absolute paths.
+8. Reopening a complete latest-version database performs no migration-ledger write and remains compatible with a concurrent writer.
 
 ## Database validation
 

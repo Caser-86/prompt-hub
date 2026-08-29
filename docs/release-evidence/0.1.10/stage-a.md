@@ -2,7 +2,7 @@
 
 审查日期：2026-08-29  
 分支：`codex/legacy-v5-schema-recovery`  
-阶段代码提交：`30cc0fa`、`17c59d4`、`44be732`、`de975c1`
+阶段代码提交：`30cc0fa`、`17c59d4`、`44be732`、`de975c1`、`d074614`
 
 ## 已验证修复
 
@@ -11,6 +11,7 @@
 3. 版本 7 在接受连接前验证全部应用表和关键字段；缺少 `prompt_favorites` 或 `skills.snapshot_path` 不会被静默修复或误判为健康。
 4. 迁移前备份使用 SQLite 在线备份 API，能够包含未检查点 WAL 中的已提交提示词。
 5. Windows 应用数据目录不可用或为空时，启动状态为 `data_directory_unavailable`；准备服务和重试不会创建相对路径数据库。
+6. 完整的最新数据库重开不再执行迁移账本写入；即使另一连接持有写事务也能只读打开，避免与提示词保存形成 `SQLITE_BUSY` 竞态。
 
 数据库架构版本保持为 7；Stage A 未增加数据迁移。
 
@@ -20,6 +21,7 @@
 - 首次结构完整性测试：15 通过、2 失败。缺少表或关键字段的版本 7 数据库被错误接受。
 - 首次 AppData 测试：编译失败，因为安全的 unavailable 状态和可用性检查尚不存在。
 - 首次 WAL 备份测试：备份中预期提示词数量为 1，实际为 0。
+- 首次只读重开测试：另一连接持有写事务时，最新数据库重开等待 5 秒后返回 `database is locked`。
 
 以上测试均在生产代码修改前运行并观察到预期失败。
 
@@ -27,7 +29,7 @@
 
 | 命令 | 结果 |
 | --- | --- |
-| `cargo test -p prompt-store --test migrations --test backup` | 迁移 18/18、备份 8/8 通过 |
+| `cargo test -p prompt-store --test migrations --test backup --test concurrency` | 迁移 19/19、备份 8/8、并发 1/1 通过 |
 | `cargo test -p prompt-hub-desktop --test bootstrap --test commands` | 启动 4/4、命令契约 1/1 通过 |
 | `cargo test -p prompt-store --test concurrency` | 并发搜索、写入与备份 1/1 通过 |
 | `cargo test -p prompt-store a_failed_migration_rolls_back_the_whole_batch` | 迁移事务回滚 1/1 通过 |
