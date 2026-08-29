@@ -116,11 +116,11 @@
 - Produces `install_skill(id, target_root, mode)`；`mode` 只允许 `new_name` 与 `replace_after_backup`。
 - `detect_skill_drift(id)` 只返回差异摘要，绝不写入目标。
 
-- [ ] **Step 1: 写失败测试**：正常安装、未审核拒绝、已存在默认拒绝、替换前备份、复制后哈希不一致回滚、脚本未执行和漂移检测。
-- [ ] **Step 2: 运行**：`cargo test -p prompt-skill --test install`，预期失败。
-- [ ] **Step 3: 实现安装器**：只复制受审清单中的常规文件到临时目录；校验后原子移动；替换先将原目录移至应用备份目录；失败时恢复备份。
-- [ ] **Step 4: 接入 UI**：仅审核通过时显示安装；冲突和替换必须由明确对话框确认；显示目标、备份和结果。
-- [ ] **Step 5: 验证并提交**：运行 Rust/UI 测试，通过后 `git commit -m "feat: install reviewed skills safely"`。
+- [x] **Step 1: 写失败测试**：正常安装、未审核拒绝、已存在默认拒绝、替换前备份、复制后哈希不一致回滚、脚本未执行和漂移检测。
+- [x] **Step 2: 运行**：`cargo test -p prompt-skill --test install`，预期失败。
+- [x] **Step 3: 实现安装器**：只复制受审清单中的常规文件到临时目录；校验后原子移动；替换先将原目录移至应用备份目录；失败时恢复备份。
+- [x] **Step 4: 接入 UI**：仅审核通过时显示安装；冲突和替换必须由明确对话框确认；显示目标、备份和结果。
+- [x] **Step 5: 验证并提交**：运行 Rust/UI 测试，通过后 `git commit -m "feat: install reviewed skills safely"`。
 
 ### Task 6: Git 候选导入、文档和发布验证
 
@@ -137,8 +137,8 @@
 - `collect_skill_git_candidate(url, revision)` 仅接受公开 HTTPS Git URL、固定提交 SHA，并在应用临时目录中检出后交给同一只读扫描器。
 - 网络失败、无效 URL 或非固定 revision 必须返回可操作错误，不能创建半成品资产。
 
-- [ ] **Step 1: 写失败测试**：HTTPS 允许、非 HTTPS/含凭据/内网拒绝、未固定 revision 拒绝、网络错误不落库。
-- [ ] **Step 2: 运行**：对应 crate 与 Tauri 测试，预期失败。
-- [ ] **Step 3: 实现最小 Git 候选收集**：使用受限 HTTPS、固定提交、临时目录和大小限制；不递归 submodule，不运行 hooks，不执行 Skill 文件。
-- [ ] **Step 4: 补充使用文档与端到端测试**：覆盖本地收集、审核、安装冲突默认取消与漂移只读检测。
-- [ ] **Step 5: 完整验证与提交**：运行 AGENTS.md 所列 pnpm、cargo 和桌面构建命令；`git commit -m "feat: complete skill library workflow"`。
+- [x] **Step 1: 写失败测试**：HTTPS 允许、非 HTTPS/含凭据/内网拒绝、未固定 revision 拒绝、网络错误不落库。
+- [x] **Step 2: 运行**：对应 crate 与 Tauri 测试，预期失败。
+- [x] **Step 3: 实现最小 Git 候选收集**：使用受限 HTTPS、固定提交、临时目录和大小限制；不递归 submodule，不运行 hooks，不执行 Skill 文件。
+- [x] **Step 4: 补充使用文档与端到端测试**：覆盖本地收集、审核、安装冲突默认取消与漂移只读检测。
+- [x] **Step 5: 完整验证与提交**：运行 AGENTS.md 所列 pnpm、cargo 和桌面构建命令；`git commit -m "feat: complete skill library workflow"`。
