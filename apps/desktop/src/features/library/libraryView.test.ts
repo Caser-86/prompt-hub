@@ -14,6 +14,8 @@ const fixtures: PromptListItem[] = [
     tags: [],
     sourceNames: [],
     favorite: false,
+    useCount: 0,
+    lastUsedAt: null,
     createdAt: "2026-07-10T00:00:00Z",
     updatedAt: "2026-07-10T00:00:00Z",
   },
@@ -26,6 +28,8 @@ const fixtures: PromptListItem[] = [
     tags: [],
     sourceNames: [],
     favorite: true,
+    useCount: 0,
+    lastUsedAt: null,
     createdAt: "2026-07-12T00:00:00Z",
     updatedAt: "2026-07-12T00:00:00Z",
   },
@@ -38,6 +42,8 @@ const fixtures: PromptListItem[] = [
     tags: [],
     sourceNames: [],
     favorite: false,
+    useCount: 8,
+    lastUsedAt: "2026-07-15T00:01:00Z",
     createdAt: "2026-07-15T00:00:00Z",
     updatedAt: "2026-07-15T00:00:00Z",
   },
@@ -45,13 +51,19 @@ const fixtures: PromptListItem[] = [
 
 describe("library view helpers", () => {
   it("keeps favorites first, then ranks commonly used prompts before recency", () => {
-    expect(filterAndSortPrompts(fixtures, "all", { "new-effective": 8 }).map((prompt) => prompt.id)).toEqual([
+    expect(filterAndSortPrompts(fixtures, "all", "default").map((prompt) => prompt.id)).toEqual([
       "favorite", "new-effective", "old-effective",
     ]);
     const visible = filterAndSortPrompts(fixtures, "effective");
 
     expect(visible.map((prompt) => prompt.id)).toEqual(["new-effective", "old-effective"]);
     expect(filterAndSortPrompts(fixtures, "favorite").map((prompt) => prompt.id)).toEqual(["favorite"]);
+  });
+
+  it("supports explicit recently-used, recently-added, recently-updated, and most-used orders", () => {
+    expect(filterAndSortPrompts(fixtures, "all", "recently_used").map((prompt) => prompt.id)).toEqual(["new-effective", "favorite", "old-effective"]);
+    expect(filterAndSortPrompts(fixtures, "all", "recently_added").map((prompt) => prompt.id)).toEqual(["new-effective", "favorite", "old-effective"]);
+    expect(filterAndSortPrompts(fixtures, "all", "most_used").map((prompt) => prompt.id)).toEqual(["new-effective", "favorite", "old-effective"]);
   });
 
   it("formats recent update times without exposing ISO timestamps", () => {

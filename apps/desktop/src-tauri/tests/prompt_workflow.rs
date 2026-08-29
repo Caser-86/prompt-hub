@@ -65,6 +65,8 @@ fn file_import_creates_reviewable_inbox_drafts_without_publishing() {
         drafts.drafts[0].sources()[0].kind(),
         prompt_domain::SourceKind::FileImport
     );
+    assert!(drafts.drafts[0].imported_at().is_some());
+    assert!(drafts.drafts[0].sources()[0].import_job_id().is_some());
     let repeated = service
         .import_file_to_inbox(
             directory.path().join("review.md"),
@@ -73,6 +75,37 @@ fn file_import_creates_reviewable_inbox_drafts_without_publishing() {
         .unwrap();
     assert_eq!(repeated.drafts.len(), 0);
     assert_eq!(repeated.skipped_duplicates, 1);
+}
+
+#[test]
+fn service_persists_use_history_and_merges_legacy_browser_counts_once() {
+    let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
+    let created = service
+        .create_manual_draft(
+            ManualPromptDraft {
+                title: "可复用提示词".to_owned(),
+                body: "只复制正文".to_owned(),
+                description: None,
+                category: Some("开发".to_owned()),
+                tags: vec![],
+                variables: vec![],
+            },
+            datetime!(2026-08-29 08:00 UTC),
+        )
+        .unwrap();
+
+    let used = service
+        .record_use(created.id(), datetime!(2026-08-29 09:00 UTC))
+        .unwrap();
+    assert_eq!(used.use_count(), 1);
+    assert_eq!(used.last_used_at(), Some(datetime!(2026-08-29 09:00 UTC)));
+
+    let migrated = service.merge_legacy_usage(vec![(created.id(), 7)]).unwrap();
+    assert_eq!(migrated[0].use_count(), 7);
+    assert_eq!(
+        migrated[0].last_used_at(),
+        Some(datetime!(2026-08-29 09:00 UTC))
+    );
 }
 
 #[test]

@@ -35,6 +35,8 @@ pub fn run() {
             commands::preview_backup_restore,
             commands::restore_backup,
             commands::list_prompts,
+            commands::record_prompt_use,
+            commands::migrate_legacy_prompt_usage,
             commands::collect_skill_folder,
             commands::collect_git_skill,
             commands::list_skills,

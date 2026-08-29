@@ -96,11 +96,15 @@ export type PromptListItem = {
   category: string | null;
   tags: string[];
   sourceNames: string[];
-  sources?: Array<{ kind: string; name: string; location: string | null; collectedAt: string }>;
+  sources?: Array<{ kind: string; name: string; location: string | null; collectedAt: string; rawExcerpt?: string | null; importJobId?: string | null }>;
   applicableTools?: string[];
   applicableModels?: string[];
   rating?: number | null;
   favorite: boolean;
+  useCount?: number;
+  lastUsedAt?: string | null;
+  importedAt?: string | null;
+  lastValidatedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -163,6 +167,8 @@ export type DesktopCommandClient = {
   restoreBackup: (path: string) => Promise<BackupInfo>;
   pruneLocalBackups: (retain: number) => Promise<number>;
   listPrompts: () => Promise<PromptListItem[]>;
+  recordPromptUse: (id: string) => Promise<{ useCount: number; lastUsedAt: string | null }>;
+  migrateLegacyPromptUsage: (entries: Array<{ id: string; useCount: number }>) => Promise<void>;
     collectSkillFolder: (path: string) => Promise<SkillListItem>;
     collectGitSkill: (source: GitSkillCollectionDraft) => Promise<SkillListItem>;
   listSkills: () => Promise<SkillListItem[]>;
@@ -268,6 +274,14 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
         throw new Error("list_prompts returned an invalid response");
       }
       return result;
+    },
+    async recordPromptUse(id) {
+      const result = await invoke("record_prompt_use", { id });
+      if (!isPromptUsageStats(result)) throw new Error("record_prompt_use returned an invalid response");
+      return result;
+    },
+    async migrateLegacyPromptUsage(entries) {
+      await invoke("migrate_legacy_prompt_usage", { entries });
     },
       async collectSkillFolder(path) {
       const result = await invoke("collect_skill_folder", { path });
@@ -440,6 +454,10 @@ function isPromptListItem(value: unknown): value is PromptListItem {
     (item.applicableTools === undefined || (Array.isArray(item.applicableTools) && item.applicableTools.every((tool) => typeof tool === "string"))) &&
     (item.applicableModels === undefined || (Array.isArray(item.applicableModels) && item.applicableModels.every((model) => typeof model === "string"))) &&
     (item.rating === undefined || item.rating === null || typeof item.rating === "number") &&
+    (item.useCount === undefined || (typeof item.useCount === "number" && item.useCount >= 0)) &&
+    (item.lastUsedAt === undefined || typeof item.lastUsedAt === "string" || item.lastUsedAt === null) &&
+    (item.importedAt === undefined || typeof item.importedAt === "string" || item.importedAt === null) &&
+    (item.lastValidatedAt === undefined || typeof item.lastValidatedAt === "string" || item.lastValidatedAt === null) &&
     typeof item.favorite === "boolean" &&
     typeof item.createdAt === "string" &&
     typeof item.updatedAt === "string"
@@ -492,7 +510,16 @@ function isPromptSourceEvidence(value: unknown): value is { kind: string; name: 
   if (typeof value !== "object" || value === null) return false;
   const source = value as Record<string, unknown>;
   return typeof source.kind === "string" && typeof source.name === "string"
-    && (typeof source.location === "string" || source.location === null) && typeof source.collectedAt === "string";
+    && (typeof source.location === "string" || source.location === null) && typeof source.collectedAt === "string"
+    && (source.rawExcerpt === undefined || typeof source.rawExcerpt === "string" || source.rawExcerpt === null)
+    && (source.importJobId === undefined || typeof source.importJobId === "string" || source.importJobId === null);
+}
+
+function isPromptUsageStats(value: unknown): value is { useCount: number; lastUsedAt: string | null } {
+  if (typeof value !== "object" || value === null) return false;
+  const stats = value as Record<string, unknown>;
+  return typeof stats.useCount === "number" && stats.useCount >= 0
+    && (typeof stats.lastUsedAt === "string" || stats.lastUsedAt === null);
 }
 
 function isPromptHistoryItem(value: unknown): value is PromptHistoryItem {

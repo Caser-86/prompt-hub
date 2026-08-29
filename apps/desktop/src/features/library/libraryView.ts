@@ -1,17 +1,28 @@
 import type { PromptListItem } from "@prompt-hub/contracts";
 
 export type PromptLibraryFilter = "all" | "favorite" | "effective" | "needs_retest";
+export type PromptLibrarySort = "default" | "recently_used" | "recently_added" | "recently_updated" | "most_used";
 
-export function filterAndSortPrompts(prompts: PromptListItem[], filter: PromptLibraryFilter, usage: Record<string, number> = {}) {
-  return prompts
+export function filterAndSortPrompts(prompts: PromptListItem[], filter: PromptLibraryFilter, sort: PromptLibrarySort = "default") {
+  return [...prompts]
     .filter((prompt) => filter === "all" || (filter === "favorite" ? prompt.favorite : prompt.effectiveness === filter))
     .sort((left, right) => {
-      const favoriteDifference = Number(right.favorite) - Number(left.favorite);
-      if (favoriteDifference) return favoriteDifference;
-      const usageDifference = (usage[right.id] ?? 0) - (usage[left.id] ?? 0);
-      if (usageDifference) return usageDifference;
-      return Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+      const countDifference = (right.useCount ?? 0) - (left.useCount ?? 0);
+      const lastUsedDifference = dateValue(right.lastUsedAt) - dateValue(left.lastUsedAt);
+      const createdDifference = dateValue(right.createdAt) - dateValue(left.createdAt);
+      const updatedDifference = dateValue(right.updatedAt) - dateValue(left.updatedAt);
+      if (sort === "recently_used") return lastUsedDifference || countDifference || updatedDifference || left.id.localeCompare(right.id);
+      if (sort === "recently_added") return createdDifference || left.id.localeCompare(right.id);
+      if (sort === "recently_updated") return updatedDifference || left.id.localeCompare(right.id);
+      if (sort === "most_used") return countDifference || lastUsedDifference || Number(right.favorite) - Number(left.favorite) || left.id.localeCompare(right.id);
+      return Number(right.favorite) - Number(left.favorite) || countDifference || lastUsedDifference || updatedDifference || left.id.localeCompare(right.id);
     });
+}
+
+function dateValue(value: string | null | undefined) {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 export function formatLibraryUpdatedAt(value: string, now = new Date()) {

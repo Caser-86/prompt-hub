@@ -19,7 +19,7 @@ import { PromptHistory } from "../features/history/PromptHistory";
 import { AiOptimizationReview } from "../features/ai/AiOptimizationReview";
 import { PromptLibrary } from "../features/library/PromptLibrary";
 import { PromptContentActions } from "../features/library/PromptContentActions";
-import { recordPromptUsage } from "../features/library/promptUsage";
+import { markPromptUsageMigrated, readPromptUsage, shouldMigratePromptUsage } from "../features/library/promptUsage";
 import { separatePromptProvenance } from "../features/library/promptContent";
 import { PromptLifecycleActions } from "../features/library/PromptLifecycleActions";
 import { PromptSearch } from "../features/search/PromptSearch";
@@ -68,6 +68,9 @@ export function AppShell() {
         : []),
     ]
     : [];
+  const metadataExport = displayedSources
+    .map((source) => `- ${source.name}（${source.location ?? "无位置记录"}；采集于 ${source.collectedAt}）`)
+    .join("\n");
 
   const closeCommandPalette = () => {
     setCommandPaletteOpen(false);
@@ -87,6 +90,17 @@ export function AppShell() {
 
     window.addEventListener("keydown", handleKeyboardShortcut);
     return () => window.removeEventListener("keydown", handleKeyboardShortcut);
+  }, []);
+
+  useEffect(() => {
+    if (!shouldMigratePromptUsage()) return;
+    const legacyUsage = readPromptUsage();
+    const entries = Object.entries(legacyUsage).map(([id, useCount]) => ({ id, useCount }));
+    if (!entries.length) {
+      markPromptUsageMigrated();
+      return;
+    }
+    void desktopCommands.migrateLegacyPromptUsage(entries).then(() => markPromptUsageMigrated()).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -173,7 +187,7 @@ export function AppShell() {
                     </div>
                   </div>
                   <section aria-label="提示词主操作" className="prompt-detail-actions">
-                    {history ? <PromptContentActions body={promptContent.body} onUsed={() => recordPromptUsage(selectedPrompt.id)} title={selectedPrompt.title} /> : <p>正在准备提示词操作…</p>}
+                    {history ? <PromptContentActions body={promptContent.body} metadataExport={metadataExport} onUsed={() => { void desktopCommands.recordPromptUse(selectedPrompt.id); }} title={selectedPrompt.title} /> : <p>正在准备提示词操作…</p>}
                   </section>
                 </header>
                 <div className="prompt-detail-main">
@@ -313,7 +327,6 @@ export function AppShell() {
           setEditorOpen(false);
         }}
         onSelectPrompt={(prompt) => {
-          recordPromptUsage(prompt.id);
           setActiveRoute("library");
           setSelectedPrompt(prompt);
           setEditorOpen(false);
