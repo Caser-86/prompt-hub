@@ -40,6 +40,14 @@ pnpm --filter @prompt-hub/desktop exec tauri build
 
 对应校验清单：`target/release/bundle/SHA256SUMS.txt`。签名检查使用 PowerShell `Get-AuthenticodeSignature`，两个包均无签名证书，因此只能作为本地候选包使用。
 
+MCP sidecar 单独构建于 `target/release/prompt-mcp.exe`（8,160,768 字节，SHA-256
+`49f00efc901bf241dd620ee5110819390b9078dac506f6590711f0233272b02b`，签名状态
+`NotSigned`）。当前 Tauri 安装包不自动把 sidecar 放入系统 `PATH`，需按
+[mcp-setup.md](../../mcp-setup.md) 单独安装或配置其绝对路径。
+
+对 release sidecar 直接发送 `tools/list` 的协议验收返回 4 个工具：
+`search_prompts`、`get_prompt`、`render_prompt`、`save_prompt_draft`。
+
 ## NSIS 安装/启动/卸载烟测
 
 在隔离临时目录
