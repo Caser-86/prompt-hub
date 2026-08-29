@@ -54,6 +54,8 @@ pub enum SkillInstallError {
     DestinationExists,
     #[error("Skill backup path already exists")]
     BackupExists,
+    #[error("Skill installation changed after copying; automatic rollback was refused")]
+    RollbackUnsafe,
     #[error("unable to install Skill")]
     Io(#[from] std::io::Error),
     #[error("unable to verify installed Skill")]
@@ -125,6 +127,23 @@ pub fn install_skill(
         let _ = fs::remove_dir_all(&stage);
     }
     install
+}
+
+/// Reverts a completed installation when a later operation, such as persistence
+/// of its receipt, fails. The installed tree is removed only while it still
+/// matches the hash that was produced by [`install_skill`].
+pub fn rollback_installation(receipt: &InstallationReceipt) -> Result<(), SkillInstallError> {
+    let installed =
+        scan_skill(receipt.install_path()).map_err(|_| SkillInstallError::RollbackUnsafe)?;
+    if installed.content_hash() != receipt.installed_hash() {
+        return Err(SkillInstallError::RollbackUnsafe);
+    }
+
+    fs::remove_dir_all(receipt.install_path())?;
+    if let Some(backup_path) = receipt.backup_path() {
+        fs::rename(backup_path, receipt.install_path())?;
+    }
+    Ok(())
 }
 
 fn validate_destination_name(value: &str) -> Result<(), SkillInstallError> {

@@ -3101,6 +3101,7 @@ dependencies = [
  "prompt-import",
  "prompt-skill",
  "prompt-store",
+ "rusqlite",
  "secrecy",
  "serde",
  "serde_json",

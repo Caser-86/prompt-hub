@@ -1,6 +1,9 @@
 use std::fs;
 
-use prompt_skill::{InstallMode, InstallRequest, SkillInstallError, install_skill, scan_skill};
+use prompt_skill::{
+    InstallMode, InstallRequest, SkillInstallError, install_skill, rollback_installation,
+    scan_skill,
+};
 use tempfile::tempdir;
 
 fn source_with_body(body: &str) -> tempfile::TempDir {
@@ -80,4 +83,56 @@ fn replacement_moves_previous_install_to_backup_first() {
         fs::read_to_string(receipt.backup_path().unwrap().join("SKILL.md")).unwrap(),
         "# Old\n"
     );
+}
+
+#[test]
+fn rollback_removes_the_new_install_and_restores_the_previous_backup() {
+    let source = source_with_body("# New\n");
+    let target = tempdir().unwrap();
+    let backups = tempdir().unwrap();
+    let existing = target.path().join("same");
+    fs::create_dir(&existing).unwrap();
+    fs::write(existing.join("SKILL.md"), "# Old\n").unwrap();
+    let hash = scan_skill(source.path()).unwrap().content_hash().to_owned();
+    let receipt = install_skill(InstallRequest {
+        source: source.path(),
+        target_root: target.path(),
+        backup_root: backups.path(),
+        destination_name: "same",
+        expected_content_hash: &hash,
+        mode: InstallMode::ReplaceAfterBackup,
+    })
+    .unwrap();
+
+    rollback_installation(&receipt).unwrap();
+
+    assert_eq!(
+        fs::read_to_string(target.path().join("same/SKILL.md")).unwrap(),
+        "# Old\n"
+    );
+    assert!(!receipt.backup_path().unwrap().exists());
+}
+
+#[test]
+fn rollback_refuses_to_delete_an_install_that_changed_after_copying() {
+    let source = source_with_body("# New\n");
+    let target = tempdir().unwrap();
+    let backups = tempdir().unwrap();
+    let hash = scan_skill(source.path()).unwrap().content_hash().to_owned();
+    let receipt = install_skill(InstallRequest {
+        source: source.path(),
+        target_root: target.path(),
+        backup_root: backups.path(),
+        destination_name: "new",
+        expected_content_hash: &hash,
+        mode: InstallMode::FailIfExists,
+    })
+    .unwrap();
+    fs::write(receipt.install_path().join("SKILL.md"), "# User change\n").unwrap();
+
+    assert!(matches!(
+        rollback_installation(&receipt),
+        Err(SkillInstallError::RollbackUnsafe)
+    ));
+    assert!(receipt.install_path().exists());
 }

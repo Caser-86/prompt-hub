@@ -59,3 +59,26 @@ fn rejects_a_skill_that_exceeds_the_file_limit() {
 
     assert!(error.to_string().contains("file limit"));
 }
+
+#[test]
+fn classifies_extensionless_hidden_and_non_utf8_files_without_missing_risks() {
+    let directory = tempdir().unwrap();
+    write_skill(directory.path(), "# Risk classification\n");
+    fs::create_dir(directory.path().join("scripts")).unwrap();
+    fs::write(
+        directory.path().join("scripts/run"),
+        "#!/bin/sh\nprintf unsafe",
+    )
+    .unwrap();
+    fs::write(directory.path().join(".hidden.ps1"), "Write-Output unsafe").unwrap();
+    fs::write(directory.path().join("opaque.bin"), [0xff, 0xfe, 0xfd]).unwrap();
+
+    let candidate = scan_skill(directory.path()).unwrap();
+
+    assert!(candidate.risks().contains(&SkillRisk::ContainsScript));
+    assert!(candidate.risks().contains(&SkillRisk::ContainsHiddenFile));
+    assert!(candidate.risks().contains(&SkillRisk::ContainsBinary));
+    assert!(candidate.files().iter().any(|file| {
+        file.relative_path() == "scripts/run" && file.kind() == SkillFileKind::Script
+    }));
+}

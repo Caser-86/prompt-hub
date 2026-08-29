@@ -35,4 +35,20 @@ fn git_skill_source_requires_a_public_https_github_url_and_fixed_commit() {
         )
         .is_err()
     );
+    assert!(
+        GitSkillSource::new(
+            "https://github.com/only-owner",
+            "0123456789abcdef0123456789abcdef01234567",
+            PathBuf::new()
+        )
+        .is_err()
+    );
+    assert!(
+        GitSkillSource::new(
+            "https://github.com/example/skills/extra",
+            "0123456789abcdef0123456789abcdef01234567",
+            PathBuf::new()
+        )
+        .is_err()
+    );
 }

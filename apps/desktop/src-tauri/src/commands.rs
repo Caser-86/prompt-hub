@@ -1328,7 +1328,7 @@ impl SkillService {
         })
         .map_err(|error| error.to_string())?;
         let now = OffsetDateTime::now_utc();
-        repository
+        if repository
             .record_installation(
                 id,
                 &input.target_root,
@@ -1340,7 +1340,16 @@ impl SkillService {
                     .as_deref(),
                 now,
             )
-            .map_err(|error| error.to_string())?;
+            .is_err()
+        {
+            prompt_skill::rollback_installation(&receipt).map_err(|_| {
+                "Skill installation record failed and automatic rollback could not be completed"
+                    .to_owned()
+            })?;
+            return Err(
+                "Skill installation record failed; file system changes were rolled back".to_owned(),
+            );
+        }
         Ok(SkillInstallationItem {
             install_path: receipt.install_path().display().to_string(),
             backup_path: receipt.backup_path().map(|path| path.display().to_string()),
