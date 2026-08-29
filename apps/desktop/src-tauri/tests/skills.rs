@@ -188,3 +188,31 @@ fn failed_installation_record_restores_the_previous_skill() {
         "# Old\n"
     );
 }
+
+#[test]
+fn invalid_git_candidate_is_rejected_before_creating_a_skill_asset() {
+    let backup_directory = tempdir().unwrap();
+    let snapshot_directory = tempdir().unwrap();
+    let service = SkillService::with_storage_roots(
+        Database::open_in_memory().unwrap().into_skill_repository(),
+        backup_directory.path().to_path_buf(),
+        snapshot_directory.path().to_path_buf(),
+    );
+
+    let error = service
+        .collect_git_candidate(prompt_hub_desktop_lib::commands::GitSkillCollectionInput {
+            repository_url: "https://github.com/owner-only".to_owned(),
+            commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            subdirectory: String::new(),
+        })
+        .unwrap_err();
+
+    assert!(error.contains("GitHub"));
+    assert!(service.list().unwrap().is_empty());
+    assert!(
+        fs::read_dir(snapshot_directory.path())
+            .unwrap()
+            .next()
+            .is_none()
+    );
+}
