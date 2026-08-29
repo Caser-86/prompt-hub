@@ -1,8 +1,6 @@
 use std::path::PathBuf;
 
-use prompt_hub_desktop_lib::bootstrap::{
-    BootstrapRuntime, BootstrapStatus, prepare_services,
-};
+use prompt_hub_desktop_lib::bootstrap::{BootstrapRuntime, BootstrapStatus, prepare_services};
 
 #[test]
 fn bootstrap_runtime_exposes_safe_recovery_status() {
