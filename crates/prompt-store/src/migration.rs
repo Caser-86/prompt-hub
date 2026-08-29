@@ -415,7 +415,9 @@ fn apply_migrations(
         transaction.pragma_update(None, "user_version", version)?;
     }
 
-    backfill_ledger(&transaction, legacy_prompt_usage)?;
+    if !has_ledger {
+        backfill_ledger(&transaction, legacy_prompt_usage)?;
+    }
     validate_latest_schema(&transaction)?;
     transaction.commit()?;
     Ok(())

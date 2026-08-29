@@ -20,6 +20,24 @@ fn initializes_and_reopens_the_latest_schema_idempotently() {
 }
 
 #[test]
+fn reopening_the_latest_schema_is_read_only_during_another_write_transaction() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("latest-read-only-open.db");
+    drop(Database::open(&path).unwrap());
+
+    let writer = Connection::open(&path).unwrap();
+    writer
+        .execute_batch("PRAGMA journal_mode = WAL; BEGIN IMMEDIATE;")
+        .unwrap();
+
+    let reopened = Database::open(&path)
+        .expect("opening a complete latest schema must not compete for a write lock");
+    assert_eq!(reopened.schema_version().unwrap(), LATEST_SCHEMA_VERSION);
+
+    writer.execute_batch("ROLLBACK;").unwrap();
+}
+
+#[test]
 fn creates_a_verified_backup_before_upgrading_an_existing_database() {
     let directory = tempdir().unwrap();
     let path = directory.path().join("legacy.db");
