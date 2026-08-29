@@ -6,6 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+jsonschema = "0.47.0"
 serde_json.workspace = true
 prompt-domain = { path = "../prompt-domain" }
 prompt-store = { path = "../prompt-store" }
@@ -13,5 +14,4 @@ time.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-jsonschema = "0.47.0"
 tempfile = "3.23.0"
