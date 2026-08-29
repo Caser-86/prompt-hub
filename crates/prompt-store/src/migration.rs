@@ -15,6 +15,8 @@ const IMPORT_JOBS_SCHEMA: &str = include_str!("../migrations/0004_import_jobs.sq
 const SKILLS_SCHEMA: &str = include_str!("../migrations/0005_skills.sql");
 const SKILL_SNAPSHOTS_SCHEMA: &str = include_str!("../migrations/0006_skill_snapshots.sql");
 const MIGRATION_LEDGER_SCHEMA: &str = include_str!("../migrations/0007_migration_ledger.sql");
+const PROMPT_METADATA_AND_USAGE_SCHEMA: &str =
+    include_str!("../migrations/0008_prompt_metadata_and_usage.sql");
 const MIGRATIONS: &[(u32, &str)] = &[
     (1, INITIAL_SCHEMA),
     (2, SEARCH_SCHEMA),
@@ -23,6 +25,7 @@ const MIGRATIONS: &[(u32, &str)] = &[
     (5, SKILLS_SCHEMA),
     (6, SKILL_SNAPSHOTS_SCHEMA),
     (7, MIGRATION_LEDGER_SCHEMA),
+    (8, PROMPT_METADATA_AND_USAGE_SCHEMA),
 ];
 
 const MIGRATION_IDS: &[(&str, &str)] = &[
@@ -33,6 +36,10 @@ const MIGRATION_IDS: &[(&str, &str)] = &[
     ("legacy/0005-skills", SKILLS_SCHEMA),
     ("legacy/0006-skill-snapshots", SKILL_SNAPSHOTS_SCHEMA),
     ("20260824_01_migration_ledger", MIGRATION_LEDGER_SCHEMA),
+    (
+        "20260829_01_prompt_metadata_and_usage",
+        PROMPT_METADATA_AND_USAGE_SCHEMA,
+    ),
 ];
 const LEGACY_PROMPT_USAGE_ID: &str = "legacy/0.1.2-prompt-usage";
 const LEGACY_PROMPT_USAGE_SQL: &str = "ALTER TABLE prompts ADD COLUMN last_used_at INTEGER;";
@@ -49,6 +56,8 @@ const REQUIRED_LATEST_SCHEMA: &[(&str, &[&str])] = &[
             "created_at",
             "updated_at",
             "deleted_at",
+            "imported_at",
+            "last_validated_at",
         ],
     ),
     (
@@ -88,6 +97,8 @@ const REQUIRED_LATEST_SCHEMA: &[(&str, &[&str])] = &[
             "name",
             "location",
             "collected_at",
+            "raw_excerpt",
+            "import_job_id",
         ],
     ),
     (
@@ -205,9 +216,10 @@ const REQUIRED_LATEST_SCHEMA: &[(&str, &[&str])] = &[
             "provenance",
         ],
     ),
+    ("prompt_usage", &["prompt_id", "use_count", "last_used_at"]),
 ];
 
-pub const LATEST_SCHEMA_VERSION: u32 = 7;
+pub const LATEST_SCHEMA_VERSION: u32 = 8;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MigrationLedgerEntry {

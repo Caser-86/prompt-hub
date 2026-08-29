@@ -263,6 +263,10 @@ pub struct PromptSource {
     name: String,
     location: Option<String>,
     collected_at: OffsetDateTime,
+    #[serde(default)]
+    raw_excerpt: Option<String>,
+    #[serde(default)]
+    import_job_id: Option<String>,
 }
 
 impl PromptSource {
@@ -283,7 +287,23 @@ impl PromptSource {
             name,
             location,
             collected_at,
+            raw_excerpt: None,
+            import_job_id: None,
         })
+    }
+
+    pub fn with_provenance(
+        kind: SourceKind,
+        name: impl Into<String>,
+        location: Option<String>,
+        collected_at: OffsetDateTime,
+        raw_excerpt: Option<String>,
+        import_job_id: Option<String>,
+    ) -> Result<Self, DomainError> {
+        let mut source = Self::new(kind, name, location, collected_at)?;
+        source.raw_excerpt = normalize_optional(raw_excerpt);
+        source.import_job_id = normalize_optional(import_job_id);
+        Ok(source)
     }
 
     #[must_use]
@@ -309,6 +329,16 @@ impl PromptSource {
     #[must_use]
     pub const fn collected_at(&self) -> OffsetDateTime {
         self.collected_at
+    }
+
+    #[must_use]
+    pub fn raw_excerpt(&self) -> Option<&str> {
+        self.raw_excerpt.as_deref()
+    }
+
+    #[must_use]
+    pub fn import_job_id(&self) -> Option<&str> {
+        self.import_job_id.as_deref()
     }
 }
 
@@ -491,6 +521,10 @@ pub struct Prompt {
     validations: Vec<ValidationRecord>,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
+    #[serde(default)]
+    imported_at: Option<OffsetDateTime>,
+    #[serde(default)]
+    last_validated_at: Option<OffsetDateTime>,
 }
 
 impl Prompt {
@@ -511,7 +545,21 @@ impl Prompt {
             validations: Vec::new(),
             created_at,
             updated_at: created_at,
+            imported_at: None,
+            last_validated_at: None,
         }
+    }
+
+    #[must_use]
+    pub fn new_imported_inbox(
+        content: PromptContent,
+        source: PromptSource,
+        actor: Actor,
+        imported_at: OffsetDateTime,
+    ) -> Self {
+        let mut prompt = Self::new_inbox(content, source, actor, imported_at);
+        prompt.imported_at = Some(imported_at);
+        prompt
     }
 
     pub fn publish(
@@ -615,6 +663,7 @@ impl Prompt {
         require_user_actor(actor)?;
         self.effectiveness = validation.status;
         self.validations.push(validation);
+        self.last_validated_at = self.validations.last().map(|entry| entry.validated_at);
         self.updated_at = updated_at;
         Ok(())
     }
@@ -647,6 +696,16 @@ impl Prompt {
     #[must_use]
     pub const fn updated_at(&self) -> OffsetDateTime {
         self.updated_at
+    }
+
+    #[must_use]
+    pub const fn imported_at(&self) -> Option<OffsetDateTime> {
+        self.imported_at
+    }
+
+    #[must_use]
+    pub const fn last_validated_at(&self) -> Option<OffsetDateTime> {
+        self.last_validated_at
     }
 
     #[must_use]

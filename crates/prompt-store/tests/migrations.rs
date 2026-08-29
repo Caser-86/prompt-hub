@@ -20,6 +20,31 @@ fn initializes_and_reopens_the_latest_schema_idempotently() {
 }
 
 #[test]
+fn latest_schema_keeps_source_evidence_and_usage_in_dedicated_tables() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("v8-metadata.db");
+    drop(Database::open(&path).expect("fresh database should migrate"));
+    let connection = Connection::open(path).unwrap();
+    let source_columns: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('prompt_sources') WHERE name IN ('raw_excerpt', 'import_job_id')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let usage_table: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'prompt_usage'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    assert_eq!(source_columns, 2);
+    assert_eq!(usage_table, 1);
+}
+
+#[test]
 fn reopening_the_latest_schema_is_read_only_during_another_write_transaction() {
     let directory = tempdir().unwrap();
     let path = directory.path().join("latest-read-only-open.db");
@@ -382,7 +407,7 @@ fn rejects_a_latest_version_database_with_an_empty_ledger() {
                 applied_at INTEGER NOT NULL,
                 provenance TEXT NOT NULL
              ) STRICT;
-             PRAGMA user_version = 7;",
+             PRAGMA user_version = 8;",
         )
         .unwrap();
     drop(connection);
@@ -424,7 +449,7 @@ fn rejects_a_database_from_a_future_schema_version() {
 
     let connection = Connection::open(&path).unwrap();
     connection
-        .execute_batch("PRAGMA user_version = 8;")
+        .execute_batch("PRAGMA user_version = 9;")
         .unwrap();
     drop(connection);
 
