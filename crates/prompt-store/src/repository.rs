@@ -289,7 +289,7 @@ impl PromptRepository {
              ON CONFLICT(prompt_id) DO UPDATE SET use_count = prompt_usage.use_count + 1, last_used_at = excluded.last_used_at",
             params![prompt_id, used_at.unix_timestamp()],
         )?;
-        let stats = usage_stats(&transaction, id)?;
+        let stats = usage_stats_for(&transaction, id)?;
         transaction.commit()?;
         Ok(stats)
     }
@@ -311,9 +311,32 @@ impl PromptRepository {
                 params![prompt_id, count],
             )?;
         }
-        let stats = usage_stats(&transaction, id)?;
+        let stats = usage_stats_for(&transaction, id)?;
         transaction.commit()?;
         Ok(stats)
+    }
+
+    pub fn usage_stats(&self, id: PromptId) -> Result<PromptUsageStats, StoreError> {
+        let found: Option<u8> = self
+            .connection
+            .query_row(
+                "SELECT 1 FROM prompts WHERE id = ?1",
+                [id.value().to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if found.is_none() {
+            return Err(StoreError::PromptMissing);
+        }
+        self.connection
+            .query_row(
+                "SELECT use_count, last_used_at FROM prompt_usage WHERE prompt_id = ?1",
+                [id.value().to_string()],
+                prompt_usage_from_row,
+            )
+            .optional()
+            .map(|value| value.unwrap_or_default())
+            .map_err(StoreError::from)
     }
 
     pub fn restore_from_backup(&mut self, backup_path: &std::path::Path) -> Result<(), StoreError> {
@@ -606,7 +629,7 @@ fn prompt_exists(transaction: &Transaction<'_>, prompt_id: &str) -> Result<bool,
     Ok(found.is_some())
 }
 
-fn usage_stats(
+fn usage_stats_for(
     transaction: &Transaction<'_>,
     id: PromptId,
 ) -> Result<PromptUsageStats, StoreError> {
@@ -614,23 +637,7 @@ fn usage_stats(
         .query_row(
             "SELECT use_count, last_used_at FROM prompt_usage WHERE prompt_id = ?1",
             [id.value().to_string()],
-            |row| {
-                let last_used_at = row
-                    .get::<_, Option<i64>>(1)?
-                    .map(OffsetDateTime::from_unix_timestamp)
-                    .transpose()
-                    .map_err(|error| {
-                        rusqlite::Error::FromSqlConversionFailure(
-                            1,
-                            rusqlite::types::Type::Integer,
-                            Box::new(error),
-                        )
-                    })?;
-                Ok(PromptUsageStats {
-                    use_count: row.get(0)?,
-                    last_used_at,
-                })
-            },
+            prompt_usage_from_row,
         )
         .optional()
         .map(|value| {
@@ -640,6 +647,33 @@ fn usage_stats(
             })
         })
         .map_err(StoreError::from)
+}
+
+impl Default for PromptUsageStats {
+    fn default() -> Self {
+        Self {
+            use_count: 0,
+            last_used_at: None,
+        }
+    }
+}
+
+fn prompt_usage_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PromptUsageStats> {
+    let last_used_at = row
+        .get::<_, Option<i64>>(1)?
+        .map(OffsetDateTime::from_unix_timestamp)
+        .transpose()
+        .map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+                1,
+                rusqlite::types::Type::Integer,
+                Box::new(error),
+            )
+        })?;
+    Ok(PromptUsageStats {
+        use_count: row.get(0)?,
+        last_used_at,
+    })
 }
 
 fn wire_value(value: &impl Serialize) -> Result<String, StoreError> {
