@@ -49,6 +49,48 @@ fn creates_a_verified_backup_before_upgrading_an_existing_database() {
 }
 
 #[test]
+fn pre_migration_backup_includes_committed_rows_still_in_the_wal() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("wal-legacy.db");
+    let writer = Connection::open(&path).unwrap();
+    for migration in [
+        include_str!("../migrations/0001_initial.sql"),
+        include_str!("../migrations/0002_search.sql"),
+        include_str!("../migrations/0003_favorites.sql"),
+        include_str!("../migrations/0004_import_jobs.sql"),
+    ] {
+        writer.execute_batch(migration).unwrap();
+    }
+    writer
+        .execute_batch(
+            "PRAGMA user_version = 4;
+             PRAGMA journal_mode = WAL;
+             PRAGMA wal_autocheckpoint = 0;
+             INSERT INTO prompts(
+                id, status, effectiveness, current_version, entity_json, created_at, updated_at, deleted_at
+             ) VALUES ('wal-prompt', 'inbox', 'unverified', 1, '{}', 1, 1, NULL);",
+        )
+        .unwrap();
+
+    let database = Database::open(&path).expect("a WAL database should migrate safely");
+    let backup = database
+        .migration_report()
+        .backup_path()
+        .expect("the WAL database needs a pre-migration backup");
+    let backup_database = Connection::open(backup).unwrap();
+    let preserved: i64 = backup_database
+        .query_row(
+            "SELECT COUNT(*) FROM prompts WHERE id = 'wal-prompt'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    assert_eq!(preserved, 1);
+    drop(writer);
+}
+
+#[test]
 fn upgrades_a_v2_database_with_the_favorites_migration() {
     let directory = tempdir().unwrap();
     let path = directory.path().join("v2.db");
@@ -372,7 +414,11 @@ fn rejects_a_database_from_a_future_schema_version() {
         Ok(_) => panic!("a future schema version must fail closed"),
         Err(error) => error,
     };
-    assert!(error.to_string().contains("newer than this application supports"));
+    assert!(
+        error
+            .to_string()
+            .contains("newer than this application supports")
+    );
 }
 
 #[test]
@@ -391,7 +437,11 @@ fn rejects_a_latest_schema_missing_a_required_table_without_recreating_it() {
         Ok(_) => panic!("a latest schema missing a required table must fail closed"),
         Err(error) => error,
     };
-    assert!(error.to_string().contains("required table prompt_favorites is missing"));
+    assert!(
+        error
+            .to_string()
+            .contains("required table prompt_favorites is missing")
+    );
 
     let unchanged = Connection::open(&path).unwrap();
     let favorites: i64 = unchanged
@@ -420,7 +470,11 @@ fn rejects_a_latest_schema_missing_a_critical_column() {
         Ok(_) => panic!("a latest schema missing a critical column must fail closed"),
         Err(error) => error,
     };
-    assert!(error.to_string().contains("required column skills.snapshot_path is missing"));
+    assert!(
+        error
+            .to_string()
+            .contains("required column skills.snapshot_path is missing")
+    );
 }
 
 #[test]

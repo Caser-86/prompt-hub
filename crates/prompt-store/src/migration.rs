@@ -81,7 +81,14 @@ const REQUIRED_LATEST_SCHEMA: &[(&str, &[&str])] = &[
     ),
     (
         "prompt_sources",
-        &["id", "prompt_id", "kind", "name", "location", "collected_at"],
+        &[
+            "id",
+            "prompt_id",
+            "kind",
+            "name",
+            "location",
+            "collected_at",
+        ],
     ),
     (
         "compatibilities",
@@ -97,7 +104,14 @@ const REQUIRED_LATEST_SCHEMA: &[(&str, &[&str])] = &[
     ),
     (
         "validation_records",
-        &["id", "prompt_id", "status", "rating", "notes", "validated_at"],
+        &[
+            "id",
+            "prompt_id",
+            "status",
+            "rating",
+            "notes",
+            "validated_at",
+        ],
     ),
     (
         "audit_events",
@@ -118,7 +132,14 @@ const REQUIRED_LATEST_SCHEMA: &[(&str, &[&str])] = &[
     ),
     (
         "prompt_fts",
-        &["prompt_id", "title", "body", "description", "tags", "variables"],
+        &[
+            "prompt_id",
+            "title",
+            "body",
+            "description",
+            "tags",
+            "variables",
+        ],
     ),
     ("prompt_favorites", &["prompt_id", "marked_at"]),
     (
@@ -177,7 +198,12 @@ const REQUIRED_LATEST_SCHEMA: &[(&str, &[&str])] = &[
     ),
     (
         "migration_ledger",
-        &["migration_id", "checksum_sha256", "applied_at", "provenance"],
+        &[
+            "migration_id",
+            "checksum_sha256",
+            "applied_at",
+            "provenance",
+        ],
     ),
 ];
 
@@ -331,7 +357,7 @@ fn backup_before_migration(
     let backup_path = path.with_extension(format!(
         "{extension}v{current_version}.pre-migration.{timestamp}.bak"
     ));
-    fs::copy(path, &backup_path)?;
+    crate::backup::copy_database(path, &backup_path)?;
 
     let backup = Connection::open(&backup_path)?;
     let integrity: String = backup.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
@@ -404,11 +430,7 @@ fn table_exists(connection: &Connection, name: &str) -> Result<bool, StoreError>
     Ok(count == 1)
 }
 
-fn column_exists(
-    connection: &Connection,
-    table: &str,
-    column: &str,
-) -> Result<bool, StoreError> {
+fn column_exists(connection: &Connection, table: &str, column: &str) -> Result<bool, StoreError> {
     let count: i64 = connection.query_row(
         "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
         rusqlite::params![table, column],
@@ -480,18 +502,16 @@ fn validate_ledger(connection: &Connection, current_version: u32) -> Result<(), 
     let mut recorded_ids = BTreeSet::new();
     for row in rows {
         let (migration_id, stored_checksum) = row?;
-        let expected_sql = if let Some((_, sql)) = MIGRATION_IDS
-            .iter()
-            .find(|(id, _)| *id == migration_id)
-        {
-            *sql
-        } else if migration_id == LEGACY_PROMPT_USAGE_ID {
-            LEGACY_PROMPT_USAGE_SQL
-        } else {
-            return Err(StoreError::UnsupportedSchema {
-                reason: format!("unknown migration id {migration_id}"),
-            });
-        };
+        let expected_sql =
+            if let Some((_, sql)) = MIGRATION_IDS.iter().find(|(id, _)| *id == migration_id) {
+                *sql
+            } else if migration_id == LEGACY_PROMPT_USAGE_ID {
+                LEGACY_PROMPT_USAGE_SQL
+            } else {
+                return Err(StoreError::UnsupportedSchema {
+                    reason: format!("unknown migration id {migration_id}"),
+                });
+            };
         if checksum(expected_sql) != stored_checksum {
             return Err(StoreError::MigrationChecksumConflict { migration_id });
         }
