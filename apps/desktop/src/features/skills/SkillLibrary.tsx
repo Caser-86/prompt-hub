@@ -113,6 +113,7 @@ export function SkillLibrary({ collectSkillFolder, collectGitSkill, getSkill, li
 
   const install = async () => {
     if (!selected || !installTarget.trim()) return;
+    if (replaceAfterBackup && !window.confirm("同名 Skill 将先创建备份，再替换为当前已审核版本。是否继续？")) return;
     setError(null);
     try {
       const result = await installSkill(selected.id, { targetRoot: installTarget.trim(), destinationName: selected.name, replaceAfterBackup });
@@ -130,6 +131,7 @@ export function SkillLibrary({ collectSkillFolder, collectGitSkill, getSkill, li
         <div><p className="eyebrow">SKILL REVIEW</p><h1 id="skill-detail-title">{selected.name}</h1></div>
         <button aria-label={selected.favorite ? `取消收藏 Skill：${selected.name}` : `收藏 Skill：${selected.name}`} className={`favorite-toggle${selected.favorite ? " is-favorite" : ""}`} onClick={() => void toggleFavorite(selected)} type="button">{selected.favorite ? <StarSolidIcon aria-hidden="true" /> : <StarIcon aria-hidden="true" />}</button>
       </header>
+      {error ? <p role="alert" className="skill-error">{error}</p> : null}
       <div className="skill-detail-grid">
         <article className="surface-card skill-markdown-card">
           <div className="skill-card-heading"><div><h2>Skill 正文</h2><p>仅供审核与复制；本页面不会执行脚本。</p></div><span className={`skill-status skill-status-${selected.reviewStatus}`}>{statusLabels[selected.reviewStatus]}</span></div>
