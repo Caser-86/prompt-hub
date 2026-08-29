@@ -376,6 +376,54 @@ fn rejects_a_database_from_a_future_schema_version() {
 }
 
 #[test]
+fn rejects_a_latest_schema_missing_a_required_table_without_recreating_it() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("missing-table.db");
+    drop(Database::open(&path).unwrap());
+
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute_batch("DROP TABLE prompt_favorites;")
+        .unwrap();
+    drop(connection);
+
+    let error = match Database::open(&path) {
+        Ok(_) => panic!("a latest schema missing a required table must fail closed"),
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("required table prompt_favorites is missing"));
+
+    let unchanged = Connection::open(&path).unwrap();
+    let favorites: i64 = unchanged
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'prompt_favorites'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(favorites, 0);
+}
+
+#[test]
+fn rejects_a_latest_schema_missing_a_critical_column() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("missing-column.db");
+    drop(Database::open(&path).unwrap());
+
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute_batch("ALTER TABLE skills DROP COLUMN snapshot_path;")
+        .unwrap();
+    drop(connection);
+
+    let error = match Database::open(&path) {
+        Ok(_) => panic!("a latest schema missing a critical column must fail closed"),
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("required column skills.snapshot_path is missing"));
+}
+
+#[test]
 fn restores_a_legacy_backup_only_after_migrating_it_to_the_current_schema() {
     let directory = tempdir().unwrap();
     let legacy_path = directory.path().join("legacy-v4.db");

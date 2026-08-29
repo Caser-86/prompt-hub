@@ -36,6 +36,150 @@ const MIGRATION_IDS: &[(&str, &str)] = &[
 ];
 const LEGACY_PROMPT_USAGE_ID: &str = "legacy/0.1.2-prompt-usage";
 const LEGACY_PROMPT_USAGE_SQL: &str = "ALTER TABLE prompts ADD COLUMN last_used_at INTEGER;";
+const REQUIRED_LATEST_SCHEMA: &[(&str, &[&str])] = &[
+    ("schema_migrations", &["version", "applied_at"]),
+    (
+        "prompts",
+        &[
+            "id",
+            "status",
+            "effectiveness",
+            "current_version",
+            "entity_json",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+        ],
+    ),
+    (
+        "prompt_versions",
+        &[
+            "prompt_id",
+            "version_number",
+            "version_id",
+            "title",
+            "body",
+            "description",
+            "content_json",
+            "actor",
+            "created_at",
+        ],
+    ),
+    ("categories", &["id", "name"]),
+    (
+        "prompt_version_categories",
+        &["prompt_id", "version_number", "category_id"],
+    ),
+    ("tags", &["id", "name"]),
+    (
+        "prompt_version_tags",
+        &["prompt_id", "version_number", "tag_id"],
+    ),
+    (
+        "prompt_version_variables",
+        &["prompt_id", "version_number", "name", "definition_json"],
+    ),
+    (
+        "prompt_sources",
+        &["id", "prompt_id", "kind", "name", "location", "collected_at"],
+    ),
+    (
+        "compatibilities",
+        &[
+            "id",
+            "prompt_id",
+            "tool",
+            "model",
+            "status",
+            "notes",
+            "confirmed_at",
+        ],
+    ),
+    (
+        "validation_records",
+        &["id", "prompt_id", "status", "rating", "notes", "validated_at"],
+    ),
+    (
+        "audit_events",
+        &["id", "prompt_id", "action", "actor", "occurred_at"],
+    ),
+    (
+        "import_jobs",
+        &[
+            "id",
+            "source_kind",
+            "status",
+            "started_at",
+            "completed_at",
+            "diagnostics_json",
+            "source_path",
+            "source_fingerprint",
+        ],
+    ),
+    (
+        "prompt_fts",
+        &["prompt_id", "title", "body", "description", "tags", "variables"],
+    ),
+    ("prompt_favorites", &["prompt_id", "marked_at"]),
+    (
+        "import_job_items",
+        &[
+            "id",
+            "job_id",
+            "source_path",
+            "body_fingerprint",
+            "title",
+            "outcome",
+            "warnings_json",
+            "error_message",
+            "prompt_id",
+            "recorded_at",
+        ],
+    ),
+    (
+        "skills",
+        &[
+            "id",
+            "name",
+            "description",
+            "tool_kind",
+            "source_kind",
+            "source_location",
+            "source_revision",
+            "content_hash",
+            "skill_markdown",
+            "risk_flags",
+            "review_status",
+            "review_notes",
+            "reviewed_at",
+            "favorite",
+            "created_at",
+            "updated_at",
+            "snapshot_path",
+        ],
+    ),
+    (
+        "skill_files",
+        &["skill_id", "relative_path", "bytes", "sha256", "kind"],
+    ),
+    (
+        "skill_installations",
+        &[
+            "id",
+            "skill_id",
+            "target_root",
+            "install_path",
+            "installed_hash",
+            "backup_path",
+            "installed_at",
+            "last_verified_at",
+        ],
+    ),
+    (
+        "migration_ledger",
+        &["migration_id", "checksum_sha256", "applied_at", "provenance"],
+    ),
+];
 
 pub const LATEST_SCHEMA_VERSION: u32 = 7;
 
@@ -246,6 +390,7 @@ fn apply_migrations(
     }
 
     backfill_ledger(&transaction, legacy_prompt_usage)?;
+    validate_latest_schema(&transaction)?;
     transaction.commit()?;
     Ok(())
 }
@@ -257,6 +402,37 @@ fn table_exists(connection: &Connection, name: &str) -> Result<bool, StoreError>
         |row| row.get(0),
     )?;
     Ok(count == 1)
+}
+
+fn column_exists(
+    connection: &Connection,
+    table: &str,
+    column: &str,
+) -> Result<bool, StoreError> {
+    let count: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
+        rusqlite::params![table, column],
+        |row| row.get(0),
+    )?;
+    Ok(count == 1)
+}
+
+fn validate_latest_schema(connection: &Connection) -> Result<(), StoreError> {
+    for (table, columns) in REQUIRED_LATEST_SCHEMA {
+        if !table_exists(connection, table)? {
+            return Err(StoreError::UnsupportedSchema {
+                reason: format!("required table {table} is missing"),
+            });
+        }
+        for column in *columns {
+            if !column_exists(connection, table, column)? {
+                return Err(StoreError::UnsupportedSchema {
+                    reason: format!("required column {table}.{column} is missing"),
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 fn has_supported_legacy_schema(connection: &Connection) -> Result<bool, StoreError> {
