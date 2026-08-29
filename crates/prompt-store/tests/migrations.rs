@@ -232,6 +232,11 @@ fn upgrades_the_legacy_v5_prompt_usage_schema_without_losing_usage_data() {
         )
         .unwrap();
     assert_eq!(last_used_at, 42);
+    drop(upgraded);
+
+    let reopened = Database::open(&path)
+        .expect("a recovered legacy prompt-usage database must reopen normally");
+    assert_eq!(reopened.schema_version().unwrap(), LATEST_SCHEMA_VERSION);
 }
 
 #[test]
@@ -302,6 +307,72 @@ fn rejects_an_unknown_migration_id_before_opening_the_database() {
         Err(error) => error,
     };
     assert!(error.to_string().contains("unknown migration id"));
+}
+
+#[test]
+fn rejects_a_latest_version_database_with_an_empty_ledger() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("empty-ledger.db");
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute_batch(
+            "CREATE TABLE migration_ledger(
+                migration_id TEXT PRIMARY KEY,
+                checksum_sha256 TEXT NOT NULL,
+                applied_at INTEGER NOT NULL,
+                provenance TEXT NOT NULL
+             ) STRICT;
+             PRAGMA user_version = 7;",
+        )
+        .unwrap();
+    drop(connection);
+
+    let error = match Database::open(&path) {
+        Ok(_) => panic!("an empty committed ledger must fail closed"),
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("migration ledger is incomplete"));
+}
+
+#[test]
+fn rejects_a_latest_version_database_with_a_missing_canonical_ledger_entry() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("incomplete-ledger.db");
+    drop(Database::open(&path).unwrap());
+
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute(
+            "DELETE FROM migration_ledger WHERE migration_id = ?1",
+            ["legacy/0004-import-jobs"],
+        )
+        .unwrap();
+    drop(connection);
+
+    let error = match Database::open(&path) {
+        Ok(_) => panic!("a missing canonical ledger entry must fail closed"),
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("migration ledger is incomplete"));
+}
+
+#[test]
+fn rejects_a_database_from_a_future_schema_version() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("future.db");
+    drop(Database::open(&path).unwrap());
+
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute_batch("PRAGMA user_version = 8;")
+        .unwrap();
+    drop(connection);
+
+    let error = match Database::open(&path) {
+        Ok(_) => panic!("a future schema version must fail closed"),
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("newer than this application supports"));
 }
 
 #[test]

@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -33,6 +34,8 @@ const MIGRATION_IDS: &[(&str, &str)] = &[
     ("legacy/0006-skill-snapshots", SKILL_SNAPSHOTS_SCHEMA),
     ("20260824_01_migration_ledger", MIGRATION_LEDGER_SCHEMA),
 ];
+const LEGACY_PROMPT_USAGE_ID: &str = "legacy/0.1.2-prompt-usage";
+const LEGACY_PROMPT_USAGE_SQL: &str = "ALTER TABLE prompts ADD COLUMN last_used_at INTEGER;";
 
 pub const LATEST_SCHEMA_VERSION: u32 = 7;
 
@@ -201,10 +204,18 @@ fn apply_migrations(
     let current_version =
         connection.pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))?;
 
+    if current_version > LATEST_SCHEMA_VERSION {
+        return Err(StoreError::UnsupportedSchema {
+            reason: format!(
+                "schema version {current_version} is newer than this application supports"
+            ),
+        });
+    }
+
     let has_ledger = table_exists(connection, "migration_ledger")?;
     let legacy_prompt_usage = current_version == 5 && has_legacy_prompt_usage_schema(connection)?;
     if has_ledger {
-        validate_ledger(connection)?;
+        validate_ledger(connection, current_version)?;
     } else if current_version > 0 && !has_supported_legacy_schema(connection)? {
         return Err(StoreError::UnsupportedSchema {
             reason: "required Prompt Hub tables are missing or ambiguous".to_owned(),
@@ -276,29 +287,52 @@ fn backfill_ledger(
             "INSERT OR IGNORE INTO migration_ledger(migration_id, checksum_sha256, applied_at, provenance)
              VALUES (?1, ?2, unixepoch(), 'legacy_recovery')",
             rusqlite::params![
-                "legacy/0.1.2-prompt-usage",
-                checksum("ALTER TABLE prompts ADD COLUMN last_used_at INTEGER;")
+                LEGACY_PROMPT_USAGE_ID,
+                checksum(LEGACY_PROMPT_USAGE_SQL)
             ],
         )?;
     }
     Ok(())
 }
 
-fn validate_ledger(connection: &Connection) -> Result<(), StoreError> {
+fn validate_ledger(connection: &Connection, current_version: u32) -> Result<(), StoreError> {
     let mut statement =
         connection.prepare("SELECT migration_id, checksum_sha256 FROM migration_ledger")?;
     let rows = statement.query_map([], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
     })?;
+    let mut recorded_ids = BTreeSet::new();
     for row in rows {
         let (migration_id, stored_checksum) = row?;
-        let Some((_, sql)) = MIGRATION_IDS.iter().find(|(id, _)| *id == migration_id) else {
+        let expected_sql = if let Some((_, sql)) = MIGRATION_IDS
+            .iter()
+            .find(|(id, _)| *id == migration_id)
+        {
+            *sql
+        } else if migration_id == LEGACY_PROMPT_USAGE_ID {
+            LEGACY_PROMPT_USAGE_SQL
+        } else {
             return Err(StoreError::UnsupportedSchema {
                 reason: format!("unknown migration id {migration_id}"),
             });
         };
-        if checksum(sql) != stored_checksum {
+        if checksum(expected_sql) != stored_checksum {
             return Err(StoreError::MigrationChecksumConflict { migration_id });
+        }
+        recorded_ids.insert(migration_id);
+    }
+
+    if current_version == LATEST_SCHEMA_VERSION {
+        let missing = MIGRATION_IDS
+            .iter()
+            .map(|(id, _)| *id)
+            .find(|id| !recorded_ids.contains(*id));
+        if let Some(migration_id) = missing {
+            return Err(StoreError::UnsupportedSchema {
+                reason: format!(
+                    "migration ledger is incomplete: missing canonical entry {migration_id}"
+                ),
+            });
         }
     }
     Ok(())
