@@ -24,6 +24,11 @@
 
 - URL 导入拒绝私网、本机、保留地址和不安全重定向。
 - 诊断与脱敏工具不输出密钥、授权头或提示词正文。
+- MCP 读取边界、Skill 审核/哈希校验、安装回滚和不可变 Git 快照已完成 Stage D/E 安全加固；验证记录见 [0.1.10 候选包与安全证据](docs/release-evidence/0.1.10/stage-de-security.md)。
+
+### 0.1.10 候选包
+
+- 已生成 NSIS/MSI Windows 候选包，记录 SHA-256 并完成 NSIS 安装、启动、卸载烟测；证据见 [packaging.md](docs/release-evidence/0.1.10/packaging.md)。
 
 ### Known limitations
 
