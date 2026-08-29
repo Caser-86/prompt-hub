@@ -7,8 +7,11 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            let data_directory = app.path().app_data_dir().unwrap_or_default();
-            app.manage(bootstrap::BootstrapRuntime::new(data_directory));
+            let runtime = match app.path().app_data_dir() {
+                Ok(data_directory) => bootstrap::BootstrapRuntime::new(data_directory),
+                Err(_) => bootstrap::BootstrapRuntime::unavailable(),
+            };
+            app.manage(runtime);
             let runtime = app.state::<bootstrap::BootstrapRuntime>();
             match bootstrap::prepare_services(&runtime) {
                 Ok(services) => bootstrap::attach_services(app.handle(), services),

@@ -27,16 +27,37 @@ pub struct BootstrapFailure {
 pub struct BootstrapRuntime {
     database_path: PathBuf,
     data_directory: PathBuf,
+    data_directory_available: bool,
     status: Mutex<BootstrapStatus>,
 }
 
 impl BootstrapRuntime {
     #[must_use]
     pub fn new(data_directory: PathBuf) -> Self {
+        if data_directory.as_os_str().is_empty() {
+            return Self::unavailable();
+        }
         Self {
             database_path: data_directory.join("prompt-hub.db"),
             data_directory,
+            data_directory_available: true,
             status: Mutex::new(ready_status()),
+        }
+    }
+
+    #[must_use]
+    pub fn unavailable() -> Self {
+        let failure = data_directory_failure();
+        Self {
+            database_path: PathBuf::new(),
+            data_directory: PathBuf::new(),
+            data_directory_available: false,
+            status: Mutex::new(BootstrapStatus {
+                state: "recovery".to_owned(),
+                code: Some(failure.code),
+                safe_message: Some(failure.safe_message),
+                backup_name: failure.backup_name,
+            }),
         }
     }
 
@@ -48,6 +69,7 @@ impl BootstrapRuntime {
         Self {
             database_path,
             data_directory,
+            data_directory_available: true,
             status: Mutex::new(ready_status()),
         }
     }
@@ -96,6 +118,11 @@ impl BootstrapRuntime {
     pub fn data_directory(&self) -> &Path {
         &self.data_directory
     }
+
+    #[must_use]
+    pub const fn data_directory_available(&self) -> bool {
+        self.data_directory_available
+    }
 }
 
 pub struct BootstrapServices {
@@ -107,6 +134,9 @@ pub struct BootstrapServices {
 }
 
 pub fn prepare_services(runtime: &BootstrapRuntime) -> Result<BootstrapServices, BootstrapFailure> {
+    if !runtime.data_directory_available() {
+        return Err(data_directory_failure());
+    }
     let data_directory = runtime.data_directory().to_path_buf();
     let database_path = runtime.database_path().to_path_buf();
     let database = prompt_store::Database::open(&database_path).map_err(|_| migration_failure())?;
@@ -147,6 +177,15 @@ pub fn migration_failure() -> BootstrapFailure {
     BootstrapFailure {
         code: "migration_failed".to_owned(),
         safe_message: "本地数据升级失败，原数据未被替换。请重试或导出诊断信息。".to_owned(),
+        backup_name: None,
+    }
+}
+
+#[must_use]
+pub fn data_directory_failure() -> BootstrapFailure {
+    BootstrapFailure {
+        code: "data_directory_unavailable".to_owned(),
+        safe_message: "无法确定应用数据目录，未打开本地数据库。请重新启动后重试。".to_owned(),
         backup_name: None,
     }
 }
