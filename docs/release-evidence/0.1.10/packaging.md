@@ -43,7 +43,7 @@ pnpm --filter @prompt-hub/desktop exec tauri build
 ## NSIS 安装/启动/卸载烟测
 
 在隔离临时目录
-`C:\Users\MR\AppData\Local\Temp\PromptHub-install-smoke-0.1.10-20260830`
+`C:\Users\MR\AppData\Local\Temp\PromptHub-install-smoke-0.1.10-20260830-r2`
 执行静默安装、启动和卸载：
 
 | 检查 | 结果 |
