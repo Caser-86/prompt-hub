@@ -33,6 +33,7 @@ Scope: MCP published/inbox authority, controlled Skill installation, and immutab
 - `bd62113` — Skill scan classification, install rollback, and Git process/resource hardening.
 - `e589bf0` — opt-in real public immutable Git snapshot verification.
 - `e26fbed` — Skill end-to-end review, conflict, confirmation, replacement, and text-only preview coverage.
+- `18f6520` — invalid Git candidates are rejected before Skill persistence.
 
 ## Commands run
 
@@ -44,7 +45,7 @@ Scope: MCP published/inbox authority, controlled Skill installation, and immutab
 | `pnpm test` | PASS — contracts 22, desktop 61 |
 | `cargo fmt --check` | PASS |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
-| `cargo test --workspace` | PASS — only the explicit performance/network tests remain ignored by default |
+| `cargo test --workspace` | PASS — only the explicit performance/network tests remain ignored by default; Skill service suite now 6 tests |
 | `pnpm --filter @prompt-hub/desktop build` | PASS |
 | `cargo test -p prompt-skill --test git snapshots_a_real_public_skill_at_an_immutable_commit_without_checkout -- --ignored --exact` | PASS against `openai/skills` commit `49f948faa9258a0c61caceaf225e179651397431` |
 | `pnpm exec playwright test --reporter=line` | PASS — 4 tests, including the Skill workflow |
