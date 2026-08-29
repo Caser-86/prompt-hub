@@ -2,7 +2,7 @@
 
 日期：2026-08-30  
 分支：`codex/legacy-v5-schema-recovery`  
-源码提交：`7e1f671f7a2ccaee7680fb9ebd06daff6f262ca2`  
+源码提交：`f68b59281a435f87b29958ff32881f3b208b62df`
 通道：`candidate`（自用内部候选包，不是公开正式发布包）
 
 ## 构建元数据
@@ -35,8 +35,8 @@ pnpm --filter @prompt-hub/desktop exec tauri build
 
 | 包 | 大小（字节） | SHA-256 | 签名状态 |
 | --- | ---: | --- | --- |
-| `target/release/bundle/nsis/Prompt Hub_0.1.10_x64-setup.exe` | 3,690,354 | `a1197e9c1e5880c24c8e8a878c1548dd5c328fce620b9c2960a6c1d87a916ac0` | `NotSigned` |
-| `target/release/bundle/msi/Prompt Hub_0.1.10_x64_en-US.msi` | 4,964,352 | `5cf4597b9e1c41088970340930fce96025ac4a13736f5bf25987656db04eddef` | `NotSigned` |
+| `target/release/bundle/nsis/Prompt Hub_0.1.10_x64-setup.exe` | 3,691,936 | `03f603119fd875170f2e6ccb0f095db936686023129b54860abe2f3326372fea` | `NotSigned` |
+| `target/release/bundle/msi/Prompt Hub_0.1.10_x64_en-US.msi` | 4,964,352 | `f5263bd218208933568be6bfde3c3a658e91b5baa2e933f1c3a61d080eac99aa` | `NotSigned` |
 
 对应校验清单：`target/release/bundle/SHA256SUMS.txt`。签名检查使用 PowerShell `Get-AuthenticodeSignature`，两个包均无签名证书，因此只能作为本地候选包使用。
 
