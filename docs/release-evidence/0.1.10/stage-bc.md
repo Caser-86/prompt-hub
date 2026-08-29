@@ -14,6 +14,7 @@ Scope: durable prompt metadata/use history and offline workflow closure.
 
 | Command | Result |
 | --- | --- |
+| `pnpm install --frozen-lockfile` | PASS — lockfile and workspace dependencies are current |
 | `cargo test -p prompt-domain` | PASS — 10 tests |
 | `cargo test -p prompt-store --test migrations --test repository` | PASS — 32 tests (21 migration, 11 repository) |
 | `cargo test -p prompt-hub-desktop --test prompt_workflow` | PASS — 13 tests |
@@ -25,6 +26,8 @@ Scope: durable prompt metadata/use history and offline workflow closure.
 | `cargo test --workspace` | PASS — ignored baseline test remains explicitly ignored |
 | `pnpm --filter @prompt-hub/desktop build` | PASS — Vite production build |
 | `pnpm exec playwright test tests/e2e/offline-library.spec.ts --reporter=line` | PASS — 1 test |
+
+The desktop Vitest suite still prints React `act(...)` warnings from the existing `App` tests; they are warnings only and do not indicate failed assertions. No test or build command failed in this gate run.
 
 ## Real workflow coverage
 

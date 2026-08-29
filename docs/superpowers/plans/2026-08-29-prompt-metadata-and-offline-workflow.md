@@ -36,11 +36,11 @@
 - Produce `PromptRepository::{record_use,usage_stats,merge_legacy_usage}` returning `PromptUsageStats { use_count, last_used_at }`.
 - Produce schema version 8 with source evidence and prompt time columns.
 
-- [ ] Write tests that reject an oversized source excerpt, migrate a v7 fixture to v8, atomically increment usage, and retain the maximum imported legacy count.
-- [ ] Run `cargo test -p prompt-store --test migrations --test repository` and observe missing v8 columns/APIs.
-- [ ] Add the v8 SQL, manifest entry, source model fields, timestamp persistence, and usage repository implementation.
-- [ ] Run the focused tests, then `cargo test -p prompt-domain -p prompt-store`.
-- [ ] Commit `feat(store): persist prompt provenance and usage`.
+- [x] Write tests that reject an oversized source excerpt, migrate a v7 fixture to v8, atomically increment usage, and retain the maximum imported legacy count.
+- [x] Run the focused store/domain tests and observe the expected pre-implementation failures before adding the v8 APIs.
+- [x] Add the v8 SQL, manifest entry, source model fields, timestamp persistence, and usage repository implementation.
+- [x] Run the focused tests, then `cargo test -p prompt-domain -p prompt-store`.
+- [x] Commit `feat(store): persist prompt provenance and usage` (`d8c6bcb`).
 
 ### Task 2: Expose metadata and use persistence through desktop commands
 
@@ -54,11 +54,11 @@
 - Extend `PromptListItem` source evidence with `rawExcerpt`, `importJobId`, `importedAt`, `lastValidatedAt`, `useCount`, and `lastUsedAt`.
 - Produce `recordPromptUse(id)` and `migrateLegacyPromptUsage(entries)` Tauri commands and command-client methods.
 
-- [ ] Write failing command/service tests for imported source provenance, validation timestamp, use recording, and one-time legacy usage merge.
-- [ ] Run `cargo test -p prompt-hub-desktop --test prompt_workflow` and contract tests to observe missing API fields.
-- [ ] Add the minimal command/service/contract mapping, preserving all MCP restrictions.
-- [ ] Run focused Rust and TypeScript tests.
-- [ ] Commit `feat(desktop): expose durable prompt usage metadata`.
+- [x] Write failing command/service tests for imported source provenance, validation timestamp, use recording, and one-time legacy usage merge.
+- [x] Run the workflow and contract tests against the pre-implementation boundary.
+- [x] Add the minimal command/service/contract mapping, preserving all MCP restrictions.
+- [x] Run focused Rust and TypeScript tests.
+- [x] Commit `feat(desktop): expose durable prompt usage metadata` (`ade5beb`).
 
 ### Task 3: Replace browser-only usage sorting and separate copy/export metadata
 
@@ -77,11 +77,11 @@
 - `filterAndSortPrompts(prompts, filter, sort)` consumes `useCount` and `lastUsedAt` from the contract.
 - `PromptContentActions` accepts `metadataExport` separately from `body`; default export is body-only.
 
-- [ ] Write failing UI tests for each sort order, persisted use callback, one-time legacy transfer, copy body-only, and explicit metadata export.
-- [ ] Run the focused Vitest tests and observe the old localStorage-only behavior.
-- [ ] Implement the minimal UI/client changes and remove writes to the legacy counter after successful migration.
-- [ ] Run focused tests, `pnpm lint`, and `pnpm typecheck`.
-- [ ] Commit `feat(ui): use persisted library usage and explicit metadata export`.
+- [x] Write failing UI tests for each sort order, persisted use callback, one-time legacy transfer, copy body-only, and explicit metadata export.
+- [x] Run the focused Vitest tests against the old localStorage-only behavior.
+- [x] Implement the minimal UI/client changes and remove writes to the legacy counter after successful migration.
+- [x] Run focused tests, `pnpm lint`, and `pnpm typecheck`.
+- [x] Commit `feat(ui): use persisted library usage and explicit metadata export` (implemented with the desktop metadata commit `ade5beb`).
 
 ### Task 4: Verify the offline workflow at real persistence boundaries
 
@@ -94,18 +94,18 @@
 - Real desktop service fixture covers create, TXT/MD/JSON/CSV import, invalid input, duplicate input, inbox publish, search, validation, use, favourite, backup/restore, delete/recover, and restart.
 - Browser test covers library sorting/filtering, copy/export boundary, and bridge command invocation.
 
-- [ ] Write focused failing workflow cases for the missing acceptance criteria and run the relevant test target.
-- [ ] Add only the fixture helpers and implementation corrections needed to make the real path pass.
-- [ ] Run `cargo test -p prompt-hub-desktop --test prompt_workflow`, `pnpm test`, and `pnpm exec playwright test tests/e2e/offline-library.spec.ts`.
-- [ ] Record commands and factual outcomes in Stage B/C evidence.
-- [ ] Commit `test: verify offline prompt workflow`.
+- [x] Write focused failing workflow cases for the missing acceptance criteria and run the relevant test target.
+- [x] Add only the fixture helpers and implementation corrections needed to make the real path pass.
+- [x] Run `cargo test -p prompt-hub-desktop --test prompt_workflow`, `pnpm test`, and `pnpm exec playwright test tests/e2e/offline-library.spec.ts`.
+- [x] Record commands and factual outcomes in Stage B/C evidence.
+- [x] Commit `test: verify offline prompt workflow` (`013122d`).
 
 ### Task 5: Full review and verification
 
 **Files:**
 - Modify: `docs/release-evidence/0.1.10/stage-bc.md`
 
-- [ ] Inspect diffs for migration-ID reuse, provenance placed in body, browser-only usage writes, raw prompt logging, and MCP mutations outside the inbox.
-- [ ] Run the AGENTS.md verification commands exactly, including desktop build.
-- [ ] Record all pass/fail evidence without claiming unrun installer smoke tests.
-- [ ] Commit `docs: record stage b and c verification`.
+- [x] Inspect diffs for migration-ID reuse, provenance placed in body, browser-only usage writes, raw prompt logging, and MCP mutations outside the inbox.
+- [x] Run the AGENTS.md verification commands exactly, including desktop build.
+- [x] Record all pass/fail evidence without claiming unrun installer smoke tests.
+- [x] Commit `docs: record stage b and c verification` (`013122d` includes the evidence update).
