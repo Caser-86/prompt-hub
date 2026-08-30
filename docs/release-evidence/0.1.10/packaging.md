@@ -35,8 +35,8 @@ pnpm --filter @prompt-hub/desktop exec tauri build
 
 | 包 | 大小（字节） | SHA-256 | 签名状态 |
 | --- | ---: | --- | --- |
-| `target/release/bundle/nsis/Prompt Hub_0.1.10_x64-setup.exe` | 3,691,658 | `82e35ba142f4d936de623691eed598aed95fce9934e3d29a6b10601584923fe7` | `NotSigned` |
-| `target/release/bundle/msi/Prompt Hub_0.1.10_x64_en-US.msi` | 6,578,176 | `6a3cbb29731fa3b0a94cb25986607bdee61ea42d744e59bc0223ef8d37f50b35` | `NotSigned` |
+| `target/release/bundle/nsis/Prompt Hub_0.1.10_x64-setup.exe` | 3,692,928 | `dbf628f5984595dc2fd1cb55423bb8d65f1b7aead807cf62053523501340ba57` | `NotSigned` |
+| `target/release/bundle/msi/Prompt Hub_0.1.10_x64_en-US.msi` | 6,578,176 | `34823887c23fe4c8b031548d5f054def370c33d42acd70fac45a7b966cfcc703` | `NotSigned` |
 
 对应校验清单：`target/release/bundle/SHA256SUMS.txt`。签名检查使用 PowerShell `Get-AuthenticodeSignature`，两个包均无签名证书，因此只能作为本地候选包使用。
 
@@ -51,7 +51,7 @@ MCP sidecar 单独构建于 `target/release/prompt-mcp.exe`（8,160,768 字节�
 ## NSIS 安装/启动/卸载烟测
 
 在隔离临时目录
-`C:\Users\MR\AppData\Local\Temp\PromptHub-install-smoke-0.1.10-r3-beca3724a271415eb68c5db70d36285e`
+`C:\Users\MR\AppData\Local\Temp\PromptHub-install-smoke-0.1.10-r4-d98a316b69624a0c9660d9ac1aa1143e`
 执行静默安装、启动和卸载：
 
 | 检查 | 结果 |
