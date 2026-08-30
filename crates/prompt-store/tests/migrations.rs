@@ -66,6 +66,10 @@ fn upgrades_a_v7_database_to_the_metadata_and_usage_schema() {
     drop(connection);
     let upgraded = Database::open(&path).unwrap();
     assert_eq!(upgraded.schema_version().unwrap(), LATEST_SCHEMA_VERSION);
+    drop(upgraded);
+    let reopened = Database::open(&path)
+        .expect("an upgraded v7 database must reopen with a complete migration ledger");
+    assert_eq!(reopened.schema_version().unwrap(), LATEST_SCHEMA_VERSION);
 }
 
 #[test]
@@ -471,6 +475,33 @@ fn rejects_a_latest_version_database_with_a_missing_canonical_ledger_entry() {
         Err(error) => error,
     };
     assert!(error.to_string().contains("migration ledger is incomplete"));
+}
+
+#[test]
+fn repairs_a_known_missing_metadata_ledger_entry_without_rewriting_data() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("missing-metadata-ledger.db");
+    let database = Database::open(&path).unwrap();
+    drop(database);
+
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute(
+            "DELETE FROM migration_ledger WHERE migration_id = ?1",
+            ["20260829_01_prompt_metadata_and_usage"],
+        )
+        .unwrap();
+    drop(connection);
+
+    let reopened =
+        Database::open(&path).expect("the known v8 ledger omission should be repaired safely");
+    assert!(
+        reopened
+            .migration_ledger()
+            .unwrap()
+            .iter()
+            .any(|entry| entry.migration_id() == "20260829_01_prompt_metadata_and_usage")
+    );
 }
 
 #[test]

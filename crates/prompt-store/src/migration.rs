@@ -43,6 +43,7 @@ const MIGRATION_IDS: &[(&str, &str)] = &[
 ];
 const LEGACY_PROMPT_USAGE_ID: &str = "legacy/0.1.2-prompt-usage";
 const LEGACY_PROMPT_USAGE_SQL: &str = "ALTER TABLE prompts ADD COLUMN last_used_at INTEGER;";
+const PROMPT_METADATA_AND_USAGE_ID: &str = "20260829_01_prompt_metadata_and_usage";
 const REQUIRED_LATEST_SCHEMA: &[(&str, &[&str])] = &[
     ("schema_migrations", &["version", "applied_at"]),
     (
@@ -397,6 +398,7 @@ fn apply_migrations(
     let has_ledger = table_exists(connection, "migration_ledger")?;
     let legacy_prompt_usage = current_version == 5 && has_legacy_prompt_usage_schema(connection)?;
     if has_ledger {
+        repair_known_metadata_ledger_omission(connection, current_version)?;
         validate_ledger(connection, current_version)?;
     } else if current_version > 0 && !has_supported_legacy_schema(connection)? {
         return Err(StoreError::UnsupportedSchema {
@@ -425,6 +427,29 @@ fn apply_migrations(
             [version],
         )?;
         transaction.pragma_update(None, "user_version", version)?;
+    }
+
+    // Databases that already had the ledger must record every newly applied
+    // canonical migration as part of the same transaction. Older builds
+    // omitted this row for the v8 metadata migration, which made the next
+    // startup reject an otherwise complete database.
+    if has_ledger {
+        for (version, sql) in migrations
+            .iter()
+            .copied()
+            .filter(|(version, _)| *version > current_version)
+        {
+            if let Some((migration_id, _)) = MIGRATION_IDS
+                .iter()
+                .find(|(migration_id, _)| migration_id_version(migration_id) == version)
+            {
+                transaction.execute(
+                    "INSERT OR IGNORE INTO migration_ledger(migration_id, checksum_sha256, applied_at, provenance)
+                     VALUES (?1, ?2, unixepoch(), 'canonical')",
+                    rusqlite::params![migration_id, checksum(sql)],
+                )?;
+            }
+        }
     }
 
     if !has_ledger {
@@ -515,6 +540,14 @@ fn backfill_ledger(
 }
 
 fn validate_ledger(connection: &Connection, current_version: u32) -> Result<(), StoreError> {
+    validate_ledger_with_allowed_missing(connection, current_version, None)
+}
+
+fn validate_ledger_with_allowed_missing(
+    connection: &Connection,
+    current_version: u32,
+    allowed_missing: Option<&str>,
+) -> Result<(), StoreError> {
     let mut statement =
         connection.prepare("SELECT migration_id, checksum_sha256 FROM migration_ledger")?;
     let rows = statement.query_map([], |row| {
@@ -544,7 +577,7 @@ fn validate_ledger(connection: &Connection, current_version: u32) -> Result<(), 
             .iter()
             .map(|(id, _)| *id)
             .find(|id| !recorded_ids.contains(*id));
-        if let Some(migration_id) = missing {
+        if let Some(migration_id) = missing.filter(|id| Some(*id) != allowed_missing) {
             return Err(StoreError::UnsupportedSchema {
                 reason: format!(
                     "migration ledger is incomplete: missing canonical entry {migration_id}"
@@ -553,6 +586,57 @@ fn validate_ledger(connection: &Connection, current_version: u32) -> Result<(), 
         }
     }
     Ok(())
+}
+
+fn repair_known_metadata_ledger_omission(
+    connection: &mut Connection,
+    current_version: u32,
+) -> Result<(), StoreError> {
+    if current_version != LATEST_SCHEMA_VERSION
+        || !table_exists(connection, "migration_ledger")?
+        || !table_exists(connection, "prompt_usage")?
+    {
+        return Ok(());
+    }
+
+    let missing: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM migration_ledger WHERE migration_id = ?1",
+        [PROMPT_METADATA_AND_USAGE_ID],
+        |row| row.get(0),
+    )?;
+    if missing != 0 {
+        return Ok(());
+    }
+
+    // Only backfill this one known omission after the complete v8 shape and
+    // every other ledger entry have passed validation. Any unrelated gap,
+    // unknown migration, checksum conflict, or schema damage still fails
+    // closed below.
+    validate_latest_schema(connection)?;
+    validate_ledger_with_allowed_missing(
+        connection,
+        current_version,
+        Some(PROMPT_METADATA_AND_USAGE_ID),
+    )?;
+
+    let transaction = connection.transaction()?;
+    transaction.execute(
+        "INSERT INTO migration_ledger(migration_id, checksum_sha256, applied_at, provenance)
+         VALUES (?1, ?2, unixepoch(), 'legacy_recovery')",
+        rusqlite::params![
+            PROMPT_METADATA_AND_USAGE_ID,
+            checksum(PROMPT_METADATA_AND_USAGE_SCHEMA)
+        ],
+    )?;
+    transaction.commit()?;
+    Ok(())
+}
+
+fn migration_id_version(migration_id: &str) -> u32 {
+    MIGRATION_IDS
+        .iter()
+        .position(|(id, _)| *id == migration_id)
+        .map_or(0, |index| index as u32 + 1)
 }
 
 fn has_legacy_prompt_usage_schema(connection: &Connection) -> Result<bool, StoreError> {
