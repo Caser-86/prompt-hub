@@ -505,6 +505,50 @@ fn repairs_a_known_missing_metadata_ledger_entry_without_rewriting_data() {
 }
 
 #[test]
+fn refuses_to_commit_a_latest_upgrade_when_an_older_ledger_entry_is_missing() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("incomplete-legacy-ledger.db");
+    drop(Database::open(&path).unwrap());
+
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute(
+            "DELETE FROM migration_ledger WHERE migration_id = ?1",
+            ["legacy/0006-skill-snapshots"],
+        )
+        .unwrap();
+    connection
+        .execute_batch(
+            "DROP INDEX idx_prompt_usage_last_used_at;
+             DROP TABLE prompt_usage;
+             ALTER TABLE prompt_sources DROP COLUMN raw_excerpt;
+             ALTER TABLE prompt_sources DROP COLUMN import_job_id;
+             ALTER TABLE prompts DROP COLUMN imported_at;
+             ALTER TABLE prompts DROP COLUMN last_validated_at;
+             DELETE FROM migration_ledger WHERE migration_id = '20260829_01_prompt_metadata_and_usage';
+             DELETE FROM schema_migrations WHERE version = 8;
+             PRAGMA user_version = 7;",
+        )
+        .unwrap();
+    drop(connection);
+
+    let error = match Database::open(&path) {
+        Ok(_) => panic!("incomplete legacy ledger must fail closed"),
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("migration ledger is incomplete"));
+
+    let connection = Connection::open(&path).unwrap();
+    let version: u32 = connection
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .unwrap();
+    assert_eq!(
+        version, 7,
+        "failed upgrade must not commit a partial schema"
+    );
+}
+
+#[test]
 fn rejects_a_database_from_a_future_schema_version() {
     let directory = tempdir().unwrap();
     let path = directory.path().join("future.db");

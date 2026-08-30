@@ -463,6 +463,12 @@ fn apply_migrations(
         )?;
     }
     validate_latest_schema(&transaction)?;
+    if has_ledger {
+        // Validate the post-migration ledger before committing. This prevents
+        // an already-incomplete legacy ledger from being upgraded into a
+        // seemingly healthy v8 database that only fails on its next startup.
+        validate_ledger(&transaction, LATEST_SCHEMA_VERSION)?;
+    }
     transaction.commit()?;
     Ok(())
 }
