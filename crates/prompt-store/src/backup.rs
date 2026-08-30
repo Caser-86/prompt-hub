@@ -199,7 +199,7 @@ fn backup_metadata(
     })
 }
 
-fn copy_database(source: &Path, target: &Path) -> Result<(), StoreError> {
+pub(crate) fn copy_database(source: &Path, target: &Path) -> Result<(), StoreError> {
     let source_connection = Connection::open(source)?;
     let mut target_connection = Connection::open(target)?;
     Backup::new(&source_connection, &mut target_connection)?.run_to_completion(

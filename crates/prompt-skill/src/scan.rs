@@ -251,16 +251,8 @@ fn collect_files(
             return Err(SkillScanError::TotalSizeLimit);
         }
         let content = fs::read(&path)?;
-        let kind = classify_file(&relative_path, &content);
-        if is_hidden_path(&relative_path) {
-            risks.insert(SkillRisk::ContainsHiddenFile);
-        }
-        if is_script_path(&relative_path) {
-            risks.insert(SkillRisk::ContainsScript);
-        }
-        if content.contains(&0) {
-            risks.insert(SkillRisk::ContainsBinary);
-        }
+        let (kind, file_risks) = classify_file(&relative_path, &content);
+        risks.extend(file_risks);
         let digest = Sha256::digest(content);
         files.push(SkillFile {
             relative_path,
@@ -287,38 +279,65 @@ fn relative_path(root: &Path, path: &Path) -> Result<String, SkillScanError> {
     Ok(relative.to_string_lossy().replace('\\', "/"))
 }
 
-fn classify_file(relative_path: &str, content: &[u8]) -> SkillFileKind {
+fn classify_file(relative_path: &str, content: &[u8]) -> (SkillFileKind, BTreeSet<SkillRisk>) {
     if relative_path == "SKILL.md" {
-        return SkillFileKind::SkillMarkdown;
+        return (SkillFileKind::SkillMarkdown, BTreeSet::new());
     }
-    if is_hidden_path(relative_path) {
-        return SkillFileKind::Hidden;
-    }
-    if is_script_path(relative_path) {
-        return SkillFileKind::Script;
-    }
-    if content.contains(&0) {
-        return SkillFileKind::Binary;
-    }
-    SkillFileKind::Text
-}
-
-fn is_hidden_path(relative_path: &str) -> bool {
-    relative_path
+    let hidden = relative_path
         .split('/')
-        .any(|segment| segment.starts_with('.'))
-}
-
-fn is_script_path(relative_path: &str) -> bool {
-    matches!(
-        PathBuf::from(relative_path)
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .unwrap_or_default()
-            .to_ascii_lowercase()
-            .as_str(),
-        "ps1" | "bat" | "cmd" | "sh" | "py" | "js" | "mjs" | "cjs"
-    )
+        .any(|segment| segment.starts_with('.'));
+    let scripts_directory = relative_path
+        .split('/')
+        .any(|segment| segment.eq_ignore_ascii_case("scripts"));
+    let extension = PathBuf::from(relative_path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let script = scripts_directory
+        || content.starts_with(b"#!")
+        || matches!(
+            extension.as_str(),
+            "ps1"
+                | "bat"
+                | "cmd"
+                | "sh"
+                | "bash"
+                | "zsh"
+                | "fish"
+                | "py"
+                | "js"
+                | "mjs"
+                | "cjs"
+                | "ts"
+                | "tsx"
+                | "jsx"
+                | "rb"
+                | "pl"
+                | "php"
+                | "lua"
+        );
+    let binary = content.contains(&0) || std::str::from_utf8(content).is_err();
+    let mut risks = BTreeSet::new();
+    if script {
+        risks.insert(SkillRisk::ContainsScript);
+    }
+    if binary {
+        risks.insert(SkillRisk::ContainsBinary);
+    }
+    if hidden {
+        risks.insert(SkillRisk::ContainsHiddenFile);
+    }
+    let kind = if script {
+        SkillFileKind::Script
+    } else if binary {
+        SkillFileKind::Binary
+    } else if hidden {
+        SkillFileKind::Hidden
+    } else {
+        SkillFileKind::Text
+    };
+    (kind, risks)
 }
 
 fn parse_metadata(markdown: &str, root: &Path) -> (String, String) {

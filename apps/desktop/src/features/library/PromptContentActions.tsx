@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ClipboardDocumentIcon, EllipsisHorizontalIcon } from "@heroicons/react/24/outline";
 
-export function PromptContentActions({ body, onUsed, title }: { body: string; onUsed?: () => void; title: string }) {
+export function PromptContentActions({ body, metadataExport, onUsed, title }: { body: string; metadataExport?: string; onUsed?: () => void; title: string }) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -18,7 +18,15 @@ export function PromptContentActions({ body, onUsed, title }: { body: string; on
   }
 
   function exportMarkdown() {
-    const content = `# ${title}\n\n${body}\n`;
+    downloadMarkdown(`# ${title}\n\n${body}\n`, title);
+  }
+
+  function exportMarkdownWithMetadata() {
+    if (!metadataExport) return;
+    downloadMarkdown(`# ${title}\n\n${body}\n\n---\n\n## 来源元数据\n\n${metadataExport.trim()}\n`, title);
+  }
+
+  function downloadMarkdown(content: string, title: string) {
     const url = URL.createObjectURL(new Blob([content], { type: "text/markdown;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -32,6 +40,7 @@ export function PromptContentActions({ body, onUsed, title }: { body: string; on
     <details className="prompt-export-menu">
       <summary aria-label="更多提示词操作"><EllipsisHorizontalIcon aria-hidden="true" /></summary>
       <button onClick={exportMarkdown} type="button">导出 Markdown</button>
+      {metadataExport ? <button onClick={exportMarkdownWithMetadata} type="button">导出 Markdown（含来源）</button> : null}
     </details>
     {copied ? <p role="status">已复制提示词正文。</p> : null}
     {failed ? <p role="alert">无法复制提示词正文，请手动复制。</p> : null}

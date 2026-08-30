@@ -12,7 +12,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "status": { "enum": ["inbox", "published", "archived", "deleted"] },
+            "status": { "const": "published" },
             "effectiveness": { "enum": ["unverified", "effective", "ineffective", "needs_retest"] },
             "source_kind": { "enum": ["manual", "file_import", "web_url", "ai_generated", "mcp"] },
             "category": { "type": "string", "minLength": 1 },

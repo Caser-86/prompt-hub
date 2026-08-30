@@ -4,8 +4,7 @@ import { StarIcon as StarSolidIcon } from "@heroicons/react/24/solid";
 
 import type { PromptListItem } from "@prompt-hub/contracts";
 
-import { filterAndSortPrompts, formatLibraryUpdatedAt, type PromptLibraryFilter } from "./libraryView";
-import { readPromptUsage, recordPromptUsage } from "./promptUsage";
+import { filterAndSortPrompts, formatLibraryUpdatedAt, type PromptLibraryFilter, type PromptLibrarySort } from "./libraryView";
 import "./prompt-library.css";
 
 type PromptLibraryProps = {
@@ -23,7 +22,7 @@ export function PromptLibrary({ loadPrompts, onCreate, onAdvancedSearch, onSelec
   const [selected, setSelected] = useState<string[]>([]);
   const [confirmBatchArchive, setConfirmBatchArchive] = useState(false);
   const [filter, setFilter] = useState<PromptLibraryFilter>("all");
-  const [usage, setUsage] = useState(readPromptUsage);
+  const [sort, setSort] = useState<PromptLibrarySort>("default");
 
   useEffect(() => {
     void loadPrompts()
@@ -48,9 +47,8 @@ export function PromptLibrary({ loadPrompts, onCreate, onAdvancedSearch, onSelec
       setConfirmBatchArchive(false);
     });
   };
-  const visiblePrompts = prompts ? filterAndSortPrompts(prompts, filter, usage) : [];
+  const visiblePrompts = prompts ? filterAndSortPrompts(prompts, filter, sort) : [];
   const openPrompt = (prompt: PromptListItem) => {
-    setUsage(recordPromptUsage(prompt.id));
     onSelect?.(prompt);
   };
 
@@ -88,6 +86,15 @@ export function PromptLibrary({ loadPrompts, onCreate, onAdvancedSearch, onSelec
               ))}
             </div>
             <p aria-live="polite" className="library-result-count">共 {visiblePrompts.length} 条提示词</p>
+            <label className="library-sort-control">排序
+              <select aria-label="提示词排序" value={sort} onChange={(event) => setSort(event.target.value as PromptLibrarySort)}>
+                <option value="default">默认推荐</option>
+                <option value="recently_used">最近使用</option>
+                <option value="recently_added">最近添加</option>
+                <option value="recently_updated">最近更新</option>
+                <option value="most_used">使用最多</option>
+              </select>
+            </label>
           </div>
           {selected.length ? <section aria-label="批量管理提示" className="selection-notice" role="status">
             <div><strong>已选择 {selected.length} 条提示词</strong><span>可批量归档；归档不会删除，之后可以恢复。</span></div>

@@ -12,13 +12,22 @@
 | MCP 写入 | STDIO MCP 只有四个版本化工具；写工具只能创建收件箱草稿，不能发布、覆盖或永久清除。 | `crates/prompt-mcp/tests/schema_contract.rs`、`stdio.rs`、`tools.rs` |
 | 破坏性操作 | 恢复和永久清除前创建完整性校验备份；恢复预览先校验数据库；软删除才能进入永久清除确认。 | `crates/prompt-store/tests/backup.rs`、桌面命令测试 |
 | 并发基础 | SQLite 启用外键、WAL 与 5 秒 busy timeout。 | `crates/prompt-store/src/migration.rs` |
+| 迁移血缘 | 拒绝未来架构版本、空或缺项的已提交迁移账本、未知迁移与校验和冲突；旧 0.1.2 prompt-usage 血缘可升级并再次打开；完整最新数据库的重开保持只读。 | `crates/prompt-store/tests/migrations.rs` |
+| 架构完整性 | 迁移提交前验证版本 7 的全部应用表和关键字段；账本完整但实际结构缺损时 fail closed。 | `crates/prompt-store/tests/migrations.rs` |
+| 迁移备份 | 迁移前使用 SQLite 在线备份 API 创建一致快照，包含尚在 WAL 中的已提交记录。 | `pre_migration_backup_includes_committed_rows_still_in_the_wal` |
+| 启动数据路径 | 系统应用数据目录无法解析或为空时进入恢复状态；准备服务与重试不会打开相对路径数据库。 | `apps/desktop/src-tauri/tests/bootstrap.rs` |
 
 ## 已知限制与发布阻断项
 
 - 首发未提供数据库加密或应用锁；已在 [privacy.md](privacy.md) 说明本机磁盘访问风险。
 - 尚未完成并记录桌面与 MCP 同时读写、备份、索引重建的压力试验。
 - 尚未在干净 Windows 用户配置文件上完成签名安装包、卸载后数据保留和 MCP 发现的发布验收。
+- 0.1.10 候选包已经完成构建、哈希记录和隔离临时目录的 NSIS 安装/启动/卸载烟测，但安装包仍为 `NotSigned`；详见 [packaging.md](release-evidence/0.1.10/packaging.md)。
 - 未提供代码签名证书或更新服务配置；因此不得宣称已签名公开发布或已启用自动更新。
+
+## 2026-08-29 Stage A 复查
+
+Stage A 已补充数据库 fail-closed、迁移账本完整性、最终架构形状、WAL 一致备份和应用数据目录不可用的自动化验证。详细命令与红/绿证据记录在 [stage-a.md](release-evidence/0.1.10/stage-a.md)。本次工作面向自用正式产品，不把代码签名、公开更新服务或公开 Release tag 作为本阶段完成条件。
 
 ## 复查命令
 

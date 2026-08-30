@@ -28,11 +28,13 @@ use prompt_skill::{
     scan_skill, snapshot_git_skill, snapshot_local_skill,
 };
 use prompt_store::{
-    BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage,
-    SearchQuery, SearchSort, SkillRepository, SkillReviewStatus, SkillSource, StoredSkill,
-    create_backup, create_backup_in_directory, preview_restore, prune_backups,
+    BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, PromptUsageStats, SearchFilters,
+    SearchPage, SearchQuery, SearchSort, SkillRepository, SkillReviewStatus, SkillSource,
+    StoredSkill, create_backup, create_backup_in_directory, preview_restore, prune_backups,
 };
 use uuid::Uuid;
+
+use crate::bootstrap::{self, BootstrapRuntime, BootstrapStatus};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -591,6 +593,7 @@ impl PromptService {
                 failed: 0,
             });
         }
+        let raw_excerpt = source_excerpt(&fetched.text);
         let content = match PromptContent::new(
             title.clone(),
             fetched.text,
@@ -620,11 +623,13 @@ impl PromptService {
                 return Err(error);
             }
         };
-        let source = match PromptSource::new(
+        let source = match PromptSource::with_provenance(
             SourceKind::WebUrl,
             "网页导入",
             Some(canonical_url.clone()),
             fetched.retrieved_at,
+            Some(raw_excerpt),
+            Some(job_id.clone()),
         ) {
             Ok(source) => source,
             Err(error) => {
@@ -644,7 +649,7 @@ impl PromptService {
                 return Err(error);
             }
         };
-        let prompt = Prompt::new_inbox(content, source, Actor::User, created_at);
+        let prompt = Prompt::new_imported_inbox(content, source, Actor::User, created_at);
         if let Err(error) = self.save(&prompt, AuditAction::Created) {
             self.record_url_import_item(
                 &job_id,
@@ -762,14 +767,16 @@ impl PromptService {
                     continue;
                 }
             };
-            let source = PromptSource::new(
+            let source = PromptSource::with_provenance(
                 SourceKind::FileImport,
                 source_name,
                 Some(candidate.source_path.clone()),
                 created_at,
+                Some(source_excerpt(&candidate.body)),
+                Some(job_id.to_owned()),
             )
             .map_err(|error| error.to_string())?;
-            let prompt = Prompt::new_inbox(content, source, Actor::User, created_at);
+            let prompt = Prompt::new_imported_inbox(content, source, Actor::User, created_at);
             if let Err(error) = self.save(&prompt, AuditAction::Created) {
                 self.record_import_item(
                     job_id,
@@ -889,6 +896,44 @@ impl PromptService {
             .map_err(|_| "prompt repository is unavailable".to_owned())?
             .list()
             .map_err(|error| error.to_string())
+    }
+
+    pub fn record_use(
+        &self,
+        id: PromptId,
+        used_at: OffsetDateTime,
+    ) -> Result<PromptUsageStats, String> {
+        self.repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?
+            .record_use(id, used_at)
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn merge_legacy_usage(
+        &self,
+        entries: Vec<(PromptId, i64)>,
+    ) -> Result<Vec<PromptUsageStats>, String> {
+        let mut repository = self
+            .repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?;
+        let known_ids = repository
+            .list()
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .map(|prompt| prompt.id().value().to_string())
+            .collect::<std::collections::HashSet<_>>();
+        entries
+            .into_iter()
+            .filter(|(_, count)| *count > 0)
+            .filter(|(id, _)| known_ids.contains(&id.value().to_string()))
+            .map(|(id, count)| {
+                repository
+                    .merge_legacy_usage(id, count)
+                    .map_err(|error| error.to_string())
+            })
+            .collect()
     }
 
     pub fn recent_import_jobs(&self) -> Result<Vec<prompt_store::ImportJob>, String> {
@@ -1315,7 +1360,7 @@ impl SkillService {
         })
         .map_err(|error| error.to_string())?;
         let now = OffsetDateTime::now_utc();
-        repository
+        if repository
             .record_installation(
                 id,
                 &input.target_root,
@@ -1327,7 +1372,16 @@ impl SkillService {
                     .as_deref(),
                 now,
             )
-            .map_err(|error| error.to_string())?;
+            .is_err()
+        {
+            prompt_skill::rollback_installation(&receipt).map_err(|_| {
+                "Skill installation record failed and automatic rollback could not be completed"
+                    .to_owned()
+            })?;
+            return Err(
+                "Skill installation record failed; file system changes were rolled back".to_owned(),
+            );
+        }
         Ok(SkillInstallationItem {
             install_path: receipt.install_path().display().to_string(),
             backup_path: receipt.backup_path().map(|path| path.display().to_string()),
@@ -1375,6 +1429,10 @@ pub struct PromptListItem {
     applicable_models: Vec<String>,
     rating: Option<u8>,
     favorite: bool,
+    use_count: i64,
+    last_used_at: Option<String>,
+    imported_at: Option<String>,
+    last_validated_at: Option<String>,
     created_at: String,
     updated_at: String,
 }
@@ -1386,6 +1444,22 @@ pub struct PromptSourceItem {
     name: String,
     location: Option<String>,
     collected_at: String,
+    raw_excerpt: Option<String>,
+    import_job_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacyPromptUsageInput {
+    pub id: String,
+    pub use_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptUsageItem {
+    use_count: i64,
+    last_used_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1605,7 +1679,11 @@ impl SkillInstallationItem {
 }
 
 impl PromptListItem {
-    fn from_prompt(prompt: Prompt, favorite: bool) -> Result<Self, String> {
+    fn from_prompt(
+        prompt: Prompt,
+        favorite: bool,
+        usage: PromptUsageStats,
+    ) -> Result<Self, String> {
         let content = prompt.current_version().content();
         Ok(Self {
             id: prompt.id().value().to_string(),
@@ -1628,6 +1706,8 @@ impl PromptListItem {
                         name: source.name().to_owned(),
                         location: source.location().map(str::to_owned),
                         collected_at: format_timestamp(source.collected_at())?,
+                        raw_excerpt: source.raw_excerpt().map(str::to_owned),
+                        import_job_id: source.import_job_id().map(str::to_owned),
                     })
                 })
                 .collect::<Result<Vec<_>, String>>()?,
@@ -1646,8 +1726,24 @@ impl PromptListItem {
                 .last()
                 .and_then(|validation| validation.rating),
             favorite,
+            use_count: usage.use_count(),
+            last_used_at: usage.last_used_at().map(format_timestamp).transpose()?,
+            imported_at: prompt.imported_at().map(format_timestamp).transpose()?,
+            last_validated_at: prompt
+                .last_validated_at()
+                .map(format_timestamp)
+                .transpose()?,
             created_at: format_timestamp(prompt.created_at())?,
             updated_at: format_timestamp(prompt.updated_at())?,
+        })
+    }
+}
+
+impl PromptUsageItem {
+    fn from_store(stats: PromptUsageStats) -> Result<Self, String> {
+        Ok(Self {
+            use_count: stats.use_count(),
+            last_used_at: stats.last_used_at().map(format_timestamp).transpose()?,
         })
     }
 }
@@ -1656,6 +1752,10 @@ fn format_timestamp(timestamp: OffsetDateTime) -> Result<String, String> {
     timestamp
         .format(&Rfc3339)
         .map_err(|error| error.to_string())
+}
+
+fn source_excerpt(body: &str) -> String {
+    body.chars().take(512).collect()
 }
 
 fn parse_skill_review_status(value: &str) -> Result<SkillReviewStatus, String> {
@@ -1691,9 +1791,39 @@ pub fn list_prompts(service: State<'_, PromptService>) -> Result<Vec<PromptListI
             let favorite = repository
                 .is_favorite(prompt.id())
                 .map_err(|error| error.to_string())?;
-            PromptListItem::from_prompt(prompt, favorite)
+            let usage = repository
+                .usage_stats(prompt.id())
+                .map_err(|error| error.to_string())?;
+            PromptListItem::from_prompt(prompt, favorite, usage)
         })
         .collect()
+}
+
+#[tauri::command]
+pub fn record_prompt_use(
+    service: State<'_, PromptService>,
+    id: String,
+) -> Result<PromptUsageItem, String> {
+    let id = PromptId::from_uuid(Uuid::parse_str(&id).map_err(|_| "invalid prompt id".to_owned())?);
+    PromptUsageItem::from_store(service.record_use(id, OffsetDateTime::now_utc())?)
+}
+
+#[tauri::command]
+pub fn migrate_legacy_prompt_usage(
+    service: State<'_, PromptService>,
+    entries: Vec<LegacyPromptUsageInput>,
+) -> Result<(), String> {
+    let entries = entries
+        .into_iter()
+        .filter(|entry| entry.use_count > 0)
+        .map(|entry| {
+            Uuid::parse_str(&entry.id)
+                .map(PromptId::from_uuid)
+                .map(|id| (id, entry.use_count))
+                .map_err(|_| "invalid prompt id".to_owned())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    service.merge_legacy_usage(entries).map(|_| ())
 }
 
 #[tauri::command]
@@ -2101,6 +2231,39 @@ pub fn get_application_status() -> ApplicationStatus {
         database_schema_version: LATEST_SCHEMA_VERSION,
         offline_capable: true,
     }
+}
+
+#[tauri::command]
+pub fn get_bootstrap_status(runtime: State<'_, BootstrapRuntime>) -> BootstrapStatus {
+    runtime.status()
+}
+
+#[tauri::command]
+pub fn retry_database_bootstrap(
+    app: tauri::AppHandle,
+    runtime: State<'_, BootstrapRuntime>,
+) -> Result<BootstrapStatus, String> {
+    if runtime.status().state == "ready" {
+        return Ok(runtime.status());
+    }
+    let services = bootstrap::prepare_services(&runtime).map_err(|failure| {
+        runtime.mark_recovery(
+            failure.code.clone(),
+            failure.safe_message.clone(),
+            failure.backup_name.clone(),
+        );
+        failure.safe_message
+    })?;
+    bootstrap::attach_services(&app, services);
+    runtime.mark_ready();
+    Ok(runtime.status())
+}
+
+#[tauri::command]
+pub fn export_bootstrap_diagnostics(
+    runtime: State<'_, BootstrapRuntime>,
+) -> Result<String, String> {
+    serde_json::to_string_pretty(&runtime.status()).map_err(|_| "无法导出诊断摘要".to_owned())
 }
 
 #[tauri::command]

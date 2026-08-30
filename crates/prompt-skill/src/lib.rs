@@ -5,7 +5,7 @@ mod scan;
 pub use git::{GitSkillError, GitSkillSource, snapshot_git_skill};
 pub use install::{
     InstallMode, InstallRequest, InstallationReceipt, SkillInstallError, SkillSnapshotError,
-    install_skill, snapshot_local_skill,
+    install_skill, rollback_installation, snapshot_local_skill,
 };
 pub use scan::{
     ScanLimits, SkillCandidate, SkillFile, SkillFileKind, SkillRisk, SkillScanError, scan_skill,

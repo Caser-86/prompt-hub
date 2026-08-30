@@ -39,3 +39,22 @@ cargo test --release -p prompt-store --test search_baseline -- --ignored --nocap
 | 50,000 | 223,912 | 221,046 | 261,544 | 816,578 | 1,806,763 |
 
 这些是单机开发环境测量值，不是面向所有硬件的服务等级承诺。
+
+## 2026-08-30 0.1.10 候选包复测
+
+- 机器：AMD Ryzen 7 8845HS，8 核 / 16 逻辑处理器。
+- 构建：Rust `release` 测试配置，文件 SQLite 数据库。
+- 数据：每个规模单独新建临时数据库，全部为脱敏中文样本。
+- 命令：
+
+```powershell
+cargo test --release -p prompt-store --test search_baseline -- --ignored --nocapture --exact reports_file_backed_search_rebuild_and_backup_baselines
+```
+
+| 记录数 | 冷检索（µs） | 热检索（µs） | 分类筛选（µs） | 索引重建（µs） | 备份（µs） |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1,000 | 4,367 | 3,865 | 5,258 | 15,264 | 87,038 |
+| 10,000 | 46,223 | 42,989 | 55,233 | 156,398 | 435,416 |
+| 50,000 | 249,457 | 265,929 | 332,651 | 867,029 | 1,862,634 |
+
+本次复测通过；数值仅代表当前机器和当前提交的可重复基线，不构成跨硬件性能保证。

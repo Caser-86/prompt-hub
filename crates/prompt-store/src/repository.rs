@@ -14,6 +14,24 @@ pub struct PromptRepository {
     pub(crate) connection: Connection,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PromptUsageStats {
+    use_count: i64,
+    last_used_at: Option<OffsetDateTime>,
+}
+
+impl PromptUsageStats {
+    #[must_use]
+    pub const fn use_count(&self) -> i64 {
+        self.use_count
+    }
+
+    #[must_use]
+    pub const fn last_used_at(&self) -> Option<OffsetDateTime> {
+        self.last_used_at
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportJob {
     id: String,
@@ -89,8 +107,8 @@ impl PromptRepository {
             None => {
                 transaction.execute(
                     "INSERT INTO prompts(
-                        id, status, effectiveness, current_version, entity_json, created_at, updated_at
-                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                        id, status, effectiveness, current_version, entity_json, created_at, updated_at, imported_at, last_validated_at
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                     params![
                         prompt_id,
                         wire_value(&prompt.status())?,
@@ -99,6 +117,8 @@ impl PromptRepository {
                         serde_json::to_string(prompt)?,
                         prompt.created_at().unix_timestamp(),
                         prompt.updated_at().unix_timestamp(),
+                        prompt.imported_at().map(|value| value.unix_timestamp()),
+                        prompt.last_validated_at().map(|value| value.unix_timestamp()),
                     ],
                 )?;
                 insert_version(&transaction, prompt_id.as_str(), prompt.current_version())?;
@@ -254,10 +274,85 @@ impl PromptRepository {
         Ok(found.is_some())
     }
 
+    pub fn record_use(
+        &mut self,
+        id: PromptId,
+        used_at: OffsetDateTime,
+    ) -> Result<PromptUsageStats, StoreError> {
+        let prompt_id = id.value().to_string();
+        let transaction = self.connection.transaction()?;
+        if !prompt_exists(&transaction, &prompt_id)? {
+            return Err(StoreError::PromptMissing);
+        }
+        transaction.execute(
+            "INSERT INTO prompt_usage(prompt_id, use_count, last_used_at) VALUES (?1, 1, ?2)
+             ON CONFLICT(prompt_id) DO UPDATE SET use_count = prompt_usage.use_count + 1, last_used_at = excluded.last_used_at",
+            params![prompt_id, used_at.unix_timestamp()],
+        )?;
+        let stats = usage_stats_for(&transaction, id)?;
+        transaction.commit()?;
+        Ok(stats)
+    }
+
+    pub fn merge_legacy_usage(
+        &mut self,
+        id: PromptId,
+        count: i64,
+    ) -> Result<PromptUsageStats, StoreError> {
+        let prompt_id = id.value().to_string();
+        let transaction = self.connection.transaction()?;
+        if !prompt_exists(&transaction, &prompt_id)? {
+            return Err(StoreError::PromptMissing);
+        }
+        if count > 0 {
+            transaction.execute(
+                "INSERT INTO prompt_usage(prompt_id, use_count, last_used_at) VALUES (?1, ?2, NULL)
+                 ON CONFLICT(prompt_id) DO UPDATE SET use_count = MAX(prompt_usage.use_count, excluded.use_count)",
+                params![prompt_id, count],
+            )?;
+        }
+        let stats = usage_stats_for(&transaction, id)?;
+        transaction.commit()?;
+        Ok(stats)
+    }
+
+    pub fn usage_stats(&self, id: PromptId) -> Result<PromptUsageStats, StoreError> {
+        let found: Option<u8> = self
+            .connection
+            .query_row(
+                "SELECT 1 FROM prompts WHERE id = ?1",
+                [id.value().to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if found.is_none() {
+            return Err(StoreError::PromptMissing);
+        }
+        self.connection
+            .query_row(
+                "SELECT use_count, last_used_at FROM prompt_usage WHERE prompt_id = ?1",
+                [id.value().to_string()],
+                prompt_usage_from_row,
+            )
+            .optional()
+            .map(|value| value.unwrap_or_default())
+            .map_err(StoreError::from)
+    }
+
     pub fn restore_from_backup(&mut self, backup_path: &std::path::Path) -> Result<(), StoreError> {
         let source = Connection::open(backup_path)?;
-        let backup = Backup::new(&source, &mut self.connection)?;
-        backup.run_to_completion(64, std::time::Duration::from_millis(5), None)?;
+        let mut migrated = Connection::open_in_memory()?;
+        Backup::new(&source, &mut migrated)?.run_to_completion(
+            64,
+            std::time::Duration::from_millis(5),
+            None,
+        )?;
+        crate::migration::migrate_connection(&mut migrated)?;
+        Backup::new(&migrated, &mut self.connection)?.run_to_completion(
+            64,
+            std::time::Duration::from_millis(5),
+            None,
+        )?;
         Ok(())
     }
 
@@ -416,6 +511,8 @@ fn update_prompt(
              current_version = ?4,
              entity_json = ?5,
              updated_at = ?6,
+             imported_at = ?7,
+             last_validated_at = ?8,
              deleted_at = CASE WHEN ?2 = 'deleted' THEN ?6 ELSE NULL END
          WHERE id = ?1",
         params![
@@ -425,6 +522,10 @@ fn update_prompt(
             prompt.current_version().number(),
             serde_json::to_string(prompt)?,
             prompt.updated_at().unix_timestamp(),
+            prompt.imported_at().map(|value| value.unix_timestamp()),
+            prompt
+                .last_validated_at()
+                .map(|value| value.unix_timestamp()),
         ],
     )?;
     Ok(())
@@ -502,8 +603,8 @@ fn insert_sources(
     for source in prompt.sources() {
         transaction.execute(
             "INSERT INTO prompt_sources(
-                id, prompt_id, kind, name, location, collected_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                id, prompt_id, kind, name, location, collected_at, raw_excerpt, import_job_id
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 source.id().to_string(),
                 prompt_id,
@@ -511,10 +612,59 @@ fn insert_sources(
                 source.name(),
                 source.location(),
                 source.collected_at().unix_timestamp(),
+                source.raw_excerpt(),
+                source.import_job_id(),
             ],
         )?;
     }
     Ok(())
+}
+
+fn prompt_exists(transaction: &Transaction<'_>, prompt_id: &str) -> Result<bool, StoreError> {
+    let found: Option<u8> = transaction
+        .query_row("SELECT 1 FROM prompts WHERE id = ?1", [prompt_id], |row| {
+            row.get(0)
+        })
+        .optional()?;
+    Ok(found.is_some())
+}
+
+fn usage_stats_for(
+    transaction: &Transaction<'_>,
+    id: PromptId,
+) -> Result<PromptUsageStats, StoreError> {
+    transaction
+        .query_row(
+            "SELECT use_count, last_used_at FROM prompt_usage WHERE prompt_id = ?1",
+            [id.value().to_string()],
+            prompt_usage_from_row,
+        )
+        .optional()
+        .map(|value| {
+            value.unwrap_or(PromptUsageStats {
+                use_count: 0,
+                last_used_at: None,
+            })
+        })
+        .map_err(StoreError::from)
+}
+
+fn prompt_usage_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PromptUsageStats> {
+    let last_used_at = row
+        .get::<_, Option<i64>>(1)?
+        .map(OffsetDateTime::from_unix_timestamp)
+        .transpose()
+        .map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+                1,
+                rusqlite::types::Type::Integer,
+                Box::new(error),
+            )
+        })?;
+    Ok(PromptUsageStats {
+        use_count: row.get(0)?,
+        last_used_at,
+    })
 }
 
 fn wire_value(value: &impl Serialize) -> Result<String, StoreError> {
@@ -546,4 +696,12 @@ pub enum StoreError {
     VersionConflict { stored: u32, incoming: u32 },
     #[error("import job was not found after it was created")]
     ImportJobMissing,
+    #[error("prompt was not found")]
+    PromptMissing,
+    #[error("migration checksum conflict for {migration_id}")]
+    MigrationChecksumConflict { migration_id: String },
+    #[error("database schema is not a supported Prompt Hub history: {reason}")]
+    UnsupportedSchema { reason: String },
+    #[error("database recovery is required ({code})")]
+    RecoveryRequired { code: String, safe_message: String },
 }

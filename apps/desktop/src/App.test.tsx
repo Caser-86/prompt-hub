@@ -4,6 +4,9 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const desktopMock = vi.hoisted(() => ({
+  getBootstrapStatus: vi.fn(),
+  retryDatabaseBootstrap: vi.fn(),
+  exportBootstrapDiagnostics: vi.fn(),
   createManualPromptDraft: vi.fn(),
   publishPrompt: vi.fn(),
   importFileToInbox: vi.fn(),
@@ -50,6 +53,9 @@ import { App } from "./App";
 
 describe("App", () => {
   beforeEach(() => {
+    desktopMock.getBootstrapStatus.mockResolvedValue({ state: "ready", code: null, safeMessage: null, backupName: null });
+    desktopMock.retryDatabaseBootstrap.mockResolvedValue({ state: "ready", code: null, safeMessage: null, backupName: null });
+    desktopMock.exportBootstrapDiagnostics.mockResolvedValue('{"state":"ready"}');
     desktopMock.listPrompts.mockImplementation(() => new Promise<never[]>(() => undefined));
     desktopMock.getDiagnosticsStatus.mockResolvedValue({ databaseAvailable: true, searchIndexConsistent: true, mcpDatabaseAvailable: true });
     desktopMock.getRedactedDiagnosticEvents.mockResolvedValue([]);

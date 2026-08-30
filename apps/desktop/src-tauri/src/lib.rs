@@ -1,3 +1,4 @@
+pub mod bootstrap;
 pub mod commands;
 
 use tauri::Manager;
@@ -6,22 +7,24 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            let data_directory = app.path().app_data_dir()?;
-            let database_path = data_directory.join("prompt-hub.db");
-            let database = prompt_store::Database::open(&database_path)?;
-            app.manage(commands::PromptService::new(database.into_repository()));
-            let skill_database = prompt_store::Database::open(&database_path)?;
-            app.manage(commands::SkillService::with_snapshot_root(
-                skill_database.into_skill_repository(),
-                data_directory.join("skill-snapshots"),
-            ));
-            app.manage(commands::AiCancellationRegistry::default());
-            app.manage(commands::BackupService::new(database_path));
-            let credentials = prompt_ai::SystemCredentialAdapter::new("Prompt Hub", "default")?;
-            app.manage(commands::AiSettingsService::new(credentials));
+            let runtime = match app.path().app_data_dir() {
+                Ok(data_directory) => bootstrap::BootstrapRuntime::new(data_directory),
+                Err(_) => bootstrap::BootstrapRuntime::unavailable(),
+            };
+            app.manage(runtime);
+            let runtime = app.state::<bootstrap::BootstrapRuntime>();
+            match bootstrap::prepare_services(&runtime) {
+                Ok(services) => bootstrap::attach_services(app.handle(), services),
+                Err(failure) => {
+                    runtime.mark_recovery(failure.code, failure.safe_message, failure.backup_name)
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::get_bootstrap_status,
+            commands::retry_database_bootstrap,
+            commands::export_bootstrap_diagnostics,
             commands::get_application_status,
             commands::get_diagnostics_status,
             commands::get_redacted_diagnostic_events,
@@ -32,6 +35,8 @@ pub fn run() {
             commands::preview_backup_restore,
             commands::restore_backup,
             commands::list_prompts,
+            commands::record_prompt_use,
+            commands::migrate_legacy_prompt_usage,
             commands::collect_skill_folder,
             commands::collect_git_skill,
             commands::list_skills,
@@ -66,5 +71,5 @@ pub fn run() {
             commands::record_prompt_validation
         ])
         .run(tauri::generate_context!())
-        .expect("failed to run Prompt Hub desktop application");
+        .unwrap_or_else(|error| eprintln!("Prompt Hub desktop event loop stopped: {error}"));
 }

@@ -290,3 +290,24 @@ fn persists_import_job_path_fingerprint_and_terminal_diagnostics() {
     assert!(stored.completed_at().is_some());
     assert!(stored.diagnostics_json().contains("imported"));
 }
+
+#[test]
+fn records_prompt_usage_and_merges_legacy_counts_without_decreasing_them() {
+    let database = Database::open_in_memory().unwrap();
+    let mut repository = database.into_repository();
+    let prompt = prompt("持久化使用统计");
+    repository.save(&prompt, AuditAction::Created).unwrap();
+
+    let first_use = datetime!(2026-08-29 08:00 UTC);
+    let usage = repository.record_use(prompt.id(), first_use).unwrap();
+    assert_eq!(usage.use_count(), 1);
+    assert_eq!(usage.last_used_at(), Some(first_use));
+
+    let merged = repository.merge_legacy_usage(prompt.id(), 9).unwrap();
+    assert_eq!(merged.use_count(), 9);
+    assert_eq!(merged.last_used_at(), Some(first_use));
+
+    let retained = repository.merge_legacy_usage(prompt.id(), 3).unwrap();
+    assert_eq!(retained.use_count(), 9);
+    assert_eq!(retained.last_used_at(), Some(first_use));
+}

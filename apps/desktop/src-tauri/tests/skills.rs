@@ -174,3 +174,82 @@ fn installed_skill_verification_detects_local_content_drift() {
         "drifted"
     );
 }
+
+#[test]
+fn failed_installation_record_restores_the_previous_skill() {
+    let source = tempdir().unwrap();
+    fs::write(source.path().join("SKILL.md"), "# New\n").unwrap();
+    let target = tempdir().unwrap();
+    let existing = target.path().join("rollback-check");
+    fs::create_dir(&existing).unwrap();
+    fs::write(existing.join("SKILL.md"), "# Old\n").unwrap();
+    let database_directory = tempdir().unwrap();
+    let database = database_directory.path().join("skills.sqlite3");
+    let snapshots = tempdir().unwrap();
+    let service = SkillService::with_snapshot_root(
+        Database::open(&database).unwrap().into_skill_repository(),
+        snapshots.path().to_path_buf(),
+    );
+    let collected = service
+        .collect_local_folder(source.path().to_path_buf())
+        .unwrap();
+    service
+        .review(
+            &collected.id,
+            SkillReviewInput {
+                status: "approved".to_owned(),
+                notes: None,
+            },
+        )
+        .unwrap();
+    rusqlite::Connection::open(&database)
+        .unwrap()
+        .execute_batch(
+            "CREATE TRIGGER reject_skill_installation
+             BEFORE INSERT ON skill_installations
+             BEGIN
+               SELECT RAISE(ABORT, 'forced installation record failure');
+             END;",
+        )
+        .unwrap();
+
+    let error = service
+        .install(
+            &collected.id,
+            SkillInstallInput {
+                target_root: target.path().display().to_string(),
+                destination_name: "rollback-check".to_owned(),
+                replace_after_backup: true,
+            },
+        )
+        .unwrap_err();
+
+    assert!(error.contains("record"));
+    assert_eq!(
+        fs::read_to_string(target.path().join("rollback-check/SKILL.md")).unwrap(),
+        "# Old\n"
+    );
+}
+
+#[test]
+fn invalid_git_candidate_is_rejected_before_creating_a_skill_asset() {
+    let snapshot_directory = tempdir().unwrap();
+    let service = skill_service(snapshot_directory.path());
+
+    let error = service
+        .collect_git_candidate(prompt_hub_desktop_lib::commands::GitSkillCollectionInput {
+            repository_url: "https://github.com/owner-only".to_owned(),
+            commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            subdirectory: String::new(),
+        })
+        .unwrap_err();
+
+    assert!(error.contains("GitHub"));
+    assert!(service.list().unwrap().is_empty());
+    assert!(
+        fs::read_dir(snapshot_directory.path())
+            .unwrap()
+            .next()
+            .is_none()
+    );
+}

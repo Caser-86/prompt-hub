@@ -123,6 +123,71 @@ fn confirmed_compatibility_requires_a_confirmation_time() {
 }
 
 #[test]
+fn provenance_source_keeps_excerpt_and_import_job_outside_prompt_content() {
+    let source = PromptSource::with_provenance(
+        SourceKind::FileImport,
+        "文件导入",
+        Some("C:/提示词/会议.md".to_owned()),
+        datetime!(2026-08-29 08:00 UTC),
+        Some("原文的短摘录".to_owned()),
+        Some("import-job-1".to_owned()),
+    )
+    .expect("valid source evidence should be accepted");
+
+    assert_eq!(source.raw_excerpt(), Some("原文的短摘录"));
+    assert_eq!(source.import_job_id(), Some("import-job-1"));
+}
+
+#[test]
+fn provenance_source_rejects_unbounded_excerpt_data() {
+    let error = PromptSource::with_provenance(
+        SourceKind::FileImport,
+        "文件导入",
+        Some("C:/提示词/导入.md".to_owned()),
+        datetime!(2026-08-29 08:00 UTC),
+        Some("x".repeat(4097)),
+        Some("import-job-1".to_owned()),
+    )
+    .expect_err("source evidence must have a bounded excerpt");
+
+    assert_eq!(error, DomainError::SourceExcerptTooLong);
+}
+
+#[test]
+fn imported_prompt_tracks_import_and_last_validation_times() {
+    let imported_at = datetime!(2026-08-29 08:00 UTC);
+    let mut prompt = Prompt::new_imported_inbox(
+        valid_content("从文件导入的正文"),
+        PromptSource::new(
+            SourceKind::FileImport,
+            "文件导入",
+            Some("C:/提示词/导入.md".to_owned()),
+            imported_at,
+        )
+        .unwrap(),
+        Actor::User,
+        imported_at,
+    );
+    let validated_at = datetime!(2026-08-29 09:00 UTC);
+    prompt
+        .record_validation(
+            prompt_domain::ValidationRecord::new(
+                EffectivenessStatus::Effective,
+                Some(5),
+                None,
+                validated_at,
+            )
+            .unwrap(),
+            Actor::User,
+            validated_at,
+        )
+        .unwrap();
+
+    assert_eq!(prompt.imported_at(), Some(imported_at));
+    assert_eq!(prompt.last_validated_at(), Some(validated_at));
+}
+
+#[test]
 fn public_enum_values_have_stable_snake_case_wire_names() {
     assert_eq!(
         serde_json::to_string(&EffectivenessStatus::NeedsRetest).unwrap(),

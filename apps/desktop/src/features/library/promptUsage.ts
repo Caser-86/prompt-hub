@@ -1,4 +1,5 @@
 const storageKey = "prompt-hub.prompt-usage";
+const migrationKey = "prompt-hub.prompt-usage-migrated";
 
 export type PromptUsage = Record<string, number>;
 
@@ -12,9 +13,10 @@ export function readPromptUsage(storage: Storage = window.localStorage): PromptU
   }
 }
 
-export function recordPromptUsage(id: string, storage: Storage = window.localStorage) {
-  const usage = readPromptUsage(storage);
-  const next = { ...usage, [id]: (usage[id] ?? 0) + 1 };
-  storage.setItem(storageKey, JSON.stringify(next));
-  return next;
+export function shouldMigratePromptUsage(storage: Storage = window.localStorage) {
+  return storage.getItem(migrationKey) !== "1";
+}
+
+export function markPromptUsageMigrated(storage: Storage = window.localStorage) {
+  storage.setItem(migrationKey, "1");
 }

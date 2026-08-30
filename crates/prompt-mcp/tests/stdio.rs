@@ -2,8 +2,8 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 use prompt_domain::{
-    Actor, AuditAction, Prompt, PromptContent, PromptSource, PromptVariable, SourceKind,
-    VariableKind,
+    Actor, AuditAction, EffectivenessStatus, Prompt, PromptContent, PromptSource, PromptVariable,
+    SourceKind, VariableKind,
 };
 use prompt_store::Database;
 use tempfile::tempdir;
@@ -102,7 +102,7 @@ fn stdio_server_calls_read_tools_and_creates_only_an_inbox_draft() {
     let path = directory.path().join("prompt-hub.db");
     let database = Database::open(&path).unwrap();
     let mut repository = database.into_repository();
-    let prompt = Prompt::new_inbox(
+    let mut prompt = Prompt::new_inbox(
         PromptContent::with_variables(
             "代码审查",
             "审查 {{language}} 代码",
@@ -123,6 +123,13 @@ fn stdio_server_calls_read_tools_and_creates_only_an_inbox_draft() {
         datetime!(2026-07-15 00:00 UTC),
     );
     repository.save(&prompt, AuditAction::Created).unwrap();
+    prompt
+        .publish(
+            EffectivenessStatus::Unverified,
+            datetime!(2026-07-15 00:01 UTC),
+        )
+        .unwrap();
+    repository.save(&prompt, AuditAction::Published).unwrap();
     drop(repository);
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_prompt-mcp"))
@@ -173,4 +180,119 @@ fn stdio_server_calls_read_tools_and_creates_only_an_inbox_draft() {
             .unwrap()
             .contains("\"status\":\"inbox\""),
     );
+}
+
+#[test]
+fn stdio_server_enforces_runtime_schema_and_published_only_reads() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("prompt-hub.db");
+    let database = Database::open(&path).unwrap();
+    let mut repository = database.into_repository();
+    let inbox = prompt("Inbox secret");
+    repository.save(&inbox, AuditAction::Created).unwrap();
+    let mut published = prompt("Published prompt");
+    published
+        .publish(
+            EffectivenessStatus::Unverified,
+            datetime!(2026-07-15 00:01 UTC),
+        )
+        .unwrap();
+    repository.save(&published, AuditAction::Published).unwrap();
+    drop(repository);
+
+    let request = format!(
+        concat!(
+            "{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{{\"name\":\"search_prompts\",\"arguments\":{{\"query\":\"\"}}}}}}\n",
+            "{{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{{\"name\":\"search_prompts\",\"arguments\":{{\"filters\":{{\"status\":\"inbox\"}}}}}}}}\n",
+            "{{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{{\"name\":\"get_prompt\",\"arguments\":{{\"id\":\"{}\"}}}}}}\n",
+            "{{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{{\"name\":\"get_prompt\",\"arguments\":{{\"id\":\"{}\"}}}}}}\n",
+            "{{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{{\"name\":\"save_prompt_draft\",\"arguments\":{{\"title\":\"Escalation\",\"body\":\"Must remain inbox\",\"status\":\"published\",\"source\":{{\"kind\":\"mcp\",\"name\":\"Codex\"}}}}}}}}\n"
+        ),
+        inbox.id().value(),
+        published.id().value(),
+    );
+    let responses = run_mcp(&path, request.as_bytes());
+
+    let search: serde_json::Value = tool_payload(&responses[0]);
+    assert_eq!(search["total"], 1);
+    assert_eq!(search["hits"][0]["id"], published.id().value().to_string());
+    let invalid_filter: serde_json::Value = tool_payload(&responses[1]);
+    assert_eq!(invalid_filter["code"], "invalid_argument");
+    let denied: serde_json::Value = tool_payload(&responses[2]);
+    assert_eq!(denied["code"], "permission_denied");
+    assert!(
+        responses[3]["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Published prompt")
+    );
+    let lifecycle_override: serde_json::Value = tool_payload(&responses[4]);
+    assert_eq!(lifecycle_override["code"], "invalid_argument");
+}
+
+#[test]
+fn stdio_server_rejects_oversized_requests_and_recovers_at_the_next_line() {
+    let mut oversized = format!(
+        "{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"padding\":\"{}\"}}\n",
+        "x".repeat(1024 * 1024)
+    );
+    oversized.push_str("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}\n");
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_prompt-mcp"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(oversized.as_bytes())
+        .unwrap();
+    drop(child.stdin.take());
+    let responses = String::from_utf8(child.wait_with_output().unwrap().stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .collect::<Vec<_>>();
+
+    assert_eq!(responses[0]["error"]["code"], -32600);
+    assert_eq!(responses[0]["error"]["message"], "request too large");
+    assert_eq!(responses[1]["id"], 2);
+    assert_eq!(responses[1]["result"]["tools"].as_array().unwrap().len(), 4);
+}
+
+fn prompt(title: &str) -> Prompt {
+    Prompt::new_inbox(
+        PromptContent::new(title, "Body", None, Some("security".to_owned()), Vec::new()).unwrap(),
+        PromptSource::new(
+            SourceKind::Manual,
+            "manual",
+            None,
+            datetime!(2026-07-15 00:00 UTC),
+        )
+        .unwrap(),
+        Actor::User,
+        datetime!(2026-07-15 00:00 UTC),
+    )
+}
+
+fn run_mcp(path: &std::path::Path, request: &[u8]) -> Vec<serde_json::Value> {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_prompt-mcp"))
+        .env("PROMPT_HUB_DATABASE_PATH", path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.as_mut().unwrap().write_all(request).unwrap();
+    drop(child.stdin.take());
+    String::from_utf8(child.wait_with_output().unwrap().stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+fn tool_payload(response: &serde_json::Value) -> serde_json::Value {
+    serde_json::from_str(response["result"]["content"][0]["text"].as_str().unwrap()).unwrap()
 }

@@ -3,22 +3,78 @@ use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
 use prompt_domain::{
-    Actor, Prompt, PromptContent, PromptId, PromptSource, PromptVariable, SourceKind,
+    Actor, Prompt, PromptContent, PromptId, PromptSource, PromptStatus, PromptVariable, SourceKind,
 };
-use prompt_mcp::{ToolOperation, approved_tools};
+use prompt_mcp::{ToolOperation, approved_tools, tool_input_schema, validate_tool_arguments};
 use prompt_store::{Database, PromptRepository, SearchFilters, SearchQuery};
 use serde_json::{Map, Value, json};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+const MAX_REQUEST_BYTES: usize = 1024 * 1024;
+
+enum RequestLine {
+    End,
+    Data(Vec<u8>),
+    TooLarge,
+}
+
 fn main() {
     let stdin = io::stdin();
+    let mut input = stdin.lock();
     let mut stdout = io::stdout().lock();
-    for line in stdin.lock().lines() {
-        let Ok(line) = line else { break };
-        let response = handle_request(&line);
+    loop {
+        let response = match read_request_line(&mut input) {
+            Ok(RequestLine::End) => break,
+            Ok(RequestLine::TooLarge) => error(Value::Null, -32600, "request too large"),
+            Ok(RequestLine::Data(line)) => match std::str::from_utf8(&line) {
+                Ok(line) => handle_request(line),
+                Err(_) => error(Value::Null, -32700, "parse error"),
+            },
+            Err(_) => break,
+        };
         if writeln!(stdout, "{response}").is_err() {
             break;
+        }
+    }
+}
+
+fn read_request_line(reader: &mut impl BufRead) -> io::Result<RequestLine> {
+    let mut line = Vec::new();
+    let mut saw_input = false;
+    let mut too_large = false;
+    loop {
+        let available = reader.fill_buf()?;
+        if available.is_empty() {
+            return if !saw_input {
+                Ok(RequestLine::End)
+            } else if too_large {
+                Ok(RequestLine::TooLarge)
+            } else {
+                Ok(RequestLine::Data(line))
+            };
+        }
+        saw_input = true;
+        let newline = available.iter().position(|byte| *byte == b'\n');
+        let consumed = newline.map_or(available.len(), |index| index + 1);
+        let payload = newline.map_or(available, |index| &available[..index]);
+        if !too_large {
+            if line.len().saturating_add(payload.len()) > MAX_REQUEST_BYTES {
+                too_large = true;
+                line.clear();
+            } else {
+                line.extend_from_slice(payload);
+            }
+        }
+        reader.consume(consumed);
+        if newline.is_some() {
+            if too_large {
+                return Ok(RequestLine::TooLarge);
+            }
+            if line.last() == Some(&b'\r') {
+                line.pop();
+            }
+            return Ok(RequestLine::Data(line));
         }
     }
 }
@@ -34,7 +90,7 @@ fn handle_request(line: &str) -> Value {
             json!({"jsonrpc":"2.0", "id":id, "result":{"tools": approved_tools().into_iter().map(|tool| json!({
             "name": tool.name,
             "description": match tool.operation { ToolOperation::ReadOnly => "Prompt Hub local read-only tool", ToolOperation::InboxWrite => "Prompt Hub tool that creates an inbox draft" },
-            "inputSchema":{"$ref":tool.input_schema_id}
+            "inputSchema":tool_input_schema(tool.name).unwrap_or_else(|| json!({"type":"object","additionalProperties":false}))
         })).collect::<Vec<_>>()}})
         }
         Some("tools/call") => match call_tool(&request) {
@@ -53,6 +109,8 @@ fn handle_request(line: &str) -> Value {
 fn structured_tool_error(message: &str) -> Value {
     let code = if message.starts_with("database_unavailable") {
         "database_unavailable"
+    } else if message.starts_with("permission_denied") {
+        "permission_denied"
     } else if message == "prompt_not_found" {
         "not_found"
     } else if message.contains("variable") {
@@ -78,9 +136,13 @@ fn call_tool(request: &Value) -> Result<Value, String> {
         .ok_or("tool name is required")?;
     let arguments = params
         .get("arguments")
-        .and_then(Value::as_object)
         .cloned()
-        .unwrap_or_default();
+        .unwrap_or_else(|| Value::Object(Map::new()));
+    validate_tool_arguments(name, &arguments)?;
+    let arguments = arguments
+        .as_object()
+        .cloned()
+        .ok_or_else(|| "tool arguments must be an object".to_owned())?;
     let mut repository = open_repository()?;
     match name {
         "search_prompts" => search(&repository, &arguments),
@@ -104,7 +166,7 @@ fn search(repository: &PromptRepository, arguments: &Map<String, Value>) -> Resu
     let query = arguments.get("query").and_then(Value::as_str).unwrap_or("");
     let limit = arguments.get("limit").and_then(Value::as_u64).unwrap_or(20) as u32;
     let offset = arguments.get("offset").and_then(Value::as_u64).unwrap_or(0) as u32;
-    let filters = arguments
+    let mut filters = arguments
         .get("filters")
         .map(|value| {
             serde_json::from_value::<SearchFilters>(value.clone())
@@ -112,6 +174,7 @@ fn search(repository: &PromptRepository, arguments: &Map<String, Value>) -> Resu
         })
         .transpose()?
         .unwrap_or_default();
+    filters.status = Some(PromptStatus::Published);
     let page = repository
         .search(
             SearchQuery::new(query)
@@ -203,10 +266,14 @@ fn load_prompt(
     arguments: &Map<String, Value>,
 ) -> Result<Prompt, String> {
     let id = Uuid::parse_str(&text(arguments, "id")?).map_err(|_| "invalid prompt id")?;
-    repository
+    let prompt = repository
         .get(PromptId::from_uuid(id))
         .map_err(|_| "database_unavailable".to_owned())?
-        .ok_or("prompt_not_found".to_owned())
+        .ok_or("prompt_not_found".to_owned())?;
+    if prompt.status() != PromptStatus::Published {
+        return Err("permission_denied: MCP can read only published prompts".to_owned());
+    }
+    Ok(prompt)
 }
 fn parse_variables(arguments: &Map<String, Value>) -> Result<Vec<PromptVariable>, String> {
     arguments

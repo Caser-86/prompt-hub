@@ -1,0 +1,27 @@
+.recovery-screen {
+  max-width: 680px;
+  margin: 8vh auto;
+  padding: 48px;
+  text-align: center;
+}
+
+.recovery-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #7a4f00;
+  background: #fff1c7;
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.recovery-screen h1 { margin: 8px 0 12px; }
+.recovery-message { color: var(--ink-strong); font-size: 18px; }
+.recovery-safe-note, .recovery-backup { color: var(--ink-muted); }
+.recovery-backup strong { color: var(--ink-strong); font-family: ui-monospace, monospace; }
+.recovery-actions { display: flex; justify-content: center; gap: 12px; margin: 28px 0; }
+.recovery-feedback { color: var(--accent); font-weight: 700; }
+.recovery-help { text-align: left; border-top: 1px solid var(--line); padding-top: 18px; }
