@@ -2,7 +2,7 @@
 
 日期：2026-08-30
 分支：`feat/permanent-prompt-deletion`
-源码提交：`8a36478ed42869e0a44eb03cc2983148cee387e3`
+源码提交：`dfab89025e1851d95abf9b69536664f4df9d1008`
 通道：`candidate`（自用内部候选包，不是公开正式发布包）
 
 ## 构建元数据
@@ -19,7 +19,7 @@ node scripts/verify-release.mjs --channel=candidate --json-out=apps/desktop/src-
 | --- | --- |
 | version | `0.1.10` |
 | channel | `candidate` |
-| gitCommit | `8a36478ed42869e0a44eb03cc2983148cee387e3` |
+| gitCommit | `dfab89025e1851d95abf9b69536664f4df9d1008` |
 | tagCommit | `null`（候选包未使用 release tag） |
 | migrationManifestSha256 | `8cdee8a7a5d368eeeb0002e3e4cce5bbe59668d9f01863e392fdf27c68b53cd8` |
 
@@ -35,8 +35,8 @@ pnpm --filter @prompt-hub/desktop exec tauri build
 
 | 包 | 大小（字节） | SHA-256 | 签名状态 |
 | --- | ---: | --- | --- |
-| `target/release/bundle/nsis/Prompt Hub_0.1.10_x64-setup.exe` | 3,693,985 | `39c121f41c6c1d27d2d901f8ddc6d5446958ca6b9f0f97b874ad247ebec203dc` | `NotSigned` |
-| `target/release/bundle/msi/Prompt Hub_0.1.10_x64_en-US.msi` | 6,578,176 | `038be493f5baa8b5feedbea590ef7d8fafaf174ad7c541c32d87ac94b4362328` | `NotSigned` |
+| `target/release/bundle/nsis/Prompt Hub_0.1.10_x64-setup.exe` | 3,694,544 | `58d7761bcfa336e7ebc45053dd6c0a0f0fb430a4a2886bceb2988133d826dd74` | `NotSigned` |
+| `target/release/bundle/msi/Prompt Hub_0.1.10_x64_en-US.msi` | 6,578,176 | `2df61371d10480b4634c321e911c20fd7fee423eb38cbfb666fa3c4a8afc0bd3` | `NotSigned` |
 
 对应校验清单：`target/release/bundle/SHA256SUMS.txt`。签名检查使用 PowerShell `Get-AuthenticodeSignature`，两个包均无签名证书，因此只能作为本地候选包使用。
 
