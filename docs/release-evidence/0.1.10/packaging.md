@@ -2,7 +2,7 @@
 
 日期：2026-08-30
 分支：`feat/permanent-prompt-deletion`
-源码提交：`6225b83748ffd29b17aed5408ae34f34cf2e91fb`
+源码提交：`8a36478ed42869e0a44eb03cc2983148cee387e3`
 通道：`candidate`（自用内部候选包，不是公开正式发布包）
 
 ## 构建元数据
@@ -19,7 +19,7 @@ node scripts/verify-release.mjs --channel=candidate --json-out=apps/desktop/src-
 | --- | --- |
 | version | `0.1.10` |
 | channel | `candidate` |
-| gitCommit | `6225b83748ffd29b17aed5408ae34f34cf2e91fb` |
+| gitCommit | `8a36478ed42869e0a44eb03cc2983148cee387e3` |
 | tagCommit | `null`（候选包未使用 release tag） |
 | migrationManifestSha256 | `8cdee8a7a5d368eeeb0002e3e4cce5bbe59668d9f01863e392fdf27c68b53cd8` |
 
@@ -35,8 +35,8 @@ pnpm --filter @prompt-hub/desktop exec tauri build
 
 | 包 | 大小（字节） | SHA-256 | 签名状态 |
 | --- | ---: | --- | --- |
-| `target/release/bundle/nsis/Prompt Hub_0.1.10_x64-setup.exe` | 3,692,928 | `dbf628f5984595dc2fd1cb55423bb8d65f1b7aead807cf62053523501340ba57` | `NotSigned` |
-| `target/release/bundle/msi/Prompt Hub_0.1.10_x64_en-US.msi` | 6,578,176 | `34823887c23fe4c8b031548d5f054def370c33d42acd70fac45a7b966cfcc703` | `NotSigned` |
+| `target/release/bundle/nsis/Prompt Hub_0.1.10_x64-setup.exe` | 3,693,985 | `39c121f41c6c1d27d2d901f8ddc6d5446958ca6b9f0f97b874ad247ebec203dc` | `NotSigned` |
+| `target/release/bundle/msi/Prompt Hub_0.1.10_x64_en-US.msi` | 6,578,176 | `038be493f5baa8b5feedbea590ef7d8fafaf174ad7c541c32d87ac94b4362328` | `NotSigned` |
 
 对应校验清单：`target/release/bundle/SHA256SUMS.txt`。签名检查使用 PowerShell `Get-AuthenticodeSignature`，两个包均无签名证书，因此只能作为本地候选包使用。
 
@@ -44,6 +44,11 @@ MCP sidecar 单独构建于 `target/release/prompt-mcp.exe`（8,160,768 字节�
 `2ce8a5620075c4aba20d88cd4bd5a6ba20b21cb51990a0fd42995b804b82bf4e`，签名状态
 `NotSigned`）。当前 Tauri 安装包不自动把 sidecar 放入系统 `PATH`，需按
 [mcp-setup.md](../../mcp-setup.md) 单独安装或配置其绝对路径。
+
+本次迁移修复还在现有本地数据库上完成了启动验收：应用启动后保持进程存活，
+`PRAGMA user_version` 为 `8`，并补齐了此前缺失的
+`20260829_01_prompt_metadata_and_usage` 账本记录（`provenance=legacy_recovery`）。
+原有数据未被替换；安装前另行保存了本地数据库副本。
 
 对 release sidecar 直接发送 `tools/list` 的协议验收返回 4 个工具：
 `search_prompts`、`get_prompt`、`render_prompt`、`save_prompt_draft`。
