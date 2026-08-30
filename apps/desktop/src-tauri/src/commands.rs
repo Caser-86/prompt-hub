@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -24,7 +25,7 @@ use prompt_import::{
 };
 use prompt_skill::{
     GitSkillSource, InstallMode, InstallRequest, install_skill as install_reviewed_skill,
-    scan_skill, snapshot_git_skill,
+    scan_skill, snapshot_git_skill, snapshot_local_skill,
 };
 use prompt_store::{
     BackupDestination, LATEST_SCHEMA_VERSION, PromptRepository, SearchFilters, SearchPage,
@@ -153,7 +154,6 @@ pub struct PromptService {
 
 pub struct SkillService {
     repository: Mutex<SkillRepository>,
-    backup_root: PathBuf,
     snapshot_root: PathBuf,
 }
 
@@ -1128,20 +1128,14 @@ impl SkillService {
     pub const fn new(repository: SkillRepository) -> Self {
         Self {
             repository: Mutex::new(repository),
-            backup_root: PathBuf::new(),
             snapshot_root: PathBuf::new(),
         }
     }
 
     #[must_use]
-    pub fn with_storage_roots(
-        repository: SkillRepository,
-        backup_root: PathBuf,
-        snapshot_root: PathBuf,
-    ) -> Self {
+    pub fn with_snapshot_root(repository: SkillRepository, snapshot_root: PathBuf) -> Self {
         Self {
             repository: Mutex::new(repository),
-            backup_root,
             snapshot_root,
         }
     }
@@ -1150,20 +1144,29 @@ impl SkillService {
         if !path.is_absolute() {
             return Err("Skill folder path must be absolute".to_owned());
         }
+        if fs::symlink_metadata(&path)
+            .map_err(|_| "Skill folder is unavailable".to_owned())?
+            .file_type()
+            .is_symlink()
+        {
+            return Err("Skill folder must not be a symbolic link".to_owned());
+        }
         let path = path
             .canonicalize()
             .map_err(|_| "Skill folder is unavailable".to_owned())?;
-        let candidate = scan_skill(&path).map_err(|error| error.to_string())?;
-        let stored = self
-            .repository
-            .lock()
-            .map_err(|_| "Skill repository is unavailable".to_owned())?
-            .save_candidate(
-                &candidate,
-                &SkillSource::local_directory(path.to_string_lossy()),
-                OffsetDateTime::now_utc(),
-            )
-            .map_err(|error| error.to_string())?;
+        if self.snapshot_root.as_os_str().is_empty() {
+            return Err("Skill snapshot storage is unavailable".to_owned());
+        }
+        fs::create_dir_all(&self.snapshot_root)
+            .map_err(|_| "Skill snapshot storage is unavailable".to_owned())?;
+        let snapshot = self.snapshot_root.join(Uuid::now_v7().to_string());
+        let candidate =
+            snapshot_local_skill(&path, &snapshot).map_err(|error| error.to_string())?;
+        let stored = self.save_snapshot_candidate(
+            &candidate,
+            &SkillSource::local_directory(path.to_string_lossy()),
+            &snapshot,
+        )?;
         SkillListItem::from_stored(&stored)
     }
 
@@ -1185,18 +1188,41 @@ impl SkillService {
         let snapshot = self.snapshot_root.join(Uuid::now_v7().to_string());
         let candidate =
             snapshot_git_skill(&source, &snapshot).map_err(|error| error.to_string())?;
-        let stored = self
+        let stored = self.save_snapshot_candidate(
+            &candidate,
+            &SkillSource::git_repository(source.repository_url(), source.commit()),
+            &snapshot,
+        )?;
+        SkillListItem::from_stored(&stored)
+    }
+
+    fn save_snapshot_candidate(
+        &self,
+        candidate: &prompt_skill::SkillCandidate,
+        source: &SkillSource,
+        snapshot: &std::path::Path,
+    ) -> Result<StoredSkill, String> {
+        let snapshot_path = snapshot.to_string_lossy().to_string();
+        let result = self
             .repository
             .lock()
             .map_err(|_| "Skill repository is unavailable".to_owned())?
             .save_candidate_with_snapshot(
-                &candidate,
-                &SkillSource::git_repository(source.repository_url(), source.commit()),
-                Some(&snapshot.to_string_lossy()),
+                candidate,
+                source,
+                Some(&snapshot_path),
                 OffsetDateTime::now_utc(),
             )
-            .map_err(|error| error.to_string())?;
-        SkillListItem::from_stored(&stored)
+            .map_err(|error| error.to_string());
+        if result
+            .as_ref()
+            .ok()
+            .and_then(|stored| stored.snapshot_path())
+            != Some(snapshot_path.as_str())
+        {
+            let _ = fs::remove_dir_all(snapshot);
+        }
+        result
     }
 
     pub fn list(&self) -> Result<Vec<SkillListItem>, String> {
@@ -1211,12 +1237,20 @@ impl SkillService {
     }
 
     pub fn get(&self, id: &str) -> Result<Option<SkillDetail>, String> {
-        self.repository
+        let repository = self
+            .repository
             .lock()
-            .map_err(|_| "Skill repository is unavailable".to_owned())?
+            .map_err(|_| "Skill repository is unavailable".to_owned())?;
+        repository
             .get_skill(id)
             .map_err(|error| error.to_string())?
-            .map(|skill| SkillDetail::from_stored(&skill))
+            .map(|skill| {
+                let installation = repository
+                    .installation(skill.id())
+                    .map_err(|error| error.to_string())?
+                    .map(SkillInstallationItem::from_store);
+                SkillDetail::from_stored(&skill, installation)
+            })
             .transpose()
     }
 
@@ -1264,11 +1298,9 @@ impl SkillService {
         }
         let source = skill.snapshot_path().unwrap_or(skill.source().location());
         let source = PathBuf::from(source);
-        let backup_root = if self.backup_root.as_os_str().is_empty() {
-            target_root.join(".prompt-hub-skill-backups")
-        } else {
-            self.backup_root.clone()
-        };
+        // Keep backups under the selected target so an atomic rename remains valid on Windows
+        // when application data and the installation target are on different drives.
+        let backup_root = target_root.join(".prompt-hub-skill-backups");
         let receipt = install_reviewed_skill(InstallRequest {
             source: &source,
             target_root: &target_root,
@@ -1410,6 +1442,7 @@ pub struct SkillDetail {
     pub content_hash: String,
     pub created_at: String,
     pub updated_at: String,
+    pub installation: Option<SkillInstallationItem>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1529,7 +1562,10 @@ impl SkillListItem {
 }
 
 impl SkillDetail {
-    fn from_stored(skill: &StoredSkill) -> Result<Self, String> {
+    fn from_stored(
+        skill: &StoredSkill,
+        installation: Option<SkillInstallationItem>,
+    ) -> Result<Self, String> {
         Ok(Self {
             id: skill.id().to_owned(),
             name: skill.name().to_owned(),
@@ -1553,7 +1589,18 @@ impl SkillDetail {
             content_hash: skill.content_hash().to_owned(),
             created_at: format_timestamp(skill.created_at())?,
             updated_at: format_timestamp(skill.updated_at())?,
+            installation,
         })
+    }
+}
+
+impl SkillInstallationItem {
+    fn from_store(installation: prompt_store::SkillInstallation) -> Self {
+        Self {
+            install_path: installation.install_path().to_owned(),
+            backup_path: installation.backup_path().map(str::to_owned),
+            installed_hash: installation.installed_hash().to_owned(),
+        }
     }
 }
 

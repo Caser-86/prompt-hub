@@ -252,17 +252,14 @@ fn collect_files(
         }
         let content = fs::read(&path)?;
         let kind = classify_file(&relative_path, &content);
-        match kind {
-            SkillFileKind::Script => {
-                risks.insert(SkillRisk::ContainsScript);
-            }
-            SkillFileKind::Binary => {
-                risks.insert(SkillRisk::ContainsBinary);
-            }
-            SkillFileKind::Hidden => {
-                risks.insert(SkillRisk::ContainsHiddenFile);
-            }
-            SkillFileKind::SkillMarkdown | SkillFileKind::Text => {}
+        if is_hidden_path(&relative_path) {
+            risks.insert(SkillRisk::ContainsHiddenFile);
+        }
+        if is_script_path(&relative_path) {
+            risks.insert(SkillRisk::ContainsScript);
+        }
+        if content.contains(&0) {
+            risks.insert(SkillRisk::ContainsBinary);
         }
         let digest = Sha256::digest(content);
         files.push(SkillFile {
@@ -294,27 +291,34 @@ fn classify_file(relative_path: &str, content: &[u8]) -> SkillFileKind {
     if relative_path == "SKILL.md" {
         return SkillFileKind::SkillMarkdown;
     }
-    if relative_path
-        .split('/')
-        .any(|segment| segment.starts_with('.'))
-    {
+    if is_hidden_path(relative_path) {
         return SkillFileKind::Hidden;
     }
-    let extension = PathBuf::from(relative_path)
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if matches!(
-        extension.as_str(),
-        "ps1" | "bat" | "cmd" | "sh" | "py" | "js" | "mjs" | "cjs"
-    ) {
+    if is_script_path(relative_path) {
         return SkillFileKind::Script;
     }
     if content.contains(&0) {
         return SkillFileKind::Binary;
     }
     SkillFileKind::Text
+}
+
+fn is_hidden_path(relative_path: &str) -> bool {
+    relative_path
+        .split('/')
+        .any(|segment| segment.starts_with('.'))
+}
+
+fn is_script_path(relative_path: &str) -> bool {
+    matches!(
+        PathBuf::from(relative_path)
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str(),
+        "ps1" | "bat" | "cmd" | "sh" | "py" | "js" | "mjs" | "cjs"
+    )
 }
 
 fn parse_metadata(markdown: &str, root: &Path) -> (String, String) {

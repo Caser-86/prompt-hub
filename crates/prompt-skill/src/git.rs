@@ -1,11 +1,20 @@
 use std::fs;
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use thiserror::Error;
 
-use crate::{SkillCandidate, scan_skill};
+use crate::{ScanLimits, SkillCandidate, scan_skill};
+
+const MAX_TREE_OUTPUT_BYTES: usize = 4 * 1024 * 1024;
+
+#[derive(Debug)]
+struct TreeEntry {
+    object_id: String,
+    relative_path: PathBuf,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitSkillSource {
@@ -63,6 +72,8 @@ pub enum GitSkillError {
     SnapshotExists,
     #[error("Git did not return a safe regular file list")]
     UnsafeTree,
+    #[error("Git Skill snapshot exceeds resource limits")]
+    ResourceLimit,
     #[error("Git command failed while reading the fixed revision")]
     Git,
     #[error("unable to create Skill snapshot")]
@@ -82,8 +93,10 @@ pub fn snapshot_git_skill(
     }
     let object_store = snapshot_root.with_extension(format!("git-objects-{}", suffix()));
     fs::create_dir_all(&object_store)?;
+    let git_config = object_store.join("prompt-hub-empty.gitconfig");
+    fs::write(&git_config, "")?;
     let outcome = (|| {
-        git(&["init", "--bare", "--quiet"], &object_store)?;
+        git(&["init", "--bare", "--quiet"], &object_store, &git_config)?;
         git(
             &[
                 "-C",
@@ -95,6 +108,7 @@ pub fn snapshot_git_skill(
                 source.commit(),
             ],
             &object_store,
+            &git_config,
         )?;
         let object_store_path = path(&object_store)?;
         let mut tree_arguments = vec![
@@ -108,8 +122,15 @@ pub fn snapshot_git_skill(
         if !source.subdirectory().as_os_str().is_empty() {
             tree_arguments.extend(["--", path(source.subdirectory())?]);
         }
-        let tree = git_output(&tree_arguments, &object_store)?;
-        fs::create_dir(snapshot_root)?;
+        let tree = git_output_limited(
+            &tree_arguments,
+            &object_store,
+            &git_config,
+            MAX_TREE_OUTPUT_BYTES,
+        )?;
+        let mut entries = Vec::new();
+        let mut total_bytes = 0_u64;
+        let limits = ScanLimits::default();
         for entry in tree
             .split(|byte| *byte == 0)
             .filter(|entry| !entry.is_empty())
@@ -139,14 +160,32 @@ pub fn snapshot_git_skill(
             {
                 return Err(GitSkillError::UnsafeTree);
             }
-            let output = snapshot_root.join(relative_path);
+            let bytes = git_object_size(fields[2], &object_store, &git_config)?;
+            enforce_snapshot_limits(entries.len(), total_bytes, bytes, limits)?;
+            total_bytes = total_bytes
+                .checked_add(bytes)
+                .ok_or(GitSkillError::ResourceLimit)?;
+            entries.push(TreeEntry {
+                object_id: fields[2].to_owned(),
+                relative_path: relative_path.to_owned(),
+            });
+        }
+        fs::create_dir(snapshot_root)?;
+        for entry in entries {
+            let output = snapshot_root.join(entry.relative_path);
             fs::create_dir_all(output.parent().ok_or(GitSkillError::UnsafeTree)?)?;
-            let object = format!("{}:{}", source.commit(), remote_path);
             fs::write(
                 output,
                 git_output(
-                    &["-C", path(&object_store)?, "show", &object],
+                    &[
+                        "-C",
+                        path(&object_store)?,
+                        "cat-file",
+                        "blob",
+                        &entry.object_id,
+                    ],
                     &object_store,
+                    &git_config,
                 )?,
             )?;
         }
@@ -159,10 +198,8 @@ pub fn snapshot_git_skill(
     outcome
 }
 
-fn git(arguments: &[&str], directory: &Path) -> Result<(), GitSkillError> {
-    if Command::new("git")
-        .args(arguments)
-        .current_dir(directory)
+fn git(arguments: &[&str], directory: &Path, git_config: &Path) -> Result<(), GitSkillError> {
+    if git_command(arguments, directory, git_config)
         .status()
         .map_err(GitSkillError::Io)?
         .success()
@@ -172,10 +209,12 @@ fn git(arguments: &[&str], directory: &Path) -> Result<(), GitSkillError> {
         Err(GitSkillError::Git)
     }
 }
-fn git_output(arguments: &[&str], directory: &Path) -> Result<Vec<u8>, GitSkillError> {
-    let output = Command::new("git")
-        .args(arguments)
-        .current_dir(directory)
+fn git_output(
+    arguments: &[&str],
+    directory: &Path,
+    git_config: &Path,
+) -> Result<Vec<u8>, GitSkillError> {
+    let output = git_command(arguments, directory, git_config)
         .output()
         .map_err(GitSkillError::Io)?;
     if output.status.success() {
@@ -183,6 +222,90 @@ fn git_output(arguments: &[&str], directory: &Path) -> Result<Vec<u8>, GitSkillE
     } else {
         Err(GitSkillError::Git)
     }
+}
+
+fn git_output_limited(
+    arguments: &[&str],
+    directory: &Path,
+    git_config: &Path,
+    maximum_bytes: usize,
+) -> Result<Vec<u8>, GitSkillError> {
+    let mut child = git_command(arguments, directory, git_config)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(GitSkillError::Io)?;
+    let mut output = Vec::new();
+    child
+        .stdout
+        .take()
+        .ok_or(GitSkillError::Git)?
+        .take((maximum_bytes + 1) as u64)
+        .read_to_end(&mut output)
+        .map_err(GitSkillError::Io)?;
+    if let Err(error) = tree_output_is_within_limit(output.len(), maximum_bytes) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(error);
+    }
+    if child.wait().map_err(GitSkillError::Io)?.success() {
+        Ok(output)
+    } else {
+        Err(GitSkillError::Git)
+    }
+}
+
+fn tree_output_is_within_limit(bytes: usize, maximum_bytes: usize) -> Result<(), GitSkillError> {
+    if bytes > maximum_bytes {
+        return Err(GitSkillError::ResourceLimit);
+    }
+    Ok(())
+}
+
+fn git_command(arguments: &[&str], directory: &Path, git_config: &Path) -> Command {
+    let mut command = Command::new("git");
+    command
+        .args(arguments)
+        .current_dir(directory)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", git_config)
+        .env("GIT_ALLOW_PROTOCOL", "https")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_OPTIONAL_LOCKS", "0");
+    command
+}
+
+fn git_object_size(
+    object_id: &str,
+    object_store: &Path,
+    git_config: &Path,
+) -> Result<u64, GitSkillError> {
+    let output = git_output(
+        &["-C", path(object_store)?, "cat-file", "-s", object_id],
+        object_store,
+        git_config,
+    )?;
+    std::str::from_utf8(&output)
+        .ok()
+        .and_then(|value| value.trim().parse().ok())
+        .ok_or(GitSkillError::Git)
+}
+
+fn enforce_snapshot_limits(
+    existing_files: usize,
+    existing_total_bytes: u64,
+    next_file_bytes: u64,
+    limits: ScanLimits,
+) -> Result<(), GitSkillError> {
+    if existing_files >= limits.max_files
+        || next_file_bytes > limits.max_file_bytes
+        || existing_total_bytes
+            .checked_add(next_file_bytes)
+            .is_none_or(|total| total > limits.max_total_bytes)
+    {
+        return Err(GitSkillError::ResourceLimit);
+    }
+    Ok(())
 }
 fn path(value: &Path) -> Result<&str, GitSkillError> {
     value.to_str().ok_or(GitSkillError::UnsafeTree)
@@ -214,4 +337,42 @@ fn validate_repository_url(value: &str) -> Result<(), GitSkillError> {
         return Err(GitSkillError::RepositoryUrl);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ScanLimits;
+
+    #[test]
+    fn snapshot_limits_reject_large_tree_before_blob_materialization() {
+        let limits = ScanLimits {
+            max_files: 2,
+            max_total_bytes: 8,
+            max_file_bytes: 5,
+            max_depth: 12,
+        };
+        assert!(matches!(
+            enforce_snapshot_limits(2, 8, 1, limits),
+            Err(GitSkillError::ResourceLimit)
+        ));
+        assert!(matches!(
+            enforce_snapshot_limits(1, 4, 6, limits),
+            Err(GitSkillError::ResourceLimit)
+        ));
+        assert!(matches!(
+            enforce_snapshot_limits(1, 5, 4, limits),
+            Err(GitSkillError::ResourceLimit)
+        ));
+        assert!(enforce_snapshot_limits(1, 3, 5, limits).is_ok());
+    }
+
+    #[test]
+    fn tree_output_limit_is_bounded_to_prevent_unbounded_metadata_buffers() {
+        assert!(tree_output_is_within_limit(MAX_TREE_OUTPUT_BYTES, MAX_TREE_OUTPUT_BYTES).is_ok());
+        assert!(matches!(
+            tree_output_is_within_limit(MAX_TREE_OUTPUT_BYTES + 1, MAX_TREE_OUTPUT_BYTES),
+            Err(GitSkillError::ResourceLimit)
+        ));
+    }
 }

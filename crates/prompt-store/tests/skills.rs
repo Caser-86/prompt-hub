@@ -63,3 +63,40 @@ fn deduplicates_the_same_source_and_content_without_creating_another_asset() {
     assert_eq!(first.id(), second.id());
     assert_eq!(repository.list_skills().unwrap().len(), 1);
 }
+
+#[test]
+fn deduplication_keeps_the_latest_durable_snapshot_and_revision() {
+    let (_directory, candidate) = candidate();
+    let mut repository = Database::open_in_memory().unwrap().into_skill_repository();
+    let first_source = SkillSource::git_repository(
+        "https://github.com/example/skills.git",
+        "1111111111111111111111111111111111111111",
+    );
+    let second_source = SkillSource::git_repository(
+        "https://github.com/example/skills.git",
+        "2222222222222222222222222222222222222222",
+    );
+    let first = repository
+        .save_candidate_with_snapshot(
+            &candidate,
+            &first_source,
+            Some("C:/snapshots/first"),
+            OffsetDateTime::now_utc(),
+        )
+        .unwrap();
+    let second = repository
+        .save_candidate_with_snapshot(
+            &candidate,
+            &second_source,
+            Some("C:/snapshots/second"),
+            OffsetDateTime::now_utc(),
+        )
+        .unwrap();
+
+    assert_eq!(first.id(), second.id());
+    assert_eq!(second.snapshot_path(), Some("C:/snapshots/second"));
+    assert_eq!(
+        second.source().revision(),
+        Some("2222222222222222222222222222222222222222")
+    );
+}

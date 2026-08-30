@@ -40,6 +40,7 @@ export function SkillLibrary({ collectSkillFolder, collectGitSkill, getSkill, li
   const [isCollecting, setCollecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [installTarget, setInstallTarget] = useState("");
+  const [destinationName, setDestinationName] = useState("");
   const [replaceAfterBackup, setReplaceAfterBackup] = useState(false);
   const [installation, setInstallation] = useState<SkillInstallation | null>(null);
   const [gitSource, setGitSource] = useState<GitSkillCollectionDraft>({ repositoryUrl: "", commit: "", subdirectory: "" });
@@ -92,6 +93,10 @@ export function SkillLibrary({ collectSkillFolder, collectGitSkill, getSkill, li
         return;
       }
       setSelected(detail);
+      setDestinationName(detail.name);
+      setInstallation(detail.installation);
+      setVerification(null);
+      setReplaceAfterBackup(false);
     } catch {
       setError("无法读取 Skill 详情，请重试。");
     }
@@ -112,13 +117,13 @@ export function SkillLibrary({ collectSkillFolder, collectGitSkill, getSkill, li
   };
 
   const install = async () => {
-    if (!selected || !installTarget.trim()) return;
+    if (!selected || !installTarget.trim() || !destinationName.trim()) return;
     setError(null);
     try {
-      const result = await installSkill(selected.id, { targetRoot: installTarget.trim(), destinationName: selected.name, replaceAfterBackup });
+      const result = await installSkill(selected.id, { targetRoot: installTarget.trim(), destinationName: destinationName.trim(), replaceAfterBackup });
       setInstallation(result);
-    } catch {
-      setError("无法安装 Skill。请检查目标路径、同名冲突和原始文件是否发生变化。");
+    } catch (reason) {
+      setError(`无法安装 Skill：${errorMessage(reason, "请检查目标路径、同名冲突和原始文件是否发生变化。")}`);
     }
   };
   const verifyInstallation = async () => { if (!selected) return; try { setVerification(await verifySkillInstallation(selected.id)); } catch { setError("无法验证已安装 Skill。请确认安装记录和目标目录仍可访问。"); } };
@@ -143,7 +148,7 @@ export function SkillLibrary({ collectSkillFolder, collectGitSkill, getSkill, li
           </section>
           <section className="surface-card skill-facts-card"><h2>收集记录</h2><dl><dt>来源</dt><dd>{selected.source.location}</dd><dt>内容校验</dt><dd><code>{selected.contentHash.slice(0, 12)}…</code></dd><dt>文件数</dt><dd>{selected.files.length} 个</dd><dt>更新时间</dt><dd><time dateTime={selected.updatedAt}>{formatDate(selected.updatedAt)}</time></dd></dl></section>
           <section className="surface-card skill-files-card"><h2>已收集文件</h2><ul>{selected.files.map((file) => <li key={file.relativePath}><span>{file.relativePath}</span><small>{file.kind} · {formatBytes(file.bytes)}</small></li>)}</ul></section>
-          {selected.reviewStatus === "approved" ? <section aria-label="安装 Skill" className="surface-card skill-install-card"><h2>安装到 Codex</h2><p>安装只复制已审核文件，并再次核对内容；不会执行任何脚本。</p><label htmlFor="skill-install-target">目标目录</label><input id="skill-install-target" onChange={(event) => setInstallTarget(event.target.value)} placeholder="例如 C:\\Users\\you\\.codex\\skills" value={installTarget} /><label className="skill-replace-choice"><input checked={replaceAfterBackup} onChange={(event) => setReplaceAfterBackup(event.target.checked)} type="checkbox" />同名时先备份再替换</label><button className="button-primary" disabled={!installTarget.trim()} onClick={() => void install()} type="button">安装 Skill</button>{installation ? <><p className="skill-install-success">已安装到 {installation.installPath}{installation.backupPath ? "；原版本已备份。" : "。"}</p><button className="button-secondary" onClick={() => void verifyInstallation()} type="button">检查本地漂移</button>{verification ? <p className={`skill-verification skill-verification-${verification.state}`}>{verification.state === "matching" ? "安装内容一致" : verification.state === "drifted" ? "发现本地内容变化" : "安装目录不可用"}</p> : null}</> : null}</section> : <section className="surface-card skill-install-card skill-install-locked"><h2>安装</h2><p>审核通过后才能安装。安装始终是显式操作，不会自动执行或覆盖文件。</p></section>}
+          {selected.reviewStatus === "approved" ? <section aria-label="安装 Skill" className="surface-card skill-install-card"><h2>安装到 Codex</h2><p>安装只复制已审核文件，并再次核对内容；不会执行任何脚本。</p><label htmlFor="skill-install-target">目标目录</label><input id="skill-install-target" onChange={(event) => setInstallTarget(event.target.value)} placeholder="例如 C:\\Users\\you\\.codex\\skills" value={installTarget} /><label htmlFor="skill-install-name">安装目录名称</label><input id="skill-install-name" onChange={(event) => setDestinationName(event.target.value)} placeholder="例如 review-copy" value={destinationName} /><p>仅允许一个文件夹名称；如目标中已存在同名目录，默认会停止，不会覆盖。</p><label className="skill-replace-choice"><input checked={replaceAfterBackup} onChange={(event) => setReplaceAfterBackup(event.target.checked)} type="checkbox" />同名时先备份再替换</label><button className="button-primary" disabled={!installTarget.trim() || !destinationName.trim()} onClick={() => void install()} type="button">安装 Skill</button>{installation ? <><p className="skill-install-success">已安装到 {installation.installPath}{installation.backupPath ? "；原版本已备份。" : "。"}</p><button className="button-secondary" onClick={() => void verifyInstallation()} type="button">检查本地漂移</button>{verification ? <p className={`skill-verification skill-verification-${verification.state}`}>{verification.state === "matching" ? "安装内容一致" : verification.state === "drifted" ? "发现本地内容变化" : "安装目录不可用"}</p> : null}</> : null}</section> : <section className="surface-card skill-install-card skill-install-locked"><h2>安装</h2><p>审核通过后才能安装。安装始终是显式操作，不会自动执行或覆盖文件。</p></section>}
         </aside>
       </div>
     </section>;
@@ -164,3 +169,4 @@ function filterLabel(filter: SkillFilter) { return { all: "全部", pending: "�
 function riskLabel(risk: string) { return riskLabels[risk] ?? "需审核"; }
 function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN", { hour12: false }); }
 function formatBytes(bytes: number) { return bytes < 1024 ? `${bytes} B` : `${Math.ceil(bytes / 1024)} KB`; }
+function errorMessage(reason: unknown, fallback: string) { return reason instanceof Error && reason.message.trim() ? reason.message : fallback; }

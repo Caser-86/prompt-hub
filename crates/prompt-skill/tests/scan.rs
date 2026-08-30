@@ -36,6 +36,23 @@ fn scans_skill_metadata_hashes_and_script_risk_without_execution() {
 }
 
 #[test]
+fn records_every_applicable_risk_for_a_hidden_script() {
+    let directory = tempdir().unwrap();
+    write_skill(directory.path(), "# Combined risk\n");
+    fs::create_dir(directory.path().join(".internal")).unwrap();
+    fs::write(
+        directory.path().join(".internal/run.ps1"),
+        "Write-Output never-run",
+    )
+    .unwrap();
+
+    let candidate = scan_skill(directory.path()).unwrap();
+
+    assert!(candidate.risks().contains(&SkillRisk::ContainsHiddenFile));
+    assert!(candidate.risks().contains(&SkillRisk::ContainsScript));
+}
+
+#[test]
 fn rejects_a_directory_without_skill_markdown() {
     let directory = tempdir().unwrap();
     let error = scan_skill(directory.path()).unwrap_err();

@@ -313,6 +313,10 @@ impl SkillRepository {
             )
             .optional()?
         {
+            self.connection.execute(
+                "UPDATE skills SET source_revision = ?1, snapshot_path = COALESCE(?2, snapshot_path), updated_at = ?3 WHERE id = ?4",
+                params![source.revision(), snapshot_path, created_at.unix_timestamp(), existing],
+            )?;
             return self
                 .get_skill(&existing)?
                 .ok_or_else(|| StoreError::Domain("stored Skill disappeared".to_owned()));

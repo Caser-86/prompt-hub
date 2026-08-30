@@ -124,6 +124,7 @@ export type SkillDetail = SkillListItem & {
   files: SkillFileItem[];
   contentHash: string;
   createdAt: string;
+  installation: SkillInstallation | null;
 };
 export type SkillReviewDraft = { status: SkillReviewStatus; notes: string | null };
 export type SkillInstallDraft = { targetRoot: string; destinationName: string; replaceAfterBackup: boolean };
@@ -444,6 +445,7 @@ function isSkillDetail(value: unknown): value is SkillDetail {
   return (typeof skill.reviewNotes === "string" || skill.reviewNotes === null)
     && typeof skill.skillMarkdown === "string" && typeof skill.contentHash === "string"
     && typeof skill.createdAt === "string" && Array.isArray(skill.files)
+    && (skill.installation === null || isSkillInstallation(skill.installation))
     && skill.files.every((file) => typeof file === "object" && file !== null
       && typeof (file as Record<string, unknown>).relativePath === "string"
       && typeof (file as Record<string, unknown>).bytes === "number"

@@ -11,9 +11,8 @@ pub fn run() {
             let database = prompt_store::Database::open(&database_path)?;
             app.manage(commands::PromptService::new(database.into_repository()));
             let skill_database = prompt_store::Database::open(&database_path)?;
-            app.manage(commands::SkillService::with_storage_roots(
+            app.manage(commands::SkillService::with_snapshot_root(
                 skill_database.into_skill_repository(),
-                data_directory.join("skill-backups"),
                 data_directory.join("skill-snapshots"),
             ));
             app.manage(commands::AiCancellationRegistry::default());

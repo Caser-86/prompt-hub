@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use thiserror::Error;
 
-use crate::scan_skill;
+use crate::{SkillCandidate, scan_skill};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstallMode {
@@ -58,6 +58,49 @@ pub enum SkillInstallError {
     Io(#[from] std::io::Error),
     #[error("unable to verify installed Skill")]
     Scan(#[from] crate::SkillScanError),
+}
+
+#[derive(Debug, Error)]
+pub enum SkillSnapshotError {
+    #[error("Skill snapshot path already exists")]
+    SnapshotExists,
+    #[error("Skill source content changed while creating the snapshot")]
+    SourceChanged,
+    #[error("unable to create Skill snapshot")]
+    Io(#[from] std::io::Error),
+    #[error("unable to scan Skill snapshot")]
+    Scan(#[from] crate::SkillScanError),
+}
+
+/// Copies the reviewed local file set into a private snapshot without executing any files.
+/// The copied tree is rescanned so later installation never depends on a mutable source folder.
+pub fn snapshot_local_skill(
+    source: &Path,
+    snapshot_root: &Path,
+) -> Result<SkillCandidate, SkillSnapshotError> {
+    if snapshot_root.exists() {
+        return Err(SkillSnapshotError::SnapshotExists);
+    }
+    let candidate = scan_skill(source)?;
+    let result = (|| {
+        fs::create_dir(snapshot_root)?;
+        for file in candidate.files() {
+            let relative = Path::new(file.relative_path());
+            let output = snapshot_root.join(relative);
+            let parent = output.parent().ok_or(SkillSnapshotError::SourceChanged)?;
+            fs::create_dir_all(parent)?;
+            fs::copy(source.join(relative), output)?;
+        }
+        let copied = scan_skill(snapshot_root)?;
+        if copied.content_hash() != candidate.content_hash() {
+            return Err(SkillSnapshotError::SourceChanged);
+        }
+        Ok(copied)
+    })();
+    if result.is_err() && snapshot_root.exists() {
+        let _ = fs::remove_dir_all(snapshot_root);
+    }
+    result
 }
 
 /// Copies a reviewed Skill without executing any of its files.
