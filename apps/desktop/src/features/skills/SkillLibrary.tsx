@@ -124,7 +124,7 @@ export function SkillLibrary({ collectSkillFolder, collectGitSkill, getSkill, li
       const result = await installSkill(selected.id, { targetRoot: installTarget.trim(), destinationName: destinationName.trim(), replaceAfterBackup });
       setInstallation(result);
     } catch (reason) {
-      setError(`无法安装 Skill：${errorMessage(reason, "请检查目标路径、同名冲突和原始文件是否发生变化。")}`);
+      setError(`无法安装 Skill：${installErrorMessage(reason, "请检查目标路径、同名冲突和原始文件是否发生变化。")}`);
     }
   };
   const verifyInstallation = async () => { if (!selected) return; try { setVerification(await verifySkillInstallation(selected.id)); } catch { setError("无法验证已安装 Skill。请确认安装记录和目标目录仍可访问。"); } };
@@ -171,4 +171,19 @@ function filterLabel(filter: SkillFilter) { return { all: "全部", pending: "�
 function riskLabel(risk: string) { return riskLabels[risk] ?? "需审核"; }
 function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN", { hour12: false }); }
 function formatBytes(bytes: number) { return bytes < 1024 ? `${bytes} B` : `${Math.ceil(bytes / 1024)} KB`; }
-function errorMessage(reason: unknown, fallback: string) { return reason instanceof Error && reason.message.trim() ? reason.message : fallback; }
+function errorMessage(reason: unknown, fallback: string) {
+  if (typeof reason === "string" && reason.trim()) return reason;
+  if (reason instanceof Error && reason.message.trim()) return reason.message;
+  return fallback;
+}
+function installErrorMessage(reason: unknown, fallback: string) {
+  const message = errorMessage(reason, "");
+  const normalized = message.toLowerCase();
+  if ((normalized.includes("destination") && normalized.includes("exist")) || message.includes("同名")) {
+    return "同名冲突：目标目录中已有同名 Skill。请勾选“同名时先备份再替换”后重试。";
+  }
+  if (normalized.includes("source") && normalized.includes("chang")) {
+    return "原始 Skill 内容已变化，请重新收集并审核后再安装。";
+  }
+  return message || fallback;
+}

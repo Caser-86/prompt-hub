@@ -1,8 +1,8 @@
 # 0.1.10 候选包构建与安装烟测证据
 
 日期：2026-08-30
-分支：`codex/legacy-v5-schema-recovery`
-源码提交：`f68b59281a435f87b29958ff32881f3b208b62df`
+分支：`feat/permanent-prompt-deletion`
+源码提交：`6225b83748ffd29b17aed5408ae34f34cf2e91fb`
 通道：`candidate`（自用内部候选包，不是公开正式发布包）
 
 ## 构建元数据
@@ -19,7 +19,7 @@ node scripts/verify-release.mjs --channel=candidate --json-out=apps/desktop/src-
 | --- | --- |
 | version | `0.1.10` |
 | channel | `candidate` |
-| gitCommit | `7e1f671f7a2ccaee7680fb9ebd06daff6f262ca2` |
+| gitCommit | `6225b83748ffd29b17aed5408ae34f34cf2e91fb` |
 | tagCommit | `null`（候选包未使用 release tag） |
 | migrationManifestSha256 | `8cdee8a7a5d368eeeb0002e3e4cce5bbe59668d9f01863e392fdf27c68b53cd8` |
 
@@ -35,13 +35,13 @@ pnpm --filter @prompt-hub/desktop exec tauri build
 
 | 包 | 大小（字节） | SHA-256 | 签名状态 |
 | --- | ---: | --- | --- |
-| `target/release/bundle/nsis/Prompt Hub_0.1.10_x64-setup.exe` | 3,691,936 | `03f603119fd875170f2e6ccb0f095db936686023129b54860abe2f3326372fea` | `NotSigned` |
-| `target/release/bundle/msi/Prompt Hub_0.1.10_x64_en-US.msi` | 4,964,352 | `f5263bd218208933568be6bfde3c3a658e91b5baa2e933f1c3a61d080eac99aa` | `NotSigned` |
+| `target/release/bundle/nsis/Prompt Hub_0.1.10_x64-setup.exe` | 3,691,658 | `82e35ba142f4d936de623691eed598aed95fce9934e3d29a6b10601584923fe7` | `NotSigned` |
+| `target/release/bundle/msi/Prompt Hub_0.1.10_x64_en-US.msi` | 6,578,176 | `6a3cbb29731fa3b0a94cb25986607bdee61ea42d744e59bc0223ef8d37f50b35` | `NotSigned` |
 
 对应校验清单：`target/release/bundle/SHA256SUMS.txt`。签名检查使用 PowerShell `Get-AuthenticodeSignature`，两个包均无签名证书，因此只能作为本地候选包使用。
 
 MCP sidecar 单独构建于 `target/release/prompt-mcp.exe`（8,160,768 字节，SHA-256
-`49f00efc901bf241dd620ee5110819390b9078dac506f6590711f0233272b02b`，签名状态
+`2ce8a5620075c4aba20d88cd4bd5a6ba20b21cb51990a0fd42995b804b82bf4e`，签名状态
 `NotSigned`）。当前 Tauri 安装包不自动把 sidecar 放入系统 `PATH`，需按
 [mcp-setup.md](../../mcp-setup.md) 单独安装或配置其绝对路径。
 
@@ -51,7 +51,7 @@ MCP sidecar 单独构建于 `target/release/prompt-mcp.exe`（8,160,768 字节�
 ## NSIS 安装/启动/卸载烟测
 
 在隔离临时目录
-`C:\Users\MR\AppData\Local\Temp\PromptHub-install-smoke-0.1.10-20260830-r2`
+`C:\Users\MR\AppData\Local\Temp\PromptHub-install-smoke-0.1.10-r3-beca3724a271415eb68c5db70d36285e`
 执行静默安装、启动和卸载：
 
 | 检查 | 结果 |

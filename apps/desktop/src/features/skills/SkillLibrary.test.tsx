@@ -65,4 +65,25 @@ describe("SkillLibrary", () => {
       targetRoot: "C:/Codex/skills", destinationName: "review-copy", replaceAfterBackup: false,
     }));
   });
+
+  it("explains a same-name installation conflict in the user's language", async () => {
+    const installSkill = vi.fn().mockRejectedValue(new Error("Skill destination already exists"));
+    render(<SkillLibrary
+      collectSkillFolder={vi.fn()}
+      collectGitSkill={vi.fn()}
+      getSkill={async () => ({ ...skill, reviewStatus: "approved" as const, reviewNotes: null, skillMarkdown: "# 本地审计", files: [], contentHash: "a".repeat(64), createdAt: "2026-07-19T00:00:00Z", installation: null })}
+      listSkills={async () => [{ ...skill, reviewStatus: "approved" as const }]}
+      reviewSkill={vi.fn()}
+      setSkillFavorite={vi.fn()}
+      installSkill={installSkill}
+      verifySkillInstallation={vi.fn()}
+    />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "打开 Skill：本地审计" }));
+    fireEvent.change(await screen.findByLabelText("安装目录名称"), { target: { value: "review-copy" } });
+    fireEvent.change(screen.getByLabelText("目标目录"), { target: { value: "C:/Codex/skills" } });
+    fireEvent.click(screen.getByRole("button", { name: "安装 Skill" }));
+
+    await expect(screen.findByRole("alert")).resolves.toHaveTextContent("同名冲突");
+  });
 });

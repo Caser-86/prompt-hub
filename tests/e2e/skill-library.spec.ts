@@ -23,6 +23,7 @@ test("collects, reviews, and explicitly replaces a Skill without executing its c
       ],
       contentHash: "c".repeat(64),
       createdAt: timestamp,
+      installation: null,
     };
     let collected = false;
     const invoke = async (command: string, args?: Record<string, unknown>) => {
@@ -60,7 +61,7 @@ test("collects, reviews, and explicitly replaces a Skill without executing its c
   await page.getByRole("button", { name: "打开 Skill：reviewed-skill" }).click();
 
   await expect(page.getByText("含脚本")).toBeVisible();
-  await expect(page.getByLabel("Skill 正文")).toContainText("<img src=x onerror=alert('executed')>");
+  await expect(page.locator('[aria-label="Skill 正文"]')).toContainText("<img src=x onerror=alert('executed')>");
   await expect(page.locator(".skill-markdown-card img")).toHaveCount(0);
   await page.getByRole("button", { name: "审核通过" }).click();
 
