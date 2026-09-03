@@ -30,7 +30,7 @@
 - `README.md` links to `docs/README.md` for the complete map.
 - `docs/README.md` links only to tracked, user-facing or maintainable project documents.
 
-- [ ] **Step 1: Write the failing documentation check**
+- [x] **Step 1: Write the failing documentation check**
 
   Verify that the current README has no single documentation index:
 
@@ -40,11 +40,11 @@
 
   Expected: no matching documentation index entry.
 
-- [ ] **Step 2: Run it to verify the gap**
+- [x] **Step 2: Run it to verify the gap**
 
   Run the command above and record the absence of an index before editing.
 
-- [ ] **Step 3: Add the documentation index and entry-point link**
+- [x] **Step 3: Add the documentation index and entry-point link**
 
   Create a Chinese index with these sections and links:
 
@@ -57,7 +57,7 @@
 
   Update the README documentation section to lead with the index and state that historical plans/specs are retained for traceability.
 
-- [ ] **Step 4: Run the documentation check to verify the index exists**
+- [x] **Step 4: Run the documentation check to verify the index exists**
 
   ```powershell
   rg -n "docs/README|文档索引" README.md docs/README.md
@@ -66,7 +66,7 @@
 
   Expected: both files contain the index link and `git diff --check` exits 0.
 
-- [ ] **Step 5: Commit the documentation map**
+- [x] **Step 5: Commit the documentation map**
 
   ```powershell
   git add README.md docs/README.md
@@ -85,17 +85,17 @@
 - Release documents point to the same 0.1.10 candidate evidence and distinguish local candidate use from a public release.
 - The changelog documents the documentation index and current release limitations without claiming signing, updates, or clean-profile acceptance.
 
-- [ ] **Step 1: Check for stale release claims and broken links**
+- [x] **Step 1: Check for stale release claims and broken links**
 
   ```powershell
   rg -n "公开正式|已完成|CHANGELOG|release-evidence|workingTree|NotSigned" CHANGELOG.md docs/release-checklist.md docs/release-evidence
   ```
 
-- [ ] **Step 2: Update the minimal release wording**
+- [x] **Step 2: Update the minimal release wording**
 
   Add a `Documentation` subsection under `Unreleased`, link the documentation index, and keep all 0.1.10 limitations explicit. Do not mark unchecked release gates as complete.
 
-- [ ] **Step 3: Validate the release links and sensitive-content guard**
+- [x] **Step 3: Validate the release links and sensitive-content guard**
 
   ```powershell
   rg -n "docs/README|release-evidence/0.1.10|NotSigned|代码签名|自动更新" README.md CHANGELOG.md docs
@@ -104,7 +104,7 @@
 
   Expected: release links and limitations are present; the sensitive-content search returns no credentials or private database paths.
 
-- [ ] **Step 4: Commit aligned release documentation**
+- [x] **Step 4: Commit aligned release documentation**
 
   ```powershell
   git add CHANGELOG.md docs/release-checklist.md docs/release-evidence/README.md docs/release-evidence/0.1.10/packaging.md
@@ -121,7 +121,7 @@
 - The branch remains `feat/permanent-prompt-deletion` and tracks `origin/feat/permanent-prompt-deletion`.
 - GitHub receives the verified commits and the working tree is clean after commit.
 
-- [ ] **Step 1: Run the required verification suite**
+- [x] **Step 1: Run the required verification suite**
 
   ```powershell
   pnpm install --frozen-lockfile
@@ -134,7 +134,7 @@
   pnpm --filter @prompt-hub/desktop build
   ```
 
-- [ ] **Step 2: Check repository hygiene**
+- [x] **Step 2: Check repository hygiene**
 
   ```powershell
   git diff --check
@@ -144,7 +144,7 @@
 
   Expected: no whitespace errors, no generated local data tracked, and only intentional source/docs changes remain before commit.
 
-- [ ] **Step 3: Commit the synchronized product changes**
+- [x] **Step 3: Commit the synchronized product changes**
 
   ```powershell
   git add -A
@@ -152,7 +152,7 @@
   git commit -m "chore: synchronize formal product documentation and fixes"
   ```
 
-- [ ] **Step 4: Push the feature branch to GitHub**
+- [x] **Step 4: Push the feature branch to GitHub**
 
   ```powershell
   git push -u origin feat/permanent-prompt-deletion
@@ -162,7 +162,7 @@
 
   Expected: push exits 0, the branch is clean and up to date, and the remote hash equals local `HEAD`.
 
-- [ ] **Step 5: Verify GitHub repository metadata and branch visibility**
+- [x] **Step 5: Verify GitHub repository metadata and branch visibility**
 
   ```powershell
   gh repo view Caser-86/prompt-hub --json url,visibility,defaultBranchRef,description,repositoryTopics
