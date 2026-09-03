@@ -9,6 +9,7 @@ export type BootstrapStatus = {
   safeMessage: string | null;
   backupName: string | null;
 };
+export type RecoveryBackupCandidate = { path: string; byteLen: number; schemaVersion: number };
 
 export type BackupInfo = { path: string; byteLen: number; schemaVersion: number };
 export type BackupRestorePreview = { targetExists: boolean; backupSchemaVersion: number; backupByteLen: number; promptCount: number };
@@ -66,6 +67,9 @@ export type PromptSearchHit = {
   effectiveness: string;
   rating: number | null;
   updatedAt: string;
+  sourceNames?: string[];
+  applicableTools?: string[];
+  applicableModels?: string[];
 };
 
 export type PromptSearchPage = {
@@ -94,11 +98,14 @@ export type PromptListItem = {
   status: string;
   effectiveness: string;
   category: string | null;
+  description?: string | null;
   tags: string[];
+  variables?: PromptVariableDraft[];
   sourceNames: string[];
   sources?: Array<{ kind: string; name: string; location: string | null; collectedAt: string; rawExcerpt?: string | null; importJobId?: string | null }>;
   applicableTools?: string[];
   applicableModels?: string[];
+  compatibilityStatuses?: Array<"unknown" | "confirmed" | "unsupported">;
   rating?: number | null;
   favorite: boolean;
   useCount?: number;
@@ -113,6 +120,10 @@ export type PromptHistoryItem = {
   number: number;
   body: string;
   createdAt: string;
+  effectiveness?: string;
+  sourceNames?: string[];
+  applicableTools?: string[];
+  rating?: number | null;
 };
 
 export type SkillReviewStatus = "pending_review" | "approved" | "rejected" | "risk_pending_confirmation";
@@ -155,10 +166,23 @@ export type PromptValidationDraft = {
   notes: string | null;
 };
 
+/** A single atomic update for compatibility and validation metadata. */
+export type PromptMetadataDraft = {
+  tool: string | null;
+  model: string | null;
+  compatibilityStatus: PromptCompatibilityDraft["status"];
+  effectiveness: PromptValidationDraft["status"];
+  rating: number | null;
+  notes: string | null;
+};
+
 export type DesktopCommandClient = {
   getBootstrapStatus: () => Promise<BootstrapStatus>;
   retryDatabaseBootstrap: () => Promise<BootstrapStatus>;
   exportBootstrapDiagnostics: () => Promise<string>;
+  listRecoveryBackups: () => Promise<RecoveryBackupCandidate[]>;
+  previewRecoveryBackup: (path: string) => Promise<BackupRestorePreview>;
+  restoreRecoveryBackup: (path: string) => Promise<void>;
   getApplicationStatus: () => Promise<ApplicationStatus>;
   getDiagnosticsStatus: () => Promise<DiagnosticsStatus>;
   getRedactedDiagnosticEvents: () => Promise<RedactedDiagnosticEvent[]>;
@@ -168,6 +192,7 @@ export type DesktopCommandClient = {
   restoreBackup: (path: string) => Promise<BackupInfo>;
   pruneLocalBackups: (retain: number) => Promise<number>;
   listPrompts: () => Promise<PromptListItem[]>;
+  getPrompt: (id: string) => Promise<PromptListItem | null>;
   recordPromptUse: (id: string) => Promise<{ useCount: number; lastUsedAt: string | null }>;
   migrateLegacyPromptUsage: (entries: Array<{ id: string; useCount: number }>) => Promise<void>;
     collectSkillFolder: (path: string) => Promise<SkillListItem>;
@@ -195,6 +220,8 @@ export type DesktopCommandClient = {
   ) => Promise<PromptSearchPage>;
   recordPromptCompatibility: (id: string, metadata: PromptCompatibilityDraft) => Promise<unknown>;
   recordPromptValidation: (id: string, metadata: PromptValidationDraft) => Promise<unknown>;
+  recordPromptMetadata: (id: string, metadata: PromptMetadataDraft) => Promise<unknown>;
+  revisePrompt: (id: string, draft: ManualPromptDraft) => Promise<unknown>;
   createManualPromptDraft: (draft: ManualPromptDraft) => Promise<unknown>;
   publishPrompt: (id: string) => Promise<unknown>;
   importFileToInbox: (path: string) => Promise<ImportResult>;
@@ -226,6 +253,19 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       const result = await invoke("export_bootstrap_diagnostics");
       if (typeof result !== "string") throw new Error("export_bootstrap_diagnostics returned an invalid response");
       return result;
+    },
+    async listRecoveryBackups() {
+      const result = await invoke("list_recovery_backups");
+      if (!Array.isArray(result) || !result.every(isRecoveryBackupCandidate)) throw new Error("list_recovery_backups returned an invalid response");
+      return result;
+    },
+    async previewRecoveryBackup(path) {
+      const result = await invoke("preview_recovery_backup", { path });
+      if (!isBackupRestorePreview(result)) throw new Error("preview_recovery_backup returned an invalid response");
+      return result;
+    },
+    async restoreRecoveryBackup(path) {
+      await invoke("restore_recovery_backup", { path });
     },
     async getApplicationStatus() {
       const result = await invoke("get_application_status");
@@ -273,6 +313,13 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
       const result = await invoke("list_prompts");
       if (!Array.isArray(result) || !result.every(isPromptListItem)) {
         throw new Error("list_prompts returned an invalid response");
+      }
+      return result;
+    },
+    async getPrompt(id) {
+      const result = await invoke("get_prompt", { id });
+      if (result !== null && !isPromptListItem(result)) {
+        throw new Error("get_prompt returned an invalid response");
       }
       return result;
     },
@@ -364,6 +411,12 @@ export function createDesktopCommandClient(invoke: CommandInvoker): DesktopComma
     recordPromptValidation(id, metadata) {
       return invoke("record_prompt_validation", { id, metadata });
     },
+    recordPromptMetadata(id, metadata) {
+      return invoke("record_prompt_metadata", { id, metadata });
+    },
+    revisePrompt(id, draft) {
+      return invoke("revise_prompt", { id, draft });
+    },
     createManualPromptDraft(draft) {
       return invoke("create_manual_prompt_draft", { draft });
     },
@@ -446,15 +499,18 @@ function isPromptListItem(value: unknown): value is PromptListItem {
   return (
     typeof item.id === "string" &&
     typeof item.title === "string" &&
-    typeof item.status === "string" &&
-    typeof item.effectiveness === "string" &&
+    isPromptStatus(item.status) &&
+    isEffectivenessStatus(item.effectiveness) &&
     (typeof item.category === "string" || item.category === null) &&
+    (item.description === undefined || typeof item.description === "string" || item.description === null) &&
     Array.isArray(item.tags) && item.tags.every((tag) => typeof tag === "string") &&
+    (item.variables === undefined || (Array.isArray(item.variables) && item.variables.every(isPromptVariableDraft))) &&
     Array.isArray(item.sourceNames) && item.sourceNames.every((name) => typeof name === "string") &&
     (item.sources === undefined || (Array.isArray(item.sources) && item.sources.every(isPromptSourceEvidence))) &&
     (item.applicableTools === undefined || (Array.isArray(item.applicableTools) && item.applicableTools.every((tool) => typeof tool === "string"))) &&
     (item.applicableModels === undefined || (Array.isArray(item.applicableModels) && item.applicableModels.every((model) => typeof model === "string"))) &&
-    (item.rating === undefined || item.rating === null || typeof item.rating === "number") &&
+    (item.compatibilityStatuses === undefined || (Array.isArray(item.compatibilityStatuses) && item.compatibilityStatuses.every(isCompatibilityStatus))) &&
+    isOptionalRating(item.rating) &&
     (item.useCount === undefined || (typeof item.useCount === "number" && item.useCount >= 0)) &&
     (item.lastUsedAt === undefined || typeof item.lastUsedAt === "string" || item.lastUsedAt === null) &&
     (item.importedAt === undefined || typeof item.importedAt === "string" || item.importedAt === null) &&
@@ -463,6 +519,16 @@ function isPromptListItem(value: unknown): value is PromptListItem {
     typeof item.createdAt === "string" &&
     typeof item.updatedAt === "string"
   );
+}
+
+function isPromptVariableDraft(value: unknown): value is PromptVariableDraft {
+  if (typeof value !== "object" || value === null) return false;
+  const variable = value as Record<string, unknown>;
+  return typeof variable.name === "string"
+    && (variable.kind === "text" || variable.kind === "number" || variable.kind === "boolean")
+    && (typeof variable.description === "string" || variable.description === null)
+    && (typeof variable.defaultValue === "string" || variable.defaultValue === null)
+    && typeof variable.required === "boolean";
 }
 
 function isSkillSource(value: unknown): value is SkillSource {
@@ -532,7 +598,11 @@ function isPromptHistoryItem(value: unknown): value is PromptHistoryItem {
   return (
     typeof item.number === "number" &&
     typeof item.body === "string" &&
-    typeof item.createdAt === "string"
+    typeof item.createdAt === "string" &&
+    (item.effectiveness === undefined || isEffectivenessStatus(item.effectiveness)) &&
+    (item.sourceNames === undefined || (Array.isArray(item.sourceNames) && item.sourceNames.every((name) => typeof name === "string"))) &&
+    (item.applicableTools === undefined || (Array.isArray(item.applicableTools) && item.applicableTools.every((tool) => typeof tool === "string"))) &&
+    isOptionalRating(item.rating)
   );
 }
 
@@ -557,11 +627,34 @@ function isPromptSearchHit(value: unknown): value is PromptSearchHit {
     typeof hit.id === "string" &&
     typeof hit.title === "string" &&
     typeof hit.snippet === "string" &&
-    typeof hit.status === "string" &&
-    typeof hit.effectiveness === "string" &&
-    (typeof hit.rating === "number" || hit.rating === null) &&
-    typeof hit.updatedAt === "string"
+    isPromptStatus(hit.status) &&
+    isEffectivenessStatus(hit.effectiveness) &&
+    isRequiredRating(hit.rating) &&
+    typeof hit.updatedAt === "string" &&
+    (hit.sourceNames === undefined || (Array.isArray(hit.sourceNames) && hit.sourceNames.every((name) => typeof name === "string"))) &&
+    (hit.applicableTools === undefined || (Array.isArray(hit.applicableTools) && hit.applicableTools.every((tool) => typeof tool === "string"))) &&
+    (hit.applicableModels === undefined || (Array.isArray(hit.applicableModels) && hit.applicableModels.every((model) => typeof model === "string")))
   );
+}
+
+function isPromptStatus(value: unknown): value is PromptListItem["status"] {
+  return value === "inbox" || value === "published" || value === "archived" || value === "deleted";
+}
+
+function isEffectivenessStatus(value: unknown): value is PromptListItem["effectiveness"] {
+  return value === "unverified" || value === "effective" || value === "ineffective" || value === "needs_retest";
+}
+
+function isCompatibilityStatus(value: unknown): value is NonNullable<PromptListItem["compatibilityStatuses"]>[number] {
+  return value === "unknown" || value === "confirmed" || value === "unsupported";
+}
+
+function isRequiredRating(value: unknown): value is number | null {
+  return value === null || (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 5);
+}
+
+function isOptionalRating(value: unknown): value is number | null | undefined {
+  return value === undefined || isRequiredRating(value);
 }
 
 function isApplicationStatus(value: unknown): value is ApplicationStatus {
@@ -597,6 +690,10 @@ function isBackupInfo(value: unknown): value is BackupInfo {
   if (typeof value !== "object" || value === null) return false;
   const item = value as Record<string, unknown>;
   return typeof item.path === "string" && typeof item.byteLen === "number" && typeof item.schemaVersion === "number";
+}
+
+function isRecoveryBackupCandidate(value: unknown): value is RecoveryBackupCandidate {
+  return isBackupInfo(value);
 }
 
 function isBackupRestorePreview(value: unknown): value is BackupRestorePreview {

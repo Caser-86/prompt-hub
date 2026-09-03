@@ -1,8 +1,8 @@
 # 0.1.10 候选包构建与安装烟测证据
 
-日期：2026-08-30
+日期：2026-09-01
 分支：`feat/permanent-prompt-deletion`
-源码提交：`dfab89025e1851d95abf9b69536664f4df9d1008`
+源码提交：`10d88bb7735ebedbae41a0425fcaefcf2c0f24b8`
 通道：`candidate`（自用内部候选包，不是公开正式发布包）
 
 ## 构建元数据
@@ -19,9 +19,9 @@ node scripts/verify-release.mjs --channel=candidate --json-out=apps/desktop/src-
 | --- | --- |
 | version | `0.1.10` |
 | channel | `candidate` |
-| gitCommit | `dfab89025e1851d95abf9b69536664f4df9d1008` |
+| gitCommit | `10d88bb7735ebedbae41a0425fcaefcf2c0f24b8` |
 | tagCommit | `null`（候选包未使用 release tag） |
-| migrationManifestSha256 | `8cdee8a7a5d368eeeb0002e3e4cce5bbe59668d9f01863e392fdf27c68b53cd8` |
+| migrationManifestSha256 | `5d80ebbe3c310d153ddd53049e23950e6c90e8fed148a7b9adaae96fb9a6e3df` |
 
 ## 安装包
 
@@ -46,7 +46,7 @@ MCP sidecar 单独构建于 `target/release/prompt-mcp.exe`（8,160,768 字节�
 [mcp-setup.md](../../mcp-setup.md) 单独安装或配置其绝对路径。
 
 本次迁移修复还在现有本地数据库上完成了启动验收：应用启动后保持进程存活，
-`PRAGMA user_version` 为 `8`，并补齐了此前缺失的
+`PRAGMA user_version` 为 `9`，并补齐了此前缺失的
 `20260829_01_prompt_metadata_and_usage` 账本记录（`provenance=legacy_recovery`）。
 原有数据未被替换；安装前另行保存了本地数据库副本。
 
@@ -77,3 +77,37 @@ MCP sidecar 单独构建于 `target/release/prompt-mcp.exe`（8,160,768 字节�
 - 在上述外部条件完成前，不得将本包标为公开正式版本；本地自用可以使用 NSIS 候选包。
 
 本记录不包含密钥、授权头或提示词正文。
+
+## 2026-08-31 工作树复验（候选包）
+
+本次针对正式可用性缺口的修复在未提交工作树上重新构建并验证。安装包明确标记为
+`workingTree=dirty`，因此不能冒充可追溯的正式发布包；提交后必须重新运行
+`scripts/verify-release.mjs` 并再次构建。
+
+| 项目 | 结果 |
+| --- | --- |
+| HEAD | `10d88bb7735ebedbae41a0425fcaefcf2c0f24b8` |
+| 前端测试 | `91 passed`（21 个文件；工作区总计 116 passed） |
+| Playwright | `4 passed` |
+| Rust | `cargo fmt --check`、Clippy、`cargo test --workspace` 通过 |
+| NSIS | `Prompt Hub_0.1.10_x64-setup.exe`，3,718,531 字节，SHA-256 `E775628B8452DE6C949EC62D5F7FDA302B5375DD08D9DC5291E28D599E3FFEA3` |
+| MSI | `Prompt Hub_0.1.10_x64_en-US.msi`，6,610,944 字节，SHA-256 `B85324D222BF9ABF95F790DD2AED8EF9F5BFD09A52FCDB22AA9458194EE4C8D2` |
+
+本次复验仍未替代真实安装后的人工启动和外部 Codex 客户端发现测试；两项属于正式发布前的最后证据补齐项。
+
+## 2026-09-02 工作树复验（候选包）
+
+针对详情历史加载错误边界、契约枚举校验和交互后数据刷新修复后，重新完成前端构建与 Tauri 打包。当前工作树仍为未提交状态，包继续标记为本地候选包。
+
+| 项目 | 结果 |
+| --- | --- |
+| HEAD | `10d88bb7735ebedbae41a0425fcaefcf2c0f24b8`（工作树有未提交改动） |
+| 前端测试 | `122 passed`（contracts 26 + desktop 96；21 个文件） |
+| Playwright | `4 passed` |
+| Rust | `cargo fmt --check`、Clippy、`cargo test --workspace` 通过 |
+| 前端构建 | `pnpm --filter @prompt-hub/desktop build` 通过 |
+| 打包可执行文件启动 | 直接启动 `target/release/prompt-hub-desktop.exe`，等待 5 秒进程仍存活 |
+| NSIS | `Prompt Hub_0.1.10_x64-setup.exe`，3,718,772 字节，SHA-256 `4F436B392E40F3F1B67ED5057E2655B36BF3F2EEDB64BDD685B1CF6280288642`，`NotSigned` |
+| MSI | `Prompt Hub_0.1.10_x64_en-US.msi`，6,610,944 字节，SHA-256 `C3886B1A39203C3FF1E9B69A11632625A38E1D88CC18223A83DCFFBA6DC8278F`，`NotSigned` |
+
+校验清单由 `pnpm hash:bundles` 重新生成。尚未执行干净 Windows 用户配置文件人工验收、代码签名和真实外部 Codex 客户端发现测试，因此本包仍只建议本地自用。

@@ -6,7 +6,7 @@ Scope: durable prompt metadata/use history and offline workflow closure.
 
 ## Implemented boundaries
 
-- Schema version 8 is a forward migration (`20260829_01_prompt_metadata_and_usage`) adding source evidence, import/validation timestamps, and the `prompt_usage` table. Legacy v5 `prompts.last_used_at` is preserved and copied into usage history with an explicitly synthetic count of 1 because the old schema has no count.
+- Schema version 9 is a forward migration: version 8 (`20260829_01_prompt_metadata_and_usage`) adds source evidence, import/validation timestamps, and the `prompt_usage` table; version 9 (`20260831_01_prompt_version_metadata_snapshots`) adds immutable metadata snapshots to prompt history. Legacy v5 `prompts.last_used_at` is preserved and copied into usage history with an explicitly synthetic count of 1 because the old schema has no count.
 - Imported file/URL prompts keep their import job ID and bounded source excerpt in source metadata. Prompt copying uses only the rendered body. Metadata is available only through the explicit “导出 Markdown（含来源）” action.
 - Library ordering is persisted-data driven: default, recently used, recently added, recently updated, and most used. Old browser counts are merged once into SQLite; stale IDs are ignored and counts never decrease.
 

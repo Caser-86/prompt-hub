@@ -48,7 +48,7 @@ pub struct ManualPromptDraft {
     pub variables: Vec<ManualPromptVariable>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ManualPromptVariable {
     pub name: String,
@@ -103,6 +103,17 @@ pub struct ManualCompatibility {
 #[serde(rename_all = "camelCase")]
 pub struct ManualValidation {
     pub status: EffectivenessStatus,
+    pub rating: Option<u8>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualPromptMetadata {
+    pub tool: Option<String>,
+    pub model: Option<String>,
+    pub compatibility_status: CompatibilityStatus,
+    pub effectiveness: EffectivenessStatus,
     pub rating: Option<u8>,
     pub notes: Option<String>,
 }
@@ -898,6 +909,17 @@ impl PromptService {
             .map_err(|error| error.to_string())
     }
 
+    pub fn get_prompt_item(&self, id: PromptId) -> Result<Option<PromptListItem>, String> {
+        let repository = self
+            .repository
+            .lock()
+            .map_err(|_| "prompt repository is unavailable".to_owned())?;
+        let prompt = repository.get(id).map_err(|error| error.to_string())?;
+        prompt
+            .map(|prompt| prompt_list_item(&repository, prompt))
+            .transpose()
+    }
+
     pub fn record_use(
         &self,
         id: PromptId,
@@ -1066,6 +1088,9 @@ impl PromptService {
             prompt
                 .add_compatibility(compatibility, Actor::User, updated_at)
                 .map_err(|error| error.to_string())?;
+            prompt
+                .revise_metadata(Actor::User, updated_at)
+                .map_err(|error| error.to_string())?;
             Ok(AuditAction::Revised)
         })
     }
@@ -1082,6 +1107,70 @@ impl PromptService {
         self.modify(id, |prompt| {
             prompt
                 .record_validation(validation, Actor::User, updated_at)
+                .map_err(|error| error.to_string())?;
+            prompt
+                .revise_metadata(Actor::User, updated_at)
+                .map_err(|error| error.to_string())?;
+            Ok(AuditAction::Revised)
+        })
+    }
+
+    pub fn record_metadata(
+        &self,
+        id: PromptId,
+        metadata: ManualPromptMetadata,
+        updated_at: OffsetDateTime,
+    ) -> Result<Prompt, String> {
+        let compatibility = match metadata.tool.and_then(|tool| {
+            let tool = tool.trim().to_owned();
+            (!tool.is_empty()).then_some(tool)
+        }) {
+            Some(tool) => Some(
+                Compatibility::new(
+                    tool,
+                    metadata.model,
+                    metadata.compatibility_status,
+                    metadata.notes.clone(),
+                    (metadata.compatibility_status == CompatibilityStatus::Confirmed)
+                        .then_some(updated_at),
+                )
+                .map_err(|error| error.to_string())?,
+            ),
+            None if metadata
+                .model
+                .as_deref()
+                .is_some_and(|model| !model.trim().is_empty()) =>
+            {
+                return Err("适用模型需要同时填写适用工具".to_owned());
+            }
+            None => None,
+        };
+        let validation = ValidationRecord::new(
+            metadata.effectiveness,
+            metadata.rating,
+            metadata.notes,
+            updated_at,
+        )
+        .map_err(|error| error.to_string())?;
+        self.modify(id, |prompt| {
+            // The compact metadata editor can describe one compatibility at a
+            // time. If the prompt already has several entries, preserve them
+            // rather than silently deleting data the editor cannot represent.
+            if prompt.compatibilities().len() <= 1 {
+                prompt
+                    .clear_compatibilities(Actor::User, updated_at)
+                    .map_err(|error| error.to_string())?;
+            }
+            if let Some(compatibility) = compatibility {
+                prompt
+                    .add_compatibility(compatibility, Actor::User, updated_at)
+                    .map_err(|error| error.to_string())?;
+            }
+            prompt
+                .record_validation(validation, Actor::User, updated_at)
+                .map_err(|error| error.to_string())?;
+            prompt
+                .revise_metadata(Actor::User, updated_at)
                 .map_err(|error| error.to_string())?;
             Ok(AuditAction::Revised)
         })
@@ -1422,11 +1511,14 @@ pub struct PromptListItem {
     status: prompt_domain::PromptStatus,
     effectiveness: EffectivenessStatus,
     category: Option<String>,
+    description: Option<String>,
     tags: Vec<String>,
+    variables: Vec<ManualPromptVariable>,
     source_names: Vec<String>,
     sources: Vec<PromptSourceItem>,
     applicable_tools: Vec<String>,
     applicable_models: Vec<String>,
+    compatibility_statuses: Vec<CompatibilityStatus>,
     rating: Option<u8>,
     favorite: bool,
     use_count: i64,
@@ -1468,6 +1560,10 @@ pub struct PromptHistoryItem {
     number: u32,
     body: String,
     created_at: String,
+    effectiveness: Option<String>,
+    source_names: Option<Vec<String>>,
+    applicable_tools: Option<Vec<String>>,
+    rating: Option<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1593,6 +1689,36 @@ impl PromptHistoryItem {
             number: version.number(),
             body: version.content().body().to_owned(),
             created_at: format_timestamp(version.created_at())?,
+            effectiveness: Some(
+                match version.metadata().effectiveness() {
+                    EffectivenessStatus::Unverified => "unverified",
+                    EffectivenessStatus::Effective => "effective",
+                    EffectivenessStatus::Ineffective => "ineffective",
+                    EffectivenessStatus::NeedsRetest => "needs_retest",
+                }
+                .to_owned(),
+            ),
+            source_names: Some(
+                version
+                    .metadata()
+                    .sources()
+                    .iter()
+                    .map(|source| source.name().to_owned())
+                    .collect(),
+            ),
+            applicable_tools: Some(
+                version
+                    .metadata()
+                    .compatibilities()
+                    .iter()
+                    .map(|compatibility| compatibility.tool().to_owned())
+                    .collect(),
+            ),
+            rating: version
+                .metadata()
+                .validations()
+                .last()
+                .and_then(|entry| entry.rating),
         })
     }
 }
@@ -1691,7 +1817,19 @@ impl PromptListItem {
             status: prompt.status(),
             effectiveness: prompt.effectiveness(),
             category: content.category().map(str::to_owned),
+            description: content.description().map(str::to_owned),
             tags: content.tags().to_vec(),
+            variables: content
+                .variables()
+                .iter()
+                .map(|variable| ManualPromptVariable {
+                    name: variable.name().to_owned(),
+                    kind: variable.kind(),
+                    description: variable.description().map(str::to_owned),
+                    default_value: variable.default_value().map(str::to_owned),
+                    required: variable.required(),
+                })
+                .collect(),
             source_names: prompt
                 .sources()
                 .iter()
@@ -1720,6 +1858,11 @@ impl PromptListItem {
                 .compatibilities()
                 .iter()
                 .filter_map(|compatibility| compatibility.model().map(str::to_owned))
+                .collect(),
+            compatibility_statuses: prompt
+                .compatibilities()
+                .iter()
+                .map(|compatibility| compatibility.status())
                 .collect(),
             rating: prompt
                 .validations()
@@ -1784,19 +1927,32 @@ pub fn list_prompts(service: State<'_, PromptService>) -> Result<Vec<PromptListI
         .lock()
         .map_err(|_| "prompt repository is unavailable".to_owned())?;
     repository
-        .list()
+        .list_with_metadata()
         .map_err(|error| error.to_string())?
         .into_iter()
-        .map(|prompt| {
-            let favorite = repository
-                .is_favorite(prompt.id())
-                .map_err(|error| error.to_string())?;
-            let usage = repository
-                .usage_stats(prompt.id())
-                .map_err(|error| error.to_string())?;
-            PromptListItem::from_prompt(prompt, favorite, usage)
-        })
+        .map(|(prompt, favorite, usage)| PromptListItem::from_prompt(prompt, favorite, usage))
         .collect()
+}
+
+fn prompt_list_item(
+    repository: &PromptRepository,
+    prompt: Prompt,
+) -> Result<PromptListItem, String> {
+    let favorite = repository
+        .is_favorite(prompt.id())
+        .map_err(|error| error.to_string())?;
+    let usage = repository
+        .usage_stats(prompt.id())
+        .map_err(|error| error.to_string())?;
+    PromptListItem::from_prompt(prompt, favorite, usage)
+}
+
+#[tauri::command]
+pub fn get_prompt(
+    service: State<'_, PromptService>,
+    id: PromptId,
+) -> Result<Option<PromptListItem>, String> {
+    service.get_prompt_item(id)
 }
 
 #[tauri::command]
@@ -2126,6 +2282,15 @@ pub fn record_prompt_validation(
     service.record_validation(id, metadata, OffsetDateTime::now_utc())
 }
 
+#[tauri::command]
+pub fn record_prompt_metadata(
+    service: State<'_, PromptService>,
+    id: PromptId,
+    metadata: ManualPromptMetadata,
+) -> Result<Prompt, String> {
+    service.record_metadata(id, metadata, OffsetDateTime::now_utc())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApplicationStatus {
@@ -2194,6 +2359,14 @@ pub struct BackupInfo {
     schema_version: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveryBackupCandidate {
+    path: String,
+    byte_len: u64,
+    schema_version: u32,
+}
+
 impl BackupInfo {
     fn from_store(backup: prompt_store::BackupMetadata) -> Result<Self, String> {
         Ok(Self {
@@ -2236,6 +2409,93 @@ pub fn get_application_status() -> ApplicationStatus {
 #[tauri::command]
 pub fn get_bootstrap_status(runtime: State<'_, BootstrapRuntime>) -> BootstrapStatus {
     runtime.status()
+}
+
+fn inspect_recovery_backup(
+    runtime: &BootstrapRuntime,
+    path: PathBuf,
+) -> Result<RecoveryBackupCandidate, String> {
+    let preview =
+        preview_restore(&path, runtime.database_path()).map_err(|error| error.to_string())?;
+    Ok(RecoveryBackupCandidate {
+        path: path.to_string_lossy().into_owned(),
+        byte_len: preview.backup_byte_len(),
+        schema_version: preview.backup_schema_version(),
+    })
+}
+
+fn validated_recovery_backup_path(
+    runtime: &BootstrapRuntime,
+    raw_path: &str,
+) -> Result<PathBuf, String> {
+    let data_directory = fs::canonicalize(runtime.data_directory())
+        .map_err(|_| "应用数据目录不可用，无法恢复备份".to_owned())?;
+    let candidate =
+        fs::canonicalize(raw_path).map_err(|_| "恢复备份不存在或无法读取".to_owned())?;
+    let relative = candidate
+        .strip_prefix(&data_directory)
+        .map_err(|_| "恢复备份必须位于应用数据目录内".to_owned())?;
+    if relative.components().count() != 1 {
+        return Err("恢复备份必须位于应用数据目录根目录".to_owned());
+    }
+    let name = candidate
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "恢复备份文件名无效".to_owned())?;
+    if !name.contains(".pre-migration.") || !name.ends_with(".bak") {
+        return Err("只能恢复迁移前备份".to_owned());
+    }
+    Ok(candidate)
+}
+
+#[tauri::command]
+pub fn list_recovery_backups(
+    runtime: State<'_, BootstrapRuntime>,
+) -> Result<Vec<RecoveryBackupCandidate>, String> {
+    let mut candidates = fs::read_dir(runtime.data_directory())
+        .map_err(|error| error.to_string())?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let file_type = entry.file_type().ok()?;
+            if !file_type.is_file() {
+                return None;
+            }
+            let name = entry.file_name().into_string().ok()?;
+            if !(name.contains(".pre-migration.") && name.ends_with(".bak")) {
+                return None;
+            }
+            inspect_recovery_backup(&runtime, entry.path()).ok()
+        })
+        .collect::<Vec<_>>();
+    candidates.sort_by(|left, right| right.path.cmp(&left.path));
+    Ok(candidates)
+}
+
+#[tauri::command]
+pub fn preview_recovery_backup(
+    runtime: State<'_, BootstrapRuntime>,
+    path: String,
+) -> Result<BackupRestorePreview, String> {
+    let path = validated_recovery_backup_path(&runtime, &path)?;
+    Ok(BackupRestorePreview::from_store(
+        preview_restore(&path, runtime.database_path()).map_err(|error| error.to_string())?,
+    ))
+}
+
+#[tauri::command]
+pub fn restore_recovery_backup(
+    runtime: State<'_, BootstrapRuntime>,
+    path: String,
+) -> Result<(), String> {
+    if runtime.status().state != "recovery" {
+        return Err(
+            "recovery restore is only available while the app is in recovery mode".to_owned(),
+        );
+    }
+    let path = validated_recovery_backup_path(&runtime, &path)?;
+    prompt_store::restore_backup(&path, runtime.database_path())
+        .map(|_| ())
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -2396,6 +2656,30 @@ mod diagnostics_tests {
 #[cfg(test)]
 mod backup_service_tests {
     use super::*;
+
+    #[test]
+    fn recovery_backup_paths_are_limited_to_direct_migration_backups() {
+        let directory = tempfile::tempdir().unwrap();
+        let database_path = directory.path().join("prompt-hub.db");
+        let runtime = BootstrapRuntime::for_test(database_path);
+        let valid = directory
+            .path()
+            .join("prompt-hub.db.v8.pre-migration.123.bak");
+        std::fs::write(&valid, b"candidate").unwrap();
+        let outside = directory.path().join("outside.txt");
+        std::fs::write(&outside, b"outside").unwrap();
+        let nested_dir = directory.path().join("nested");
+        std::fs::create_dir(&nested_dir).unwrap();
+        let nested = nested_dir.join("prompt-hub.db.v8.pre-migration.456.bak");
+        std::fs::write(&nested, b"nested").unwrap();
+
+        assert_eq!(
+            validated_recovery_backup_path(&runtime, &valid.to_string_lossy()).unwrap(),
+            std::fs::canonicalize(valid).unwrap()
+        );
+        assert!(validated_recovery_backup_path(&runtime, &outside.to_string_lossy()).is_err());
+        assert!(validated_recovery_backup_path(&runtime, &nested.to_string_lossy()).is_err());
+    }
 
     #[test]
     fn desktop_backup_service_creates_and_previews_a_verified_backup() {

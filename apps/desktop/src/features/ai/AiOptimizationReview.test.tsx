@@ -28,4 +28,14 @@ describe("AiOptimizationReview", () => {
     finish?.();
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("优化已取消"));
   });
+
+  it("disables duplicate optimization submissions while a request is active", async () => {
+    const optimize = vi.fn(() => new Promise<{ body: string }>(() => undefined));
+    render(<AiOptimizationReview body="原正文" optimize={optimize} promptId="prompt-1" />);
+    fireEvent.change(screen.getByLabelText("优化指令"), { target: { value: "更清晰" } });
+    fireEvent.click(screen.getByRole("button", { name: "生成优化草稿" }));
+
+    await waitFor(() => expect(optimize).toHaveBeenCalledOnce());
+    expect(screen.getByRole("button", { name: "生成优化草稿" })).toBeDisabled();
+  });
 });

@@ -241,3 +241,34 @@ fn recovering_a_soft_deleted_prompt_returns_it_to_the_inbox_without_rewriting_hi
     assert_eq!(prompt.status(), prompt_domain::PromptStatus::Inbox);
     assert_eq!(prompt.current_version().number(), version);
 }
+
+#[test]
+fn metadata_revisions_create_a_new_version_snapshot() {
+    let mut prompt = Prompt::new_inbox(
+        valid_content("可追溯的提示词"),
+        manual_source(),
+        Actor::User,
+        datetime!(2026-07-15 00:00 UTC),
+    );
+    prompt
+        .record_validation(
+            prompt_domain::ValidationRecord::new(
+                EffectivenessStatus::Effective,
+                Some(5),
+                Some("已验证".to_owned()),
+                datetime!(2026-07-15 00:01 UTC),
+            )
+            .unwrap(),
+            Actor::User,
+            datetime!(2026-07-15 00:01 UTC),
+        )
+        .unwrap();
+
+    let version = prompt
+        .revise_metadata(Actor::User, datetime!(2026-07-15 00:01 UTC))
+        .expect("metadata changes should create a version");
+
+    assert_eq!(version.number(), 2);
+    assert_eq!(version.content().body(), "可追溯的提示词");
+    assert_eq!(prompt.current_version().number(), 2);
+}

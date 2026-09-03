@@ -57,6 +57,11 @@
   white-space: nowrap;
 }
 
+.library-load-more {
+  justify-self: center;
+  min-width: 12rem;
+}
+
 .selection-notice {
   display: flex;
   align-items: center;

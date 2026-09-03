@@ -38,7 +38,11 @@ export function SkillLibrary({ collectSkillFolder, collectGitSkill, getSkill, li
   const [folderPath, setFolderPath] = useState("");
   const [filter, setFilter] = useState<SkillFilter>("all");
   const [isCollecting, setCollecting] = useState(false);
+  const [isGitCollecting, setGitCollecting] = useState(false);
+  const [isDetailBusy, setDetailBusy] = useState(false);
+  const [favoriteBusyIds, setFavoriteBusyIds] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [installTarget, setInstallTarget] = useState("");
   const [destinationName, setDestinationName] = useState("");
   const [replaceAfterBackup, setReplaceAfterBackup] = useState(false);
@@ -47,8 +51,9 @@ export function SkillLibrary({ collectSkillFolder, collectGitSkill, getSkill, li
   const [verification, setVerification] = useState<SkillInstallationVerification | null>(null);
 
   useEffect(() => {
+    setError(null);
     void listSkills().then(setSkills).catch(() => setError("无法读取本地 Skill 库，请重试。"));
-  }, [listSkills]);
+  }, [listSkills, reloadKey]);
 
   const visibleSkills = useMemo(() => (skills ?? []).filter((skill) => {
     if (filter === "favorite") return skill.favorite;
@@ -75,13 +80,15 @@ export function SkillLibrary({ collectSkillFolder, collectGitSkill, getSkill, li
   };
 
   const collectGit = async () => {
-    if (!gitSource.repositoryUrl.trim() || !gitSource.commit.trim()) return;
+    if (isGitCollecting || !gitSource.repositoryUrl.trim() || !gitSource.commit.trim()) return;
+    setGitCollecting(true);
     setError(null);
     try {
       const skill = await collectGitSkill({ ...gitSource, repositoryUrl: gitSource.repositoryUrl.trim(), commit: gitSource.commit.trim(), subdirectory: gitSource.subdirectory.trim() });
       setSkills((current) => [skill, ...(current ?? []).filter((item) => item.id !== skill.id)]);
       setGitSource({ repositoryUrl: "", commit: "", subdirectory: "" });
     } catch { setError("无法读取 Git Skill。仅支持公开 GitHub HTTPS 地址和固定 40 位提交 SHA。"); }
+    finally { setGitCollecting(false); }
   };
 
   const openSkill = async (id: string) => {
@@ -103,38 +110,66 @@ export function SkillLibrary({ collectSkillFolder, collectGitSkill, getSkill, li
   };
 
   const updateReview = async (status: SkillReviewStatus) => {
-    if (!selected) return;
-    await reviewSkill(selected.id, { status, notes: null });
-    setSelected({ ...selected, reviewStatus: status });
-    setSkills((current) => current?.map((skill) => skill.id === selected.id ? { ...skill, reviewStatus: status } : skill) ?? null);
+    if (!selected || isDetailBusy) return;
+    setDetailBusy(true);
+    setError(null);
+    try {
+      await reviewSkill(selected.id, { status, notes: null });
+      setSelected({ ...selected, reviewStatus: status });
+      setSkills((current) => current?.map((skill) => skill.id === selected.id ? { ...skill, reviewStatus: status } : skill) ?? null);
+    } catch {
+      setError("无法更新 Skill，请重试。");
+    } finally { setDetailBusy(false); }
   };
 
   const toggleFavorite = async (skill: SkillListItem) => {
+    if (isDetailBusy || favoriteBusyIds.has(skill.id)) return;
+    setDetailBusy(true);
+    setFavoriteBusyIds((current) => new Set(current).add(skill.id));
     const favorite = !skill.favorite;
-    await setSkillFavorite(skill.id, favorite);
-    setSkills((current) => current?.map((item) => item.id === skill.id ? { ...item, favorite } : item) ?? null);
-    setSelected((current) => current?.id === skill.id ? { ...current, favorite } : current);
+    setError(null);
+    try {
+      await setSkillFavorite(skill.id, favorite);
+      setSkills((current) => current?.map((item) => item.id === skill.id ? { ...item, favorite } : item) ?? null);
+      setSelected((current) => current?.id === skill.id ? { ...current, favorite } : current);
+    } catch {
+      setError("无法更新 Skill，请重试。");
+    } finally {
+      setDetailBusy(false);
+      setFavoriteBusyIds((current) => {
+        const next = new Set(current);
+        next.delete(skill.id);
+        return next;
+      });
+    }
   };
 
   const install = async () => {
-    if (!selected || !installTarget.trim() || !destinationName.trim()) return;
+    if (isDetailBusy || !selected || !installTarget.trim() || !destinationName.trim()) return;
     if (replaceAfterBackup && !window.confirm("同名 Skill 将先创建备份，再替换为当前已审核版本。是否继续？")) return;
+    setDetailBusy(true);
     setError(null);
     try {
       const result = await installSkill(selected.id, { targetRoot: installTarget.trim(), destinationName: destinationName.trim(), replaceAfterBackup });
       setInstallation(result);
     } catch (reason) {
       setError(`无法安装 Skill：${installErrorMessage(reason, "请检查目标路径、同名冲突和原始文件是否发生变化。")}`);
-    }
+    } finally { setDetailBusy(false); }
   };
-  const verifyInstallation = async () => { if (!selected) return; try { setVerification(await verifySkillInstallation(selected.id)); } catch { setError("无法验证已安装 Skill。请确认安装记录和目标目录仍可访问。"); } };
+  const verifyInstallation = async () => {
+    if (!selected || isDetailBusy) return;
+    setDetailBusy(true);
+    try { setVerification(await verifySkillInstallation(selected.id)); }
+    catch { setError("无法验证已安装 Skill。请确认安装记录和目标目录仍可访问。"); }
+    finally { setDetailBusy(false); }
+  };
 
   if (selected) {
     return <section aria-labelledby="skill-detail-title" className="skill-library skill-detail-layout">
       <header className="skill-detail-header">
-        <button className="button-secondary" onClick={() => setSelected(null)} type="button">返回 Skill 列表</button>
+        <button className="button-secondary" disabled={isDetailBusy} onClick={() => setSelected(null)} type="button">返回 Skill 列表</button>
         <div><p className="eyebrow">SKILL REVIEW</p><h1 id="skill-detail-title">{selected.name}</h1></div>
-        <button aria-label={selected.favorite ? `取消收藏 Skill：${selected.name}` : `收藏 Skill：${selected.name}`} className={`favorite-toggle${selected.favorite ? " is-favorite" : ""}`} onClick={() => void toggleFavorite(selected)} type="button">{selected.favorite ? <StarSolidIcon aria-hidden="true" /> : <StarIcon aria-hidden="true" />}</button>
+        <button aria-label={selected.favorite ? `取消收藏 Skill：${selected.name}` : `收藏 Skill：${selected.name}`} className={`favorite-toggle${selected.favorite ? " is-favorite" : ""}`} disabled={isDetailBusy} onClick={() => void toggleFavorite(selected)} type="button">{selected.favorite ? <StarSolidIcon aria-hidden="true" /> : <StarIcon aria-hidden="true" />}</button>
       </header>
       {error ? <p role="alert" className="skill-error">{error}</p> : null}
       <div className="skill-detail-grid">
@@ -146,11 +181,11 @@ export function SkillLibrary({ collectSkillFolder, collectGitSkill, getSkill, li
           <section className="surface-card skill-review-card">
             <h2>审核与风险</h2>
             {selected.risks.length ? <div className="skill-risk-notice"><ShieldCheckIcon aria-hidden="true" /><div><strong>需人工确认</strong><p>{selected.risks.map(riskLabel).join("、")}。收集和预览均未执行这些文件。</p></div></div> : <p className="skill-safe-note">未检测到脚本、二进制或隐藏文件。</p>}
-            <div className="skill-review-actions"><button className="button-primary" onClick={() => void updateReview("approved")} type="button">审核通过</button><button className="button-secondary" onClick={() => void updateReview("risk_pending_confirmation")} type="button">标记风险待确认</button><button className="skill-reject-button" onClick={() => void updateReview("rejected")} type="button">拒绝</button></div>
+            <div className="skill-review-actions"><button className="button-primary" disabled={isDetailBusy} onClick={() => void updateReview("approved")} type="button">审核通过</button><button className="button-secondary" disabled={isDetailBusy} onClick={() => void updateReview("risk_pending_confirmation")} type="button">标记风险待确认</button><button className="skill-reject-button" disabled={isDetailBusy} onClick={() => void updateReview("rejected")} type="button">拒绝</button></div>
           </section>
           <section className="surface-card skill-facts-card"><h2>收集记录</h2><dl><dt>来源</dt><dd>{selected.source.location}</dd><dt>内容校验</dt><dd><code>{selected.contentHash.slice(0, 12)}…</code></dd><dt>文件数</dt><dd>{selected.files.length} 个</dd><dt>更新时间</dt><dd><time dateTime={selected.updatedAt}>{formatDate(selected.updatedAt)}</time></dd></dl></section>
           <section className="surface-card skill-files-card"><h2>已收集文件</h2><ul>{selected.files.map((file) => <li key={file.relativePath}><span>{file.relativePath}</span><small>{file.kind} · {formatBytes(file.bytes)}</small></li>)}</ul></section>
-          {selected.reviewStatus === "approved" ? <section aria-label="安装 Skill" className="surface-card skill-install-card"><h2>安装到 Codex</h2><p>安装只复制已审核文件，并再次核对内容；不会执行任何脚本。</p><label htmlFor="skill-install-target">目标目录</label><input id="skill-install-target" onChange={(event) => setInstallTarget(event.target.value)} placeholder="例如 C:\\Users\\you\\.codex\\skills" value={installTarget} /><label htmlFor="skill-install-name">安装目录名称</label><input id="skill-install-name" onChange={(event) => setDestinationName(event.target.value)} placeholder="例如 review-copy" value={destinationName} /><p>仅允许一个文件夹名称；如目标中已存在同名目录，默认会停止，不会覆盖。</p><label className="skill-replace-choice"><input checked={replaceAfterBackup} onChange={(event) => setReplaceAfterBackup(event.target.checked)} type="checkbox" />同名时先备份再替换</label><button className="button-primary" disabled={!installTarget.trim() || !destinationName.trim()} onClick={() => void install()} type="button">安装 Skill</button>{installation ? <><p className="skill-install-success">已安装到 {installation.installPath}{installation.backupPath ? "；原版本已备份。" : "。"}</p><button className="button-secondary" onClick={() => void verifyInstallation()} type="button">检查本地漂移</button>{verification ? <p className={`skill-verification skill-verification-${verification.state}`}>{verification.state === "matching" ? "安装内容一致" : verification.state === "drifted" ? "发现本地内容变化" : "安装目录不可用"}</p> : null}</> : null}</section> : <section className="surface-card skill-install-card skill-install-locked"><h2>安装</h2><p>审核通过后才能安装。安装始终是显式操作，不会自动执行或覆盖文件。</p></section>}
+          {selected.reviewStatus === "approved" ? <section aria-label="安装 Skill" className="surface-card skill-install-card"><h2>安装到 Codex</h2><p>安装只复制已审核文件，并再次核对内容；不会执行任何脚本。</p><label htmlFor="skill-install-target">目标目录</label><input id="skill-install-target" onChange={(event) => setInstallTarget(event.target.value)} placeholder="例如 C:\\Users\\you\\.codex\\skills" value={installTarget} /><label htmlFor="skill-install-name">安装目录名称</label><input id="skill-install-name" onChange={(event) => setDestinationName(event.target.value)} placeholder="例如 review-copy" value={destinationName} /><p>仅允许一个文件夹名称；如目标中已存在同名目录，默认会停止，不会覆盖。</p><label className="skill-replace-choice"><input checked={replaceAfterBackup} onChange={(event) => setReplaceAfterBackup(event.target.checked)} type="checkbox" />同名时先备份再替换</label><button className="button-primary" disabled={isDetailBusy || !installTarget.trim() || !destinationName.trim()} onClick={() => void install()} type="button">{isDetailBusy ? "处理中…" : "安装 Skill"}</button>{installation ? <><p className="skill-install-success">已安装到 {installation.installPath}{installation.backupPath ? "；原版本已备份。" : "。"}</p><button className="button-secondary" disabled={isDetailBusy} onClick={() => void verifyInstallation()} type="button">检查本地漂移</button>{verification ? <p className={`skill-verification skill-verification-${verification.state}`}>{verification.state === "matching" ? "安装内容一致" : verification.state === "drifted" ? "发现本地内容变化" : "安装目录不可用"}</p> : null}</> : null}</section> : <section className="surface-card skill-install-card skill-install-locked"><h2>安装</h2><p>审核通过后才能安装。安装始终是显式操作，不会自动执行或覆盖文件。</p></section>}
         </aside>
       </div>
     </section>;
@@ -159,11 +194,12 @@ export function SkillLibrary({ collectSkillFolder, collectGitSkill, getSkill, li
   return <section aria-labelledby="skills-title" className="skill-library">
     <header className="feature-heading skill-heading"><div><p className="eyebrow">LOCAL SKILLS</p><h1 id="skills-title">Skill 库</h1><p>收集、审核与安装 Codex Skill；扫描不会执行任何脚本。</p></div></header>
     <section aria-label="收集本地 Skill" className="surface-card skill-collect-panel"><div><label htmlFor="skill-folder-path">Skill 文件夹路径</label><input id="skill-folder-path" onChange={(event) => setFolderPath(event.target.value)} placeholder="例如 C:\\Users\\you\\.codex\\skills\\my-skill" value={folderPath} /><p>目录必须包含 <code>SKILL.md</code>。扫描只读取文件与风险标记。</p></div><button className="button-primary" disabled={!folderPath.trim() || isCollecting} onClick={() => void collect()} type="button">{isCollecting ? "扫描中…" : "扫描本地 Skill"}</button></section>
-    <details className="surface-card skill-git-collect"><summary>从固定 Git 提交收集</summary><p>只支持公开 GitHub HTTPS 仓库和 40 位提交 SHA；不会检出或执行仓库脚本。</p><label htmlFor="git-skill-url">仓库地址</label><input id="git-skill-url" onChange={(event) => setGitSource((current) => ({ ...current, repositoryUrl: event.target.value }))} placeholder="https://github.com/org/repo.git" value={gitSource.repositoryUrl} /><label htmlFor="git-skill-commit">提交 SHA</label><input id="git-skill-commit" onChange={(event) => setGitSource((current) => ({ ...current, commit: event.target.value }))} placeholder="40 位提交 SHA" value={gitSource.commit} /><label htmlFor="git-skill-subdirectory">Skill 子目录（可选）</label><input id="git-skill-subdirectory" onChange={(event) => setGitSource((current) => ({ ...current, subdirectory: event.target.value }))} placeholder="例如 skills/reviewer" value={gitSource.subdirectory} /><button className="button-secondary" disabled={!gitSource.repositoryUrl.trim() || !gitSource.commit.trim()} onClick={() => void collectGit()} type="button">收集 Git Skill</button></details>
+    <details className="surface-card skill-git-collect"><summary>从固定 Git 提交收集</summary><p>只支持公开 GitHub HTTPS 仓库和 40 位提交 SHA；不会检出或执行仓库脚本。</p><label htmlFor="git-skill-url">仓库地址</label><input id="git-skill-url" onChange={(event) => setGitSource((current) => ({ ...current, repositoryUrl: event.target.value }))} placeholder="https://github.com/org/repo.git" value={gitSource.repositoryUrl} /><label htmlFor="git-skill-commit">提交 SHA</label><input id="git-skill-commit" onChange={(event) => setGitSource((current) => ({ ...current, commit: event.target.value }))} placeholder="40 位提交 SHA" value={gitSource.commit} /><label htmlFor="git-skill-subdirectory">Skill 子目录（可选）</label><input id="git-skill-subdirectory" onChange={(event) => setGitSource((current) => ({ ...current, subdirectory: event.target.value }))} placeholder="例如 skills/reviewer" value={gitSource.subdirectory} /><button className="button-secondary" disabled={isGitCollecting || !gitSource.repositoryUrl.trim() || !gitSource.commit.trim()} onClick={() => void collectGit()} type="button">{isGitCollecting ? "收集 Git Skill 中…" : "收集 Git Skill"}</button></details>
     <div className="skill-toolbar"><div aria-label="筛选 Skill" className="skill-filter-options" role="group">{(["all", "pending", "approved", "favorite", "risk"] as const).map((value) => <button aria-pressed={filter === value} className="library-filter-button" key={value} onClick={() => setFilter(value)} type="button">{filterLabel(value)}</button>)}</div><p className="library-result-count">共 {visibleSkills.length} 个 Skill</p></div>
     {skills?.length === 0 ? <section className="surface-card skill-empty-state"><h2>还没有收集到 Skill</h2><p>输入本地目录后开始扫描。每一个 Skill 都会先进入待审核状态。</p></section> : null}
-    {visibleSkills.length ? <ul aria-label="Skill 列表" className="skill-list">{visibleSkills.map((skill) => <li className="surface-card skill-list-item" key={skill.id}><div className="skill-list-primary"><button aria-label={`打开 Skill：${skill.name}`} className="skill-list-title" onClick={() => void openSkill(skill.id)} type="button"><strong>{skill.name}</strong><span>{skill.description || "无描述"}</span></button></div><div className="skill-list-meta"><span className={`skill-status skill-status-${skill.reviewStatus}`}>{statusLabels[skill.reviewStatus]}</span>{skill.risks.map((risk) => <span className="skill-risk-chip" key={risk}>{riskLabel(risk)}</span>)}<span>{skill.source.kind === "git_repository" ? "Git 仓库" : "本地目录"}</span></div><button aria-label={skill.favorite ? `取消收藏 Skill：${skill.name}` : `收藏 Skill：${skill.name}`} className={`favorite-toggle${skill.favorite ? " is-favorite" : ""}`} onClick={() => void toggleFavorite(skill)} type="button">{skill.favorite ? <StarSolidIcon aria-hidden="true" /> : <StarIcon aria-hidden="true" />}</button></li>)}</ul> : skills?.length ? <section className="surface-card skill-empty-state"><p>当前筛选下没有 Skill。</p></section> : null}
+    {visibleSkills.length ? <ul aria-label="Skill 列表" className="skill-list">{visibleSkills.map((skill) => <li className="surface-card skill-list-item" key={skill.id}><div className="skill-list-primary"><button aria-label={`打开 Skill：${skill.name}`} className="skill-list-title" onClick={() => void openSkill(skill.id)} type="button"><strong>{skill.name}</strong><span>{skill.description || "无描述"}</span></button></div><div className="skill-list-meta"><span className={`skill-status skill-status-${skill.reviewStatus}`}>{statusLabels[skill.reviewStatus]}</span>{skill.risks.map((risk) => <span className="skill-risk-chip" key={risk}>{riskLabel(risk)}</span>)}<span>{skill.source.kind === "git_repository" ? "Git 仓库" : "本地目录"}</span></div><button aria-label={skill.favorite ? `取消收藏 Skill：${skill.name}` : `收藏 Skill：${skill.name}`} aria-busy={favoriteBusyIds.has(skill.id)} className={`favorite-toggle${skill.favorite ? " is-favorite" : ""}`} disabled={favoriteBusyIds.has(skill.id)} onClick={() => void toggleFavorite(skill)} type="button">{skill.favorite ? <StarSolidIcon aria-hidden="true" /> : <StarIcon aria-hidden="true" />}</button></li>)}</ul> : skills?.length ? <section className="surface-card skill-empty-state"><p>当前筛选下没有 Skill。</p></section> : null}
     {error ? <p role="alert" className="skill-error">{error}</p> : null}
+    {error && skills === null ? <button className="button-secondary" onClick={() => setReloadKey((key) => key + 1)} type="button">重试读取 Skill 库</button> : null}
   </section>;
 }
 

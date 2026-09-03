@@ -58,8 +58,11 @@ fn upgrades_a_v7_database_to_the_metadata_and_usage_schema() {
              ALTER TABLE prompt_sources DROP COLUMN import_job_id;
              ALTER TABLE prompts DROP COLUMN imported_at;
              ALTER TABLE prompts DROP COLUMN last_validated_at;
+             ALTER TABLE prompt_versions DROP COLUMN metadata_json;
              DELETE FROM migration_ledger WHERE migration_id = '20260829_01_prompt_metadata_and_usage';
+             DELETE FROM migration_ledger WHERE migration_id = '20260831_01_prompt_version_metadata_snapshots';
              DELETE FROM schema_migrations WHERE version = 8;
+             DELETE FROM schema_migrations WHERE version = 9;
              PRAGMA user_version = 7;",
         )
         .unwrap();
@@ -70,6 +73,48 @@ fn upgrades_a_v7_database_to_the_metadata_and_usage_schema() {
     let reopened = Database::open(&path)
         .expect("an upgraded v7 database must reopen with a complete migration ledger");
     assert_eq!(reopened.schema_version().unwrap(), LATEST_SCHEMA_VERSION);
+}
+
+#[test]
+fn upgrades_a_v8_database_to_the_version_metadata_snapshot_schema() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("v8-to-v9.db");
+    drop(Database::open(&path).unwrap());
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute_batch(
+            "INSERT INTO prompts(id, status, effectiveness, current_version, entity_json, created_at, updated_at, deleted_at)
+             VALUES ('legacy-metadata-prompt', 'inbox', 'effective', 1,
+               '{\"effectiveness\":\"effective\",\"sources\":[],\"compatibilities\":[],\"validations\":[]}', 1, 1, NULL);
+             INSERT INTO prompt_versions(prompt_id, version_number, version_id, title, body, description, content_json, actor, created_at)
+             VALUES ('legacy-metadata-prompt', 1, '00000000-0000-0000-0000-000000000001', '旧标题', '旧正文', NULL, '{}', 'user', 1);
+             ALTER TABLE prompt_versions DROP COLUMN metadata_json;
+             DELETE FROM migration_ledger WHERE migration_id = '20260831_01_prompt_version_metadata_snapshots';
+             DELETE FROM schema_migrations WHERE version = 9;
+             PRAGMA user_version = 8;",
+        )
+        .unwrap();
+    drop(connection);
+
+    let upgraded = Database::open(&path).expect("v8 database should gain metadata snapshots");
+    assert_eq!(upgraded.schema_version().unwrap(), LATEST_SCHEMA_VERSION);
+    let connection = Connection::open(&path).unwrap();
+    let column: String = connection
+        .query_row(
+            "SELECT name FROM pragma_table_info('prompt_versions') WHERE name = 'metadata_json'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(column, "metadata_json");
+    let snapshot: String = connection
+        .query_row(
+            "SELECT metadata_json FROM prompt_versions WHERE prompt_id = 'legacy-metadata-prompt'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(snapshot.contains("effective"));
 }
 
 #[test]
@@ -443,7 +488,7 @@ fn rejects_a_latest_version_database_with_an_empty_ledger() {
                 applied_at INTEGER NOT NULL,
                 provenance TEXT NOT NULL
              ) STRICT;
-             PRAGMA user_version = 8;",
+             PRAGMA user_version = 9;",
         )
         .unwrap();
     drop(connection);
@@ -525,8 +570,11 @@ fn refuses_to_commit_a_latest_upgrade_when_an_older_ledger_entry_is_missing() {
              ALTER TABLE prompt_sources DROP COLUMN import_job_id;
              ALTER TABLE prompts DROP COLUMN imported_at;
              ALTER TABLE prompts DROP COLUMN last_validated_at;
+             ALTER TABLE prompt_versions DROP COLUMN metadata_json;
              DELETE FROM migration_ledger WHERE migration_id = '20260829_01_prompt_metadata_and_usage';
+             DELETE FROM migration_ledger WHERE migration_id = '20260831_01_prompt_version_metadata_snapshots';
              DELETE FROM schema_migrations WHERE version = 8;
+             DELETE FROM schema_migrations WHERE version = 9;
              PRAGMA user_version = 7;",
         )
         .unwrap();
@@ -556,7 +604,7 @@ fn rejects_a_database_from_a_future_schema_version() {
 
     let connection = Connection::open(&path).unwrap();
     connection
-        .execute_batch("PRAGMA user_version = 9;")
+        .execute_batch("PRAGMA user_version = 10;")
         .unwrap();
     drop(connection);
 

@@ -82,6 +82,9 @@ pub struct SearchHit {
     pub effectiveness: EffectivenessStatus,
     pub rating: Option<u8>,
     pub updated_at: OffsetDateTime,
+    pub source_names: Vec<String>,
+    pub applicable_tools: Vec<String>,
+    pub applicable_models: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -131,17 +134,34 @@ impl PromptRepository {
                 p.status,
                 p.effectiveness,
                 p.updated_at,
-                (
-                    SELECT vr.rating FROM validation_records vr
-                    WHERE vr.prompt_id = p.id
-                    ORDER BY vr.validated_at DESC, vr.id DESC LIMIT 1
-                ) AS rating,
-                COUNT(*) OVER() AS full_count
+                 (
+                     SELECT vr.rating FROM validation_records vr
+                     WHERE vr.prompt_id = p.id
+                     ORDER BY vr.validated_at DESC, vr.id DESC LIMIT 1
+                 ) AS rating,
+                 COALESCE((
+                     SELECT group_concat(ps.name, '、')
+                     FROM prompt_sources ps
+                     WHERE ps.prompt_id = p.id
+                 ), '') AS source_names,
+                 COALESCE((
+                     SELECT group_concat(c.tool, '、')
+                     FROM compatibilities c
+                     WHERE c.prompt_id = p.id
+                 ), '') AS applicable_tools,
+                 COALESCE((
+                     SELECT group_concat(c.model, '、')
+                     FROM compatibilities c
+                     WHERE c.prompt_id = p.id AND c.model IS NOT NULL
+                 ), '') AS applicable_models,
+                 COUNT(*) OVER() AS full_count
              FROM matches m
              JOIN prompts p ON p.id = m.prompt_id
              WHERE 1 = 1"
         );
         append_filters(&mut sql, &mut values, &query.filters)?;
+        let filtered_sql = sql.clone();
+        let count_values = values.clone();
         let order_by = match query.sort {
             SearchSort::Relevance => {
                 " ORDER BY
@@ -175,7 +195,10 @@ impl PromptRepository {
                 effectiveness: row.get(4)?,
                 updated_at: row.get(5)?,
                 rating: row.get(6)?,
-                full_count: row.get(7)?,
+                source_names: row.get(7)?,
+                applicable_tools: row.get(8)?,
+                applicable_models: row.get(9)?,
+                full_count: row.get(10)?,
             })
         })?;
 
@@ -198,7 +221,18 @@ impl PromptRepository {
                 rating: row.rating,
                 updated_at: OffsetDateTime::from_unix_timestamp(row.updated_at)
                     .map_err(|error| StoreError::Clock(error.to_string()))?,
+                source_names: split_metadata(row.source_names),
+                applicable_tools: split_metadata(row.applicable_tools),
+                applicable_models: split_metadata(row.applicable_models),
             });
+        }
+        if hits.is_empty() && query.offset > 0 {
+            let count_sql = format!("SELECT COUNT(*) FROM ({filtered_sql}) AS filtered");
+            total = self.connection.query_row(
+                &count_sql,
+                params_from_iter(count_values.iter()),
+                |row| row.get(0),
+            )?;
         }
         Ok(SearchPage {
             hits,
@@ -262,7 +296,19 @@ struct RawSearchHit {
     effectiveness: String,
     updated_at: i64,
     rating: Option<u8>,
+    source_names: String,
+    applicable_tools: String,
+    applicable_models: String,
     full_count: i64,
+}
+
+fn split_metadata(value: String) -> Vec<String> {
+    value
+        .split('、')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(str::to_owned)
+        .collect()
 }
 
 fn append_filters(

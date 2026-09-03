@@ -50,4 +50,16 @@ describe("PromptLifecycleActions", () => {
     await waitFor(() => expect(permanentlyDelete).toHaveBeenCalledOnce());
     expect(screen.getByRole("status")).toHaveTextContent("C:/backups/permanent-delete.db");
   });
+
+  it("prevents duplicate lifecycle operations while one is pending", async () => {
+    const archive = vi.fn(() => new Promise<void>(() => undefined));
+    render(<PromptLifecycleActions archive={archive} initialStatus="published" publish={vi.fn()} recover={vi.fn()} softDelete={vi.fn()} />);
+
+    const archiveButton = screen.getByRole("button", { name: "归档提示词" });
+    fireEvent.click(archiveButton);
+    fireEvent.click(archiveButton);
+
+    await waitFor(() => expect(archive).toHaveBeenCalledOnce());
+    expect(archiveButton).toBeDisabled();
+  });
 });

@@ -6,13 +6,26 @@ import { PromptContentActions } from "../library/PromptContentActions";
 type PromptEditorProps = {
   saveDraft: (draft: ManualPromptDraft) => Promise<unknown>;
   onSaved?: () => void;
+  initial?: ManualPromptDraft;
+  submitLabel?: string;
+  showPreviewActions?: boolean;
 };
 
-export function PromptEditor({ saveDraft, onSaved }: PromptEditorProps) {
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [category, setCategory] = useState("");
-  const [variables, setVariables] = useState<PromptVariableDraft[]>([]);
+export function PromptEditor({
+  initial,
+  onSaved,
+  saveDraft,
+  showPreviewActions = true,
+  submitLabel = "保存到收件箱",
+}: PromptEditorProps) {
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [body, setBody] = useState(initial?.body ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [category, setCategory] = useState(initial?.category ?? "");
+  const [tagText, setTagText] = useState(initial?.tags.join(", ") ?? "");
+  const [variables, setVariables] = useState<PromptVariableDraft[]>(initial?.variables ?? []);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setSaving] = useState(false);
 
   function addVariable() {
     setVariables((current) => [
@@ -31,15 +44,38 @@ export function PromptEditor({ saveDraft, onSaved }: PromptEditorProps) {
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await saveDraft({
-      title,
-      body,
-      description: null,
-      category: category || null,
-      tags: [],
-      variables,
-    });
-    onSaved?.();
+    setError(null);
+    const names = variables.map((variable) => variable.name.trim());
+    if (names.some((name) => !name)) {
+      setError("变量名称不能为空");
+      return;
+    }
+    if (new Set(names).size !== names.length) {
+      setError("变量名称不能重复");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveDraft({
+        title,
+        body,
+        description: description.trim() || null,
+        category: category.trim() || null,
+        tags: tagText.split(",").map((tag) => tag.trim()).filter(Boolean),
+        variables: variables.map((variable, index) => ({ ...variable, name: names[index] })),
+      });
+    } catch {
+      setError("无法保存提示词，请重试。");
+      setSaving(false);
+      return;
+    }
+    try {
+      await onSaved?.();
+    } catch {
+      setError("提示词已保存，但界面刷新失败，请重新打开。");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -52,9 +88,17 @@ export function PromptEditor({ saveDraft, onSaved }: PromptEditorProps) {
         正文
         <textarea onChange={(event) => setBody(event.target.value)} required value={body} />
       </label>
+      <label className="editor-description-field">
+        说明
+        <input onChange={(event) => setDescription(event.target.value)} value={description} />
+      </label>
       <label className="editor-category-field">
         分类
         <input onChange={(event) => setCategory(event.target.value)} value={category} />
+      </label>
+      <label className="editor-tags-field">
+        标签
+        <input aria-label="标签" onChange={(event) => setTagText(event.target.value)} placeholder="多个标签用逗号分隔" value={tagText} />
       </label>
       <fieldset className="variable-editor">
         <legend>变量</legend>
@@ -95,6 +139,9 @@ export function PromptEditor({ saveDraft, onSaved }: PromptEditorProps) {
               />
               变量必填
             </label>
+            <button aria-label={`删除变量 ${variable.name || index + 1}`} onClick={() => setVariables((current) => current.filter((_, currentIndex) => currentIndex !== index))} type="button">
+              删除变量
+            </button>
           </div>
         ))}
         <button onClick={addVariable} type="button">添加变量</button>
@@ -108,9 +155,10 @@ export function PromptEditor({ saveDraft, onSaved }: PromptEditorProps) {
           <p>未替换变量：{preview.unresolved.join("、")}</p>
         ) : null}
         <pre>{preview.body}</pre>
-        <PromptContentActions body={preview.body} title={title} />
+        {showPreviewActions ? <PromptContentActions body={preview.body} title={title} /> : null}
       </section>
-      <button className="button-primary" type="submit">保存到收件箱</button>
+      {error ? <p role="alert">{error}</p> : null}
+      <button className="button-primary" disabled={isSaving} type="submit">{isSaving ? "保存中…" : submitLabel}</button>
     </form>
   );
 }

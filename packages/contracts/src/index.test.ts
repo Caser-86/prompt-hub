@@ -3,6 +3,26 @@ import { describe, expect, it } from "vitest";
 import { createDesktopCommandClient } from "./index";
 
 describe("desktop command client", () => {
+  it("keeps recovery backup operations behind typed commands", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      if (command === "list_recovery_backups") return [{ path: "C:/data/recovery.bak", byteLen: 42, schemaVersion: 8 }];
+      if (command === "preview_recovery_backup") return { targetExists: true, backupSchemaVersion: 8, backupByteLen: 42, promptCount: 2 };
+      return undefined;
+    });
+
+    await expect(client.listRecoveryBackups()).resolves.toEqual([{ path: "C:/data/recovery.bak", byteLen: 42, schemaVersion: 8 }]);
+    await expect(client.previewRecoveryBackup("C:/data/recovery.bak")).resolves.toMatchObject({ promptCount: 2 });
+    await client.restoreRecoveryBackup("C:/data/recovery.bak");
+
+    expect(calls).toEqual([
+      { command: "list_recovery_backups", args: undefined },
+      { command: "preview_recovery_backup", args: { path: "C:/data/recovery.bak" } },
+      { command: "restore_recovery_backup", args: { path: "C:/data/recovery.bak" } },
+    ]);
+  });
+
   it("collects and lists Skills through the approved command boundary", async () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const client = createDesktopCommandClient(async (command, args) => {
@@ -113,6 +133,25 @@ describe("desktop command client", () => {
     await expect(client.listPrompts()).rejects.toThrow("list_prompts returned an invalid response");
   });
 
+  it("rejects invalid prompt enum and rating values at the desktop boundary", async () => {
+    const client = createDesktopCommandClient(async () => [{
+      id: "prompt-1",
+      title: "代码审查",
+      status: "published",
+      effectiveness: "effective",
+      category: "开发",
+      tags: [],
+      sourceNames: ["手动录入"],
+      compatibilityStatuses: ["not-a-status"],
+      rating: 6,
+      favorite: false,
+      createdAt: "2026-07-15T00:00:00Z",
+      updatedAt: "2026-07-15T00:00:00Z",
+    }]);
+
+    await expect(client.listPrompts()).rejects.toThrow("list_prompts returned an invalid response");
+  });
+
   it("creates manual drafts through the approved command boundary", async () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const client = createDesktopCommandClient(async (command, args) => {
@@ -215,6 +254,46 @@ describe("desktop command client", () => {
       { command: "record_prompt_compatibility", args: { id: "prompt-1", metadata: compatibility } },
       { command: "record_prompt_validation", args: { id: "prompt-1", metadata: validation } },
     ]);
+  });
+
+  it("records compatibility and validation metadata atomically", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      return { id: "prompt-1" };
+    });
+    const metadata = {
+      tool: "Codex",
+      model: "gpt-5",
+      compatibilityStatus: "confirmed" as const,
+      effectiveness: "effective" as const,
+      rating: 5,
+      notes: "已验证",
+    };
+
+    await client.recordPromptMetadata("prompt-1", metadata);
+
+    expect(calls).toEqual([{ command: "record_prompt_metadata", args: { id: "prompt-1", metadata } }]);
+  });
+
+  it("revises prompt content through the approved command boundary", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const client = createDesktopCommandClient(async (command, args) => {
+      calls.push({ command, args });
+      return { id: "prompt-1" };
+    });
+    const draft = {
+      title: "代码审查",
+      body: "审查当前变更",
+      description: null,
+      category: "开发",
+      tags: ["审查"],
+      variables: [],
+    };
+
+    await client.revisePrompt("prompt-1", draft);
+
+    expect(calls).toEqual([{ command: "revise_prompt", args: { id: "prompt-1", draft } }]);
   });
 
   it("loads immutable history and restores a version through approved commands", async () => {

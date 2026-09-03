@@ -94,12 +94,15 @@ cargo test --workspace
 
 ## 文档
 
+- [文档索引](docs/README.md)：按使用、产品设计、数据安全、发布证据和历史计划分类的完整入口。
 - [用户指南](docs/user-guide.md)：完整使用说明，包括导入、搜索、备份、AI 草稿和 MCP。
 - [产品规格](docs/prompt-hub-product-spec.md)：产品范围、数据模型、安全要求与验收标准。
 - [模型分批执行计划](docs/superpowers/plans/2026-07-15-prompt-hub-model-batched-execution.md)：项目分期计划。
 - [Skill 库设计](docs/skill-library-design.md)：Skill 收集、审核与受控安装的安全边界与后续扩展方案。
 - [变更日志](CHANGELOG.md)：版本变更记录。
 - [提示词导入种子](docs/import-seeds)：可复用的提示词收集样本。
+
+历史计划和设计规格会保留在 `docs/superpowers/` 中，用于追踪决策；新需求以产品规格为准。
 
 ## 贡献与反馈
 

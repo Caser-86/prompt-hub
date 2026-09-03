@@ -432,6 +432,85 @@ impl ValidationRecord {
     }
 }
 
+/// Immutable metadata captured alongside every prompt version.
+///
+/// Content and metadata are deliberately kept as separate fields on the
+/// aggregate, but a version snapshot must include both so historical changes
+/// can be audited and restored without guessing from the current record.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PromptMetadataSnapshot {
+    effectiveness: EffectivenessStatus,
+    sources: Vec<PromptSource>,
+    compatibilities: Vec<Compatibility>,
+    validations: Vec<ValidationRecord>,
+    imported_at: Option<OffsetDateTime>,
+    last_validated_at: Option<OffsetDateTime>,
+}
+
+impl Default for PromptMetadataSnapshot {
+    fn default() -> Self {
+        Self {
+            effectiveness: EffectivenessStatus::Unverified,
+            sources: Vec::new(),
+            compatibilities: Vec::new(),
+            validations: Vec::new(),
+            imported_at: None,
+            last_validated_at: None,
+        }
+    }
+}
+
+impl PromptMetadataSnapshot {
+    fn new(
+        effectiveness: EffectivenessStatus,
+        sources: Vec<PromptSource>,
+        compatibilities: Vec<Compatibility>,
+        validations: Vec<ValidationRecord>,
+        imported_at: Option<OffsetDateTime>,
+        last_validated_at: Option<OffsetDateTime>,
+    ) -> Self {
+        Self {
+            effectiveness,
+            sources,
+            compatibilities,
+            validations,
+            imported_at,
+            last_validated_at,
+        }
+    }
+
+    #[must_use]
+    pub const fn effectiveness(&self) -> EffectivenessStatus {
+        self.effectiveness
+    }
+
+    #[must_use]
+    pub fn sources(&self) -> &[PromptSource] {
+        &self.sources
+    }
+
+    #[must_use]
+    pub fn compatibilities(&self) -> &[Compatibility] {
+        &self.compatibilities
+    }
+
+    #[must_use]
+    pub fn validations(&self) -> &[ValidationRecord] {
+        &self.validations
+    }
+
+    #[must_use]
+    pub const fn imported_at(&self) -> Option<OffsetDateTime> {
+        self.imported_at
+    }
+
+    #[must_use]
+    pub const fn last_validated_at(&self) -> Option<OffsetDateTime> {
+        self.last_validated_at
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuditAction {
@@ -457,16 +536,25 @@ pub struct PromptVersion {
     id: PromptVersionId,
     number: u32,
     content: PromptContent,
+    #[serde(default)]
+    metadata: PromptMetadataSnapshot,
     actor: Actor,
     created_at: OffsetDateTime,
 }
 
 impl PromptVersion {
-    fn new(number: u32, content: PromptContent, actor: Actor, created_at: OffsetDateTime) -> Self {
+    fn new(
+        number: u32,
+        content: PromptContent,
+        metadata: PromptMetadataSnapshot,
+        actor: Actor,
+        created_at: OffsetDateTime,
+    ) -> Self {
         Self {
             id: PromptVersionId::new(),
             number,
             content,
+            metadata,
             actor,
             created_at,
         }
@@ -479,6 +567,24 @@ impl PromptVersion {
         actor: Actor,
         created_at: OffsetDateTime,
     ) -> Result<Self, DomainError> {
+        Self::from_snapshot_with_metadata(
+            id,
+            number,
+            content,
+            PromptMetadataSnapshot::default(),
+            actor,
+            created_at,
+        )
+    }
+
+    pub fn from_snapshot_with_metadata(
+        id: PromptVersionId,
+        number: u32,
+        content: PromptContent,
+        metadata: PromptMetadataSnapshot,
+        actor: Actor,
+        created_at: OffsetDateTime,
+    ) -> Result<Self, DomainError> {
         if number == 0 {
             return Err(DomainError::VersionNumberRequired);
         }
@@ -486,6 +592,7 @@ impl PromptVersion {
             id,
             number,
             content,
+            metadata,
             actor,
             created_at,
         })
@@ -499,6 +606,11 @@ impl PromptVersion {
     #[must_use]
     pub const fn content(&self) -> &PromptContent {
         &self.content
+    }
+
+    #[must_use]
+    pub const fn metadata(&self) -> &PromptMetadataSnapshot {
+        &self.metadata
     }
 
     #[must_use]
@@ -542,12 +654,21 @@ impl Prompt {
         actor: Actor,
         created_at: OffsetDateTime,
     ) -> Self {
+        let sources = vec![source];
+        let metadata = PromptMetadataSnapshot::new(
+            EffectivenessStatus::Unverified,
+            sources.clone(),
+            Vec::new(),
+            Vec::new(),
+            None,
+            None,
+        );
         Self {
             id: PromptId::new(),
             status: PromptStatus::Inbox,
             effectiveness: EffectivenessStatus::Unverified,
-            current_version: PromptVersion::new(1, content, actor, created_at),
-            sources: vec![source],
+            current_version: PromptVersion::new(1, content, metadata, actor, created_at),
+            sources,
             compatibilities: Vec::new(),
             validations: Vec::new(),
             created_at,
@@ -566,6 +687,7 @@ impl Prompt {
     ) -> Self {
         let mut prompt = Self::new_inbox(content, source, actor, imported_at);
         prompt.imported_at = Some(imported_at);
+        prompt.current_version.metadata.imported_at = Some(imported_at);
         prompt
     }
 
@@ -590,8 +712,30 @@ impl Prompt {
         revised_at: OffsetDateTime,
     ) -> Result<&PromptVersion, DomainError> {
         require_user_actor(actor)?;
-        self.current_version =
-            PromptVersion::new(self.current_version.number + 1, content, actor, revised_at);
+        self.current_version = PromptVersion::new(
+            self.current_version.number + 1,
+            content,
+            self.metadata_snapshot(),
+            actor,
+            revised_at,
+        );
+        self.updated_at = revised_at;
+        Ok(&self.current_version)
+    }
+
+    pub fn revise_metadata(
+        &mut self,
+        actor: Actor,
+        revised_at: OffsetDateTime,
+    ) -> Result<&PromptVersion, DomainError> {
+        require_user_actor(actor)?;
+        self.current_version = PromptVersion::new(
+            self.current_version.number + 1,
+            self.current_version.content.clone(),
+            self.metadata_snapshot(),
+            actor,
+            revised_at,
+        );
         self.updated_at = revised_at;
         Ok(&self.current_version)
     }
@@ -603,9 +747,17 @@ impl Prompt {
         restored_at: OffsetDateTime,
     ) -> Result<&PromptVersion, DomainError> {
         require_user_actor(actor)?;
+        let metadata = historical.metadata.clone();
+        self.effectiveness = metadata.effectiveness;
+        self.sources = metadata.sources.clone();
+        self.compatibilities = metadata.compatibilities.clone();
+        self.validations = metadata.validations.clone();
+        self.imported_at = metadata.imported_at;
+        self.last_validated_at = metadata.last_validated_at;
         self.current_version = PromptVersion::new(
             self.current_version.number + 1,
             historical.content.clone(),
+            metadata,
             actor,
             restored_at,
         );
@@ -657,6 +809,17 @@ impl Prompt {
             current.tool != compatibility.tool || current.model != compatibility.model
         });
         self.compatibilities.push(compatibility);
+        self.updated_at = updated_at;
+        Ok(())
+    }
+
+    pub fn clear_compatibilities(
+        &mut self,
+        actor: Actor,
+        updated_at: OffsetDateTime,
+    ) -> Result<(), DomainError> {
+        require_user_actor(actor)?;
+        self.compatibilities.clear();
         self.updated_at = updated_at;
         Ok(())
     }
@@ -733,6 +896,24 @@ impl Prompt {
     #[must_use]
     pub fn validations(&self) -> &[ValidationRecord] {
         &self.validations
+    }
+
+    /// Rebuilds the current version's metadata for records written before
+    /// metadata snapshots were introduced. This keeps legacy JSON rows safe
+    /// to revise after a schema upgrade.
+    pub fn refresh_current_version_metadata(&mut self) {
+        self.current_version.metadata = self.metadata_snapshot();
+    }
+
+    fn metadata_snapshot(&self) -> PromptMetadataSnapshot {
+        PromptMetadataSnapshot::new(
+            self.effectiveness,
+            self.sources.clone(),
+            self.compatibilities.clone(),
+            self.validations.clone(),
+            self.imported_at,
+            self.last_validated_at,
+        )
     }
 }
 

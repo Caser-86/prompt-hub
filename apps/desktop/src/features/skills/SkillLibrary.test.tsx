@@ -86,4 +86,103 @@ describe("SkillLibrary", () => {
 
     await expect(screen.findByRole("alert")).resolves.toHaveTextContent("同名冲突");
   });
+
+  it("prevents duplicate Skill installation submissions while the first is pending", async () => {
+    let resolveInstall: (() => void) | undefined;
+    const installSkill = vi.fn().mockImplementation(() => new Promise<void>((resolve) => {
+      resolveInstall = () => resolve();
+    }));
+    render(<SkillLibrary
+      collectSkillFolder={vi.fn()}
+      collectGitSkill={vi.fn()}
+      getSkill={async () => ({ ...skill, reviewStatus: "approved" as const, reviewNotes: null, skillMarkdown: "# 本地审计", files: [], contentHash: "a".repeat(64), createdAt: "2026-07-19T00:00:00Z", installation: null })}
+      listSkills={async () => [{ ...skill, reviewStatus: "approved" as const }]}
+      reviewSkill={vi.fn()}
+      setSkillFavorite={vi.fn()}
+      installSkill={installSkill}
+      verifySkillInstallation={vi.fn()}
+    />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "打开 Skill：本地审计" }));
+    fireEvent.change(await screen.findByLabelText("安装目录名称"), { target: { value: "review-copy" } });
+    fireEvent.change(screen.getByLabelText("目标目录"), { target: { value: "C:/Codex/skills" } });
+    const installButton = screen.getByRole("button", { name: "安装 Skill" });
+    fireEvent.click(installButton);
+    fireEvent.click(installButton);
+
+    expect(installSkill).toHaveBeenCalledOnce();
+    expect(installButton).toBeDisabled();
+    resolveInstall?.();
+    await waitFor(() => expect(installButton).not.toBeDisabled());
+  });
+
+  it("prevents duplicate list favorite submissions while the first is pending", async () => {
+    let resolveFavorite: (() => void) | undefined;
+    const setSkillFavorite = vi.fn().mockImplementation(() => new Promise<void>((resolve) => {
+      resolveFavorite = () => resolve();
+    }));
+    render(<SkillLibrary
+      collectSkillFolder={vi.fn()}
+      collectGitSkill={vi.fn()}
+      getSkill={vi.fn()}
+      installSkill={vi.fn()}
+      listSkills={async () => [skill]}
+      reviewSkill={vi.fn()}
+      setSkillFavorite={setSkillFavorite}
+      verifySkillInstallation={vi.fn()}
+    />);
+
+    const favoriteButton = await screen.findByRole("button", { name: "收藏 Skill：本地审计" });
+    fireEvent.click(favoriteButton);
+    fireEvent.click(favoriteButton);
+
+    expect(setSkillFavorite).toHaveBeenCalledOnce();
+    expect(favoriteButton).toBeDisabled();
+    resolveFavorite?.();
+    await waitFor(() => expect(favoriteButton).not.toBeDisabled());
+  });
+
+  it("reports review and favorite failures instead of leaving rejected promises unhandled", async () => {
+    const reviewSkill = vi.fn().mockRejectedValue(new Error("offline"));
+    const setSkillFavorite = vi.fn().mockRejectedValue(new Error("offline"));
+    render(<SkillLibrary
+      collectSkillFolder={vi.fn()}
+      collectGitSkill={vi.fn()}
+      getSkill={async () => ({ ...skill, reviewNotes: null, skillMarkdown: "# 本地审计", files: [], contentHash: "a".repeat(64), createdAt: "2026-07-19T00:00:00Z", installation: null })}
+      listSkills={async () => [skill]}
+      reviewSkill={reviewSkill}
+      setSkillFavorite={setSkillFavorite}
+      installSkill={vi.fn()}
+      verifySkillInstallation={vi.fn()}
+    />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "打开 Skill：本地审计" }));
+    expect(await screen.findByRole("heading", { name: "本地审计" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "审核通过" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("无法更新 Skill，请重试"));
+    fireEvent.click(screen.getByRole("button", { name: "收藏 Skill：本地审计" }));
+    await waitFor(() => expect(setSkillFavorite).toHaveBeenCalledWith("skill-1", true));
+    expect(screen.getByRole("alert")).toHaveTextContent("无法更新 Skill，请重试");
+  });
+
+  it("offers a retry when the local Skill list cannot be loaded", async () => {
+    const listSkills = vi.fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce([skill]);
+    render(<SkillLibrary
+      collectSkillFolder={vi.fn()}
+      collectGitSkill={vi.fn()}
+      getSkill={vi.fn()}
+      installSkill={vi.fn()}
+      listSkills={listSkills}
+      reviewSkill={vi.fn()}
+      setSkillFavorite={vi.fn()}
+      verifySkillInstallation={vi.fn()}
+    />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("无法读取本地 Skill 库");
+    fireEvent.click(screen.getByRole("button", { name: "重试读取 Skill 库" }));
+    await waitFor(() => expect(listSkills).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole("button", { name: "打开 Skill：本地审计" })).toBeVisible();
+  });
 });

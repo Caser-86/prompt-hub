@@ -43,6 +43,6 @@ describe("InboxImport", () => {
     fireEvent.click(screen.getByRole("button", { name: "扫描文件夹到收件箱" }));
 
     await waitFor(() => expect(importFolder).toHaveBeenCalledWith("C:\\提示词"));
-    expect(screen.getByRole("status")).toHaveTextContent("已创建 2 条待审核草稿");
+    expect(await screen.findByRole("status")).toHaveTextContent("已创建 2 条待审核草稿");
   });
 });

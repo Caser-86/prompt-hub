@@ -7,6 +7,8 @@ import type { PromptListItem } from "@prompt-hub/contracts";
 import { filterAndSortPrompts, formatLibraryUpdatedAt, type PromptLibraryFilter, type PromptLibrarySort } from "./libraryView";
 import "./prompt-library.css";
 
+const INITIAL_RENDER_LIMIT = 40;
+
 type PromptLibraryProps = {
   loadPrompts: () => Promise<PromptListItem[]>;
   onCreate?: () => void;
@@ -18,36 +20,53 @@ type PromptLibraryProps = {
 
 export function PromptLibrary({ loadPrompts, onCreate, onAdvancedSearch, onSelect, onFavorite, batchArchive }: PromptLibraryProps) {
   const [prompts, setPrompts] = useState<PromptListItem[] | null>(null);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [confirmBatchArchive, setConfirmBatchArchive] = useState(false);
   const [filter, setFilter] = useState<PromptLibraryFilter>("all");
   const [sort, setSort] = useState<PromptLibrarySort>("default");
+  const [renderLimit, setRenderLimit] = useState(INITIAL_RENDER_LIMIT);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [favoriteBusyIds, setFavoriteBusyIds] = useState<Set<string>>(() => new Set());
+  const [isArchiving, setArchiving] = useState(false);
 
   useEffect(() => {
+    setError(null);
     void loadPrompts()
-      .then(setPrompts)
-      .catch(() => setError(true));
-  }, [loadPrompts]);
+      .then((nextPrompts) => {
+        setPrompts(nextPrompts);
+        setRenderLimit(INITIAL_RENDER_LIMIT);
+      })
+      .catch(() => setError("无法读取本地提示词库，请重试。"));
+  }, [loadPrompts, reloadKey]);
 
   const toggleFavorite = (prompt: PromptListItem) => {
-    if (!onFavorite) return;
+    if (!onFavorite || favoriteBusyIds.has(prompt.id)) return;
     const favorite = !prompt.favorite;
+    setFavoriteBusyIds((current) => new Set(current).add(prompt.id));
     void onFavorite(prompt, favorite).then(() => {
       setPrompts((current) => current?.map((item) => item.id === prompt.id ? { ...item, favorite } : item) ?? null);
-    });
+    }).catch(() => setError("无法更新提示词库操作，请重试。"))
+      .finally(() => setFavoriteBusyIds((current) => {
+        const next = new Set(current);
+        next.delete(prompt.id);
+        return next;
+      }));
   };
 
   const toggleSelected = (id: string) => setSelected((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
   const archiveSelected = () => {
-    if (!batchArchive) return;
+    if (!batchArchive || isArchiving || selected.length === 0) return;
+    setArchiving(true);
     void batchArchive(selected).then(() => {
       setPrompts((current) => current?.map((prompt) => selected.includes(prompt.id) ? { ...prompt, status: "archived" } : prompt) ?? null);
       setSelected([]);
       setConfirmBatchArchive(false);
-    });
+    }).catch(() => setError("无法更新提示词库操作，请重试。"))
+      .finally(() => setArchiving(false));
   };
   const visiblePrompts = prompts ? filterAndSortPrompts(prompts, filter, sort) : [];
+  const renderedPrompts = visiblePrompts.slice(0, renderLimit);
   const openPrompt = (prompt: PromptListItem) => {
     onSelect?.(prompt);
   };
@@ -78,16 +97,16 @@ export function PromptLibrary({ loadPrompts, onCreate, onAdvancedSearch, onSelec
                   aria-pressed={filter === value}
                   className="library-filter-button"
                   key={value}
-                  onClick={() => setFilter(value)}
+                  onClick={() => { setFilter(value); setRenderLimit(INITIAL_RENDER_LIMIT); }}
                   type="button"
                 >
                   {filterLabel(value)}
                 </button>
               ))}
             </div>
-            <p aria-live="polite" className="library-result-count">共 {visiblePrompts.length} 条提示词</p>
+            <p aria-live="polite" className="library-result-count">{renderedPrompts.length < visiblePrompts.length ? `已显示 ${renderedPrompts.length} / 共 ${visiblePrompts.length} 条` : `共 ${visiblePrompts.length} 条提示词`}</p>
             <label className="library-sort-control">排序
-              <select aria-label="提示词排序" value={sort} onChange={(event) => setSort(event.target.value as PromptLibrarySort)}>
+              <select aria-label="提示词排序" value={sort} onChange={(event) => { setSort(event.target.value as PromptLibrarySort); setRenderLimit(INITIAL_RENDER_LIMIT); }}>
                 <option value="default">默认推荐</option>
                 <option value="recently_used">最近使用</option>
                 <option value="recently_added">最近添加</option>
@@ -101,7 +120,7 @@ export function PromptLibrary({ loadPrompts, onCreate, onAdvancedSearch, onSelec
             <div className="selection-notice-actions"><button className="button-secondary" onClick={() => setSelected([])} type="button">取消选择</button><button className="button-primary" onClick={() => setConfirmBatchArchive(true)} type="button">归档已选 {selected.length} 条提示词</button></div>
           </section> : null}
           <ul aria-label="提示词列表" className="prompt-list">
-            {visiblePrompts.map((prompt) => (
+            {renderedPrompts.map((prompt) => (
               <li className="prompt-list-item surface-card" key={prompt.id}>
                 <div className="prompt-list-primary">
                   <button aria-label={`打开提示词：${prompt.title}`} className="prompt-list-title" onClick={() => openPrompt(prompt)} type="button">
@@ -119,7 +138,9 @@ export function PromptLibrary({ loadPrompts, onCreate, onAdvancedSearch, onSelec
                 <label><input aria-label={`选择提示词：${prompt.title}`} checked={selected.includes(prompt.id)} onChange={() => toggleSelected(prompt.id)} type="checkbox" /></label>
                 <button
                   aria-label={`${prompt.favorite ? "取消收藏" : "收藏"}提示词：${prompt.title}`}
+                  aria-busy={favoriteBusyIds.has(prompt.id)}
                   className={`favorite-toggle${prompt.favorite ? " is-favorite" : ""}`}
+                  disabled={favoriteBusyIds.has(prompt.id)}
                   onClick={() => toggleFavorite(prompt)}
                   type="button"
                 title={prompt.favorite ? "取消收藏" : "收藏"}
@@ -127,12 +148,17 @@ export function PromptLibrary({ loadPrompts, onCreate, onAdvancedSearch, onSelec
                 </div>
             </li>
           ))}
-        </ul>
+          </ul>
+          {renderLimit < visiblePrompts.length ? (
+            <button className="button-secondary library-load-more" onClick={() => setRenderLimit((current) => Math.min(current + INITIAL_RENDER_LIMIT, visiblePrompts.length))} type="button">
+              加载更多提示词
+            </button>
+          ) : null}
         {selected.length ? <div>
-          {confirmBatchArchive ? <div role="dialog" aria-label="确认批量归档"><p>批量归档可在提示词详情中恢复。</p><button onClick={archiveSelected} type="button">确认归档</button><button onClick={() => setConfirmBatchArchive(false)} type="button">取消</button></div> : null}
+          {confirmBatchArchive ? <div role="dialog" aria-label="确认批量归档"><p>批量归档可在提示词详情中恢复。</p><button aria-busy={isArchiving} disabled={isArchiving} onClick={archiveSelected} type="button">确认归档</button><button disabled={isArchiving} onClick={() => setConfirmBatchArchive(false)} type="button">取消</button></div> : null}
         </div> : null}</>
       ) : null}
-      {error ? <p role="alert">无法读取本地提示词库，请重试。</p> : null}
+      {error ? <><p role="alert">{error}</p><button onClick={() => setReloadKey((key) => key + 1)} type="button">重试读取提示词库</button></> : null}
     </section>
   );
 }

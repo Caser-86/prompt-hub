@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ClipboardDocumentIcon, EllipsisHorizontalIcon } from "@heroicons/react/24/outline";
 
-export function PromptContentActions({ body, metadataExport, onUsed, title }: { body: string; metadataExport?: string; onUsed?: () => void; title: string }) {
+export function PromptContentActions({ body, metadataExport, onUsed, title }: { body: string; metadataExport?: string; onUsed?: () => void | Promise<unknown>; title: string }) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -10,7 +10,10 @@ export function PromptContentActions({ body, metadataExport, onUsed, title }: { 
     setFailed(false);
     try {
       await navigator.clipboard.writeText(body);
-      onUsed?.();
+      // Recording usage is telemetry for local ranking, not a prerequisite for
+      // copying. Keep a transient database failure from becoming an unhandled
+      // rejection after the user's copy already succeeded.
+      void Promise.resolve(onUsed?.()).catch(() => undefined);
       setCopied(true);
     } catch {
       setFailed(true);

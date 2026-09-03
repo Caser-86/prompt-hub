@@ -17,6 +17,8 @@ const SKILL_SNAPSHOTS_SCHEMA: &str = include_str!("../migrations/0006_skill_snap
 const MIGRATION_LEDGER_SCHEMA: &str = include_str!("../migrations/0007_migration_ledger.sql");
 const PROMPT_METADATA_AND_USAGE_SCHEMA: &str =
     include_str!("../migrations/0008_prompt_metadata_and_usage.sql");
+const PROMPT_VERSION_METADATA_SNAPSHOTS_SCHEMA: &str =
+    include_str!("../migrations/0009_prompt_version_metadata_snapshots.sql");
 const MIGRATIONS: &[(u32, &str)] = &[
     (1, INITIAL_SCHEMA),
     (2, SEARCH_SCHEMA),
@@ -26,6 +28,7 @@ const MIGRATIONS: &[(u32, &str)] = &[
     (6, SKILL_SNAPSHOTS_SCHEMA),
     (7, MIGRATION_LEDGER_SCHEMA),
     (8, PROMPT_METADATA_AND_USAGE_SCHEMA),
+    (9, PROMPT_VERSION_METADATA_SNAPSHOTS_SCHEMA),
 ];
 
 const MIGRATION_IDS: &[(&str, &str)] = &[
@@ -39,6 +42,10 @@ const MIGRATION_IDS: &[(&str, &str)] = &[
     (
         "20260829_01_prompt_metadata_and_usage",
         PROMPT_METADATA_AND_USAGE_SCHEMA,
+    ),
+    (
+        "20260831_01_prompt_version_metadata_snapshots",
+        PROMPT_VERSION_METADATA_SNAPSHOTS_SCHEMA,
     ),
 ];
 const LEGACY_PROMPT_USAGE_ID: &str = "legacy/0.1.2-prompt-usage";
@@ -71,6 +78,7 @@ const REQUIRED_LATEST_SCHEMA: &[(&str, &[&str])] = &[
             "body",
             "description",
             "content_json",
+            "metadata_json",
             "actor",
             "created_at",
         ],
@@ -220,7 +228,7 @@ const REQUIRED_LATEST_SCHEMA: &[(&str, &[&str])] = &[
     ("prompt_usage", &["prompt_id", "use_count", "last_used_at"]),
 ];
 
-pub const LATEST_SCHEMA_VERSION: u32 = 8;
+pub const LATEST_SCHEMA_VERSION: u32 = 9;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MigrationLedgerEntry {
@@ -354,8 +362,12 @@ fn backup_before_migration(
     let probe = Connection::open(path)?;
     let current_version =
         probe.pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))?;
+    let needs_recovery_backup =
+        current_version == latest_version && latest_schema_needs_recovery_backup(&probe)?;
     drop(probe);
-    if current_version >= latest_version {
+    if current_version > latest_version
+        || (current_version == latest_version && !needs_recovery_backup)
+    {
         return Ok(None);
     }
 
@@ -378,6 +390,16 @@ fn backup_before_migration(
         return Err(StoreError::BackupIntegrity(integrity));
     }
     Ok(Some(backup_path))
+}
+
+fn latest_schema_needs_recovery_backup(connection: &Connection) -> Result<bool, StoreError> {
+    // A latest-version database normally needs no write on startup. If its
+    // shape or migration ledger is damaged, startup may perform a repair or
+    // fail closed; preserve the exact pre-repair bytes before either path.
+    if validate_latest_schema(connection).is_err() {
+        return Ok(true);
+    }
+    Ok(validate_ledger(connection, LATEST_SCHEMA_VERSION).is_err())
 }
 
 fn apply_migrations(
@@ -692,5 +714,36 @@ mod tests {
             .unwrap();
         assert_eq!(table_count, 0);
         assert_eq!(version, 0);
+    }
+
+    #[test]
+    fn a_latest_schema_repair_creates_a_pre_repair_backup() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("prompt-hub.db");
+        drop(Database::open(&path).unwrap());
+        {
+            let connection = Connection::open(&path).unwrap();
+            connection
+                .execute(
+                    "DELETE FROM migration_ledger WHERE migration_id = ?1",
+                    [PROMPT_METADATA_AND_USAGE_ID],
+                )
+                .unwrap();
+        }
+
+        let reopened = Database::open(&path).unwrap();
+
+        let backup = reopened
+            .migration_report()
+            .backup_path()
+            .expect("latest-schema repair must preserve the pre-repair database");
+        assert!(backup.exists());
+        assert!(
+            backup
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .contains("pre-migration")
+        );
     }
 }

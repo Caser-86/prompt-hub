@@ -25,6 +25,7 @@ export function AiDraftGenerator({ cancelGeneration, generateDraft, testConnecti
   const cancelledTasks = useRef(new Set<string>());
 
   async function testConnectionRequest() {
+    if (activeTaskId !== null) return;
     setConnectionComplete(false);
     setConnectionError(false);
     try {
@@ -38,6 +39,7 @@ export function AiDraftGenerator({ cancelGeneration, generateDraft, testConnecti
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (activeTaskId !== null) return;
     setError(false);
     setComplete(false);
     setCancelled(false);
@@ -74,8 +76,8 @@ export function AiDraftGenerator({ cancelGeneration, generateDraft, testConnecti
     <label>模型<input onChange={(event) => setModel(event.target.value)} required value={model} /></label>
     <label>生成指令<textarea onChange={(event) => setInstruction(event.target.value)} required value={instruction} /></label>
     <label>输入摘要<textarea onChange={(event) => setInputSummary(event.target.value)} required value={inputSummary} /></label>
-    <button className="button-secondary" onClick={() => { void testConnectionRequest(); }} type="button">测试连接</button>
-    <button className="button-primary" type="submit">生成收件箱草稿</button>
+    <button className="button-secondary" disabled={activeTaskId !== null} onClick={() => { void testConnectionRequest(); }} type="button">测试连接</button>
+    <button aria-busy={activeTaskId !== null} className="button-primary" disabled={activeTaskId !== null} type="submit">生成收件箱草稿</button>
     {activeTaskId !== null && cancelGeneration !== undefined ? <button onClick={() => { void cancelActiveGeneration(); }} type="button">取消生成</button> : null}
     {connectionComplete ? <p role="status">连接测试成功，未写入提示词库。</p> : null}
     {connectionError ? <p role="alert">连接测试失败。请检查 API 地址、密钥、模型和网络后重试。</p> : null}

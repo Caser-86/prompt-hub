@@ -60,4 +60,21 @@ describe("AiDraftGenerator", () => {
     completeGeneration?.();
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("生成已取消"));
   });
+
+  it("disables duplicate generation and connection checks while generating", async () => {
+    const generateDraft = vi.fn(() => new Promise<void>(() => undefined));
+    const testConnection = vi.fn();
+    render(<AiDraftGenerator generateDraft={generateDraft} testConnection={testConnection} />);
+
+    fireEvent.change(screen.getByLabelText("模型"), { target: { value: "gpt-5" } });
+    fireEvent.change(screen.getByLabelText("生成指令"), { target: { value: "优化提示词" } });
+    fireEvent.change(screen.getByLabelText("输入摘要"), { target: { value: "保留结构" } });
+    fireEvent.click(screen.getByRole("button", { name: "生成收件箱草稿" }));
+
+    await waitFor(() => expect(generateDraft).toHaveBeenCalledOnce());
+    expect(screen.getByRole("button", { name: "生成收件箱草稿" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "测试连接" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "测试连接" }));
+    expect(testConnection).not.toHaveBeenCalled();
+  });
 });

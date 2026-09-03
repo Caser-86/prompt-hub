@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -139,9 +140,10 @@ pub fn prepare_services(runtime: &BootstrapRuntime) -> Result<BootstrapServices,
     }
     let data_directory = runtime.data_directory().to_path_buf();
     let database_path = runtime.database_path().to_path_buf();
-    let database = prompt_store::Database::open(&database_path).map_err(|_| migration_failure())?;
-    let skill_database =
-        prompt_store::Database::open(&database_path).map_err(|_| migration_failure())?;
+    let database = prompt_store::Database::open(&database_path)
+        .map_err(|_| migration_failure_for(runtime.data_directory()))?;
+    let skill_database = prompt_store::Database::open(&database_path)
+        .map_err(|_| migration_failure_for(runtime.data_directory()))?;
     let credentials =
         prompt_ai::SystemCredentialAdapter::new("Prompt Hub", "default").map_err(|_| {
             BootstrapFailure {
@@ -173,11 +175,33 @@ pub fn attach_services(app: &AppHandle, services: BootstrapServices) {
 
 #[must_use]
 pub fn migration_failure() -> BootstrapFailure {
+    migration_failure_for(Path::new(""))
+}
+
+#[must_use]
+pub fn migration_failure_for(data_directory: &Path) -> BootstrapFailure {
     BootstrapFailure {
         code: "migration_failed".to_owned(),
         safe_message: "本地数据升级失败，原数据未被替换。请重试或导出诊断信息。".to_owned(),
-        backup_name: None,
+        backup_name: newest_migration_backup_name(data_directory),
     }
+}
+
+fn newest_migration_backup_name(data_directory: &Path) -> Option<String> {
+    let mut names = fs::read_dir(data_directory)
+        .ok()?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let file_type = entry.file_type().ok()?;
+            if !file_type.is_file() {
+                return None;
+            }
+            let name = entry.file_name().into_string().ok()?;
+            (name.contains(".pre-migration.") && name.ends_with(".bak")).then_some(name)
+        })
+        .collect::<Vec<_>>();
+    names.sort_unstable();
+    names.pop()
 }
 
 #[must_use]

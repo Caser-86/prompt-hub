@@ -57,4 +57,41 @@ describe("PromptHistory", () => {
     expect(diff).toHaveTextContent("<script>unsafe</script>");
     expect(diff.querySelector("script")).toBeNull();
   });
+
+  it("shows metadata captured by a version snapshot", () => {
+    render(
+      <PromptHistory
+        history={[{
+          number: 1,
+          body: "正文",
+          createdAt: "2026-07-15T00:00:00Z",
+          effectiveness: "effective",
+          sourceNames: ["手动录入"],
+          applicableTools: ["Codex"],
+          rating: 5,
+        }]}
+        restoreVersion={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("版本历史").closest("summary")!);
+    expect(screen.getByText(/元数据快照：有效 · 5\/5 · 工具：Codex · 来源：手动录入/)).toBeVisible();
+  });
+
+  it("reports a failed restore and keeps the confirmation open for retry", async () => {
+    const restoreVersion = vi.fn().mockRejectedValue(new Error("offline"));
+    render(
+      <PromptHistory
+        history={[{ number: 1, body: "版本正文", createdAt: "2026-07-15T00:00:00Z" }]}
+        restoreVersion={restoreVersion}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("版本历史").closest("summary")!);
+    fireEvent.click(screen.getByRole("button", { name: "恢复版本 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认恢复版本 1" }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("恢复失败"));
+    expect(screen.getByRole("alertdialog")).toBeVisible();
+  });
 });

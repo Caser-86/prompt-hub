@@ -4,6 +4,10 @@ export type PromptHistoryItem = {
   number: number;
   body: string;
   createdAt: string;
+  effectiveness?: string;
+  sourceNames?: string[];
+  applicableTools?: string[];
+  rating?: number | null;
 };
 
 type PromptHistoryProps = {
@@ -49,6 +53,8 @@ function lineDiff(before: string, after: string): string[] {
 
 export function PromptHistory({ history, restoreVersion }: PromptHistoryProps) {
   const [pendingRestore, setPendingRestore] = useState<number | null>(null);
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restoreError, setRestoreError] = useState(false);
   const [baseVersionNumber, setBaseVersionNumber] = useState<number | null>(history[0]?.number ?? null);
   const currentVersion = history.at(-1);
   const baseVersion = history.find((version) => version.number === baseVersionNumber);
@@ -57,8 +63,16 @@ export function PromptHistory({ history, restoreVersion }: PromptHistoryProps) {
     if (pendingRestore === null) {
       return;
     }
-    await restoreVersion(pendingRestore);
-    setPendingRestore(null);
+    setRestoreBusy(true);
+    setRestoreError(false);
+    try {
+      await restoreVersion(pendingRestore);
+      setPendingRestore(null);
+    } catch {
+      setRestoreError(true);
+    } finally {
+      setRestoreBusy(false);
+    }
   }
 
   return (
@@ -89,6 +103,13 @@ export function PromptHistory({ history, restoreVersion }: PromptHistoryProps) {
           <li key={version.number}>
             <h3>版本 {version.number}</h3>
             <time dateTime={version.createdAt}>{version.createdAt}</time>
+            {version.effectiveness || version.sourceNames?.length || version.applicableTools?.length || version.rating ? (
+              <p className="prompt-history-metadata">
+                元数据快照：{effectivenessLabel(version.effectiveness)}{version.rating ? ` · ${version.rating}/5` : ""}
+                {version.applicableTools?.length ? ` · 工具：${version.applicableTools.join("、")}` : ""}
+                {version.sourceNames?.length ? ` · 来源：${version.sourceNames.join("、")}` : ""}
+              </p>
+            ) : null}
             <pre>{version.body}</pre>
             <button onClick={() => setPendingRestore(version.number)} type="button">
               恢复版本 {version.number}
@@ -99,10 +120,20 @@ export function PromptHistory({ history, restoreVersion }: PromptHistoryProps) {
       {pendingRestore !== null ? (
         <section aria-label="确认恢复" role="alertdialog">
           <p>将版本 {pendingRestore} 恢复为新的当前版本。</p>
-          <button onClick={() => setPendingRestore(null)} type="button">取消</button>
-          <button onClick={() => void confirmRestore()} type="button">确认恢复版本 {pendingRestore}</button>
+          <button disabled={restoreBusy} onClick={() => setPendingRestore(null)} type="button">取消</button>
+          <button disabled={restoreBusy} onClick={() => void confirmRestore()} type="button">{restoreBusy ? "恢复中…" : `确认恢复版本 ${pendingRestore}`}</button>
+          {restoreError ? <p role="alert">恢复失败，请重试。</p> : null}
         </section>
       ) : null}
     </details>
   );
+}
+
+function effectivenessLabel(status?: string) {
+  return {
+    unverified: "未验证",
+    effective: "有效",
+    ineffective: "失效",
+    needs_retest: "待复测",
+  }[status ?? ""] ?? "元数据未记录";
 }

@@ -13,7 +13,8 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "verify:release": "node scripts/verify-release.mjs --channel=candidate",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "hash:bundles": "node scripts/hash-bundles.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",

@@ -7,6 +7,9 @@ const desktopMock = vi.hoisted(() => ({
   getBootstrapStatus: vi.fn(),
   retryDatabaseBootstrap: vi.fn(),
   exportBootstrapDiagnostics: vi.fn(),
+  listRecoveryBackups: vi.fn(),
+  previewRecoveryBackup: vi.fn(),
+  restoreRecoveryBackup: vi.fn(),
   createManualPromptDraft: vi.fn(),
   publishPrompt: vi.fn(),
   importFileToInbox: vi.fn(),
@@ -14,6 +17,7 @@ const desktopMock = vi.hoisted(() => ({
   importUrlToInbox: vi.fn(),
   recentImportJobs: vi.fn(),
   listPrompts: vi.fn(),
+  getPrompt: vi.fn(),
   collectSkillFolder: vi.fn(),
   collectGitSkill: vi.fn(),
   listSkills: vi.fn(),
@@ -24,8 +28,11 @@ const desktopMock = vi.hoisted(() => ({
   verifySkillInstallation: vi.fn(),
   promptHistory: vi.fn(),
   restorePromptVersion: vi.fn(),
+  recordPromptUse: vi.fn(),
   recordPromptCompatibility: vi.fn(),
   recordPromptValidation: vi.fn(),
+  recordPromptMetadata: vi.fn(),
+  revisePrompt: vi.fn(),
   archivePrompt: vi.fn(),
   batchArchivePrompts: vi.fn(),
   softDeletePrompt: vi.fn(),
@@ -178,6 +185,148 @@ describe("App", () => {
     expect(screen.getByLabelText("提示词信息")).toHaveClass("prompt-detail-info");
     expect(screen.getByLabelText("更多操作")).toHaveClass("prompt-detail-more");
     expect(screen.getByRole("button", { name: "软删除提示词" })).toBeVisible();
+  });
+
+  it("preserves description and variables when revising an existing prompt", async () => {
+    const variables = [{ name: "language", kind: "text", description: "输出语言", defaultValue: "中文", required: true }];
+    desktopMock.listPrompts.mockResolvedValueOnce([{
+      id: "prompt-1", title: "代码审查", status: "published", effectiveness: "effective", category: "开发", tags: ["审查"],
+      sourceNames: ["手动录入"], favorite: false, description: "保留结构", variables,
+      createdAt: "2026-07-15T00:00:00Z", updatedAt: "2026-07-15T00:01:00Z",
+    }]);
+    desktopMock.promptHistory.mockResolvedValueOnce([{ number: 1, body: "请审查 {{language}} 代码", createdAt: "2026-07-15T00:00:00Z" }]);
+    desktopMock.revisePrompt.mockResolvedValueOnce({});
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "打开提示词：代码审查" }));
+    fireEvent.click(screen.getByText("编辑提示词正文"));
+    expect(await screen.findByDisplayValue("保留结构")).toBeVisible();
+    expect(await screen.findByDisplayValue("中文")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "保存修订" }));
+
+    await vi.waitFor(() => expect(desktopMock.revisePrompt).toHaveBeenCalledWith("prompt-1", expect.objectContaining({ description: "保留结构", variables })));
+  });
+
+  it("refreshes visible history after editing prompt content", async () => {
+    desktopMock.listPrompts.mockResolvedValueOnce([{
+      id: "prompt-1", title: "可编辑提示词", status: "published", effectiveness: "effective", category: "开发", tags: [],
+      sourceNames: ["手动录入"], favorite: false, createdAt: "2026-07-15T00:00:00Z", updatedAt: "2026-07-15T00:01:00Z",
+    }]);
+    desktopMock.promptHistory
+      .mockResolvedValueOnce([{ number: 1, body: "旧正文", createdAt: "2026-07-15T00:00:00Z" }])
+      .mockResolvedValueOnce([
+        { number: 1, body: "旧正文", createdAt: "2026-07-15T00:00:00Z" },
+        { number: 2, body: "新正文", createdAt: "2026-07-15T00:01:00Z" },
+      ]);
+    desktopMock.revisePrompt.mockResolvedValueOnce({});
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "打开提示词：可编辑提示词" }));
+    fireEvent.click(screen.getByText("编辑提示词正文"));
+    fireEvent.change(await screen.findByDisplayValue("旧正文"), { target: { value: "新正文" } });
+    const historyCallsBeforeSave = desktopMock.promptHistory.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "保存修订" }));
+
+    await vi.waitFor(() => expect(desktopMock.revisePrompt).toHaveBeenCalledWith("prompt-1", expect.anything()));
+    await vi.waitFor(() => expect(desktopMock.promptHistory).toHaveBeenCalledTimes(historyCallsBeforeSave + 1));
+  });
+
+  it("refreshes visible history after editing prompt metadata", async () => {
+    desktopMock.listPrompts.mockResolvedValueOnce([{
+      id: "prompt-1", title: "可编辑元数据", status: "published", effectiveness: "unverified", category: "开发", tags: [],
+      sourceNames: ["手动录入"], favorite: false, createdAt: "2026-07-15T00:00:00Z", updatedAt: "2026-07-15T00:01:00Z",
+    }]);
+    desktopMock.promptHistory.mockResolvedValue([]);
+    desktopMock.recordPromptMetadata.mockResolvedValueOnce({});
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "打开提示词：可编辑元数据" }));
+    fireEvent.click(screen.getByText("编辑提示词信息").closest("summary")!);
+    const historyCallsBeforeSave = desktopMock.promptHistory.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "保存元数据" }));
+
+    await vi.waitFor(() => expect(desktopMock.recordPromptMetadata).toHaveBeenCalledWith("prompt-1", expect.anything()));
+    await vi.waitFor(() => expect(desktopMock.promptHistory).toHaveBeenCalledTimes(historyCallsBeforeSave + 1));
+  });
+
+  it("shows a retryable error when a prompt history load fails", async () => {
+    desktopMock.listPrompts.mockResolvedValueOnce([{
+      id: "prompt-1", title: "历史加载失败", status: "published", effectiveness: "effective", category: "开发", tags: [],
+      sourceNames: ["手动录入"], favorite: false, createdAt: "2026-07-15T00:00:00Z", updatedAt: "2026-07-15T00:01:00Z",
+    }]);
+    desktopMock.promptHistory.mockRejectedValueOnce(new Error("database unavailable"));
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "打开提示词：历史加载失败" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("无法加载提示词正文");
+    expect(screen.queryByRole("button", { name: "复制提示词正文" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重试加载提示词" })).toBeVisible();
+  });
+
+  it("does not offer empty prompt actions when history has no versions", async () => {
+    desktopMock.listPrompts.mockResolvedValueOnce([{
+      id: "prompt-1", title: "历史为空", status: "published", effectiveness: "effective", category: "开发", tags: [],
+      sourceNames: ["手动录入"], favorite: false, createdAt: "2026-07-15T00:00:00Z", updatedAt: "2026-07-15T00:01:00Z",
+    }]);
+    desktopMock.promptHistory.mockResolvedValueOnce([]);
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "打开提示词：历史为空" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("无法加载提示词正文");
+    expect(screen.queryByRole("button", { name: "复制提示词正文" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重试加载提示词" })).toBeVisible();
+  });
+
+  it("refreshes library usage ordering after copying a prompt", async () => {
+    const prompt = {
+      id: "prompt-1", title: "可复制提示词", status: "published", effectiveness: "effective", category: "开发", tags: [],
+      sourceNames: ["手动录入"], favorite: false, useCount: 0, lastUsedAt: null,
+      createdAt: "2026-07-15T00:00:00Z", updatedAt: "2026-07-15T00:01:00Z",
+    };
+    desktopMock.listPrompts.mockResolvedValue(prompt ? [prompt] : []);
+    desktopMock.promptHistory.mockResolvedValue([{ number: 1, body: "可复制正文", createdAt: "2026-07-15T00:00:00Z" }]);
+    desktopMock.recordPromptUse.mockResolvedValue({ useCount: 1, lastUsedAt: "2026-07-15T00:02:00Z" });
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "打开提示词：可复制提示词" }));
+    fireEvent.click(await screen.findByRole("button", { name: "复制提示词正文" }));
+    await vi.waitFor(() => expect(desktopMock.recordPromptUse).toHaveBeenCalledWith("prompt-1"));
+    const listCallsBeforeReturn = desktopMock.listPrompts.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+
+    await vi.waitFor(() => expect(desktopMock.listPrompts.mock.calls.length).toBeGreaterThan(listCallsBeforeReturn));
+  });
+
+  it("refreshes the visible history after restoring a prompt version", async () => {
+    desktopMock.listPrompts.mockResolvedValueOnce([{
+      id: "prompt-1", title: "版本化提示词", status: "published", effectiveness: "effective", category: "开发", tags: [],
+      sourceNames: ["手动录入"], favorite: false, createdAt: "2026-07-15T00:00:00Z", updatedAt: "2026-07-15T00:02:00Z",
+    }]);
+    desktopMock.promptHistory
+      .mockResolvedValueOnce([
+        { number: 1, body: "旧正文", createdAt: "2026-07-15T00:00:00Z" },
+        { number: 2, body: "当前正文", createdAt: "2026-07-15T00:01:00Z" },
+      ])
+      .mockResolvedValueOnce([
+        { number: 1, body: "旧正文", createdAt: "2026-07-15T00:00:00Z" },
+        { number: 2, body: "当前正文", createdAt: "2026-07-15T00:01:00Z" },
+        { number: 3, body: "旧正文", createdAt: "2026-07-15T00:02:00Z" },
+      ]);
+    desktopMock.restorePromptVersion.mockResolvedValueOnce({});
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "打开提示词：版本化提示词" }));
+    fireEvent.click((await screen.findByText("版本历史")).closest("summary")!);
+    const historyCallsBeforeRestore = desktopMock.promptHistory.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "恢复版本 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认恢复版本 1" }));
+
+    await vi.waitFor(() => expect(desktopMock.restorePromptVersion).toHaveBeenCalledWith("prompt-1", 1));
+    expect(await screen.findByText("旧正文")).toBeVisible();
+    expect(desktopMock.promptHistory).toHaveBeenCalledTimes(historyCallsBeforeRestore + 1);
   });
 
   it("opens advanced filters from the library instead of a separate navigation item", () => {

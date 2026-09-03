@@ -1,9 +1,11 @@
 use prompt_domain::{
-    Actor, AuditAction, Prompt, PromptContent, PromptId, PromptVersion, PromptVersionId,
+    Actor, AuditAction, Prompt, PromptContent, PromptId, PromptMetadataSnapshot, PromptVersion,
+    PromptVersionId,
 };
 use rusqlite::backup::Backup;
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -167,7 +169,11 @@ impl PromptRepository {
             )
             .optional()?;
         serialized
-            .map(|value| serde_json::from_str(&value).map_err(StoreError::from))
+            .map(|value| {
+                let mut prompt: Prompt = serde_json::from_str(&value)?;
+                prompt.refresh_current_version_metadata();
+                Ok(prompt)
+            })
             .transpose()
     }
 
@@ -200,14 +206,52 @@ impl PromptRepository {
         serialized
             .map(|value| {
                 let value = value?;
-                serde_json::from_str(&value).map_err(StoreError::from)
+                let mut prompt: Prompt = serde_json::from_str(&value)?;
+                prompt.refresh_current_version_metadata();
+                Ok(prompt)
             })
             .collect()
     }
 
+    /// Loads library prompts and their lightweight usage metadata with three
+    /// bounded queries instead of one favorite/usage query per prompt.
+    pub fn list_with_metadata(&self) -> Result<Vec<(Prompt, bool, PromptUsageStats)>, StoreError> {
+        let prompts = self.list()?;
+        let mut favorite_ids = HashSet::new();
+        let mut favorites = self
+            .connection
+            .prepare("SELECT prompt_id FROM prompt_favorites")?;
+        for prompt_id in favorites.query_map([], |row| row.get::<_, String>(0))? {
+            favorite_ids.insert(prompt_id?);
+        }
+
+        let mut usage_by_prompt = HashMap::new();
+        let mut usage = self
+            .connection
+            .prepare("SELECT prompt_id, use_count, last_used_at FROM prompt_usage")?;
+        for row in usage.query_map([], |row| {
+            let prompt_id = row.get::<_, String>(0)?;
+            let stats = prompt_usage_from_row_with_offset(row, 1)?;
+            Ok((prompt_id, stats))
+        })? {
+            let (prompt_id, stats) = row?;
+            usage_by_prompt.insert(prompt_id, stats);
+        }
+
+        Ok(prompts
+            .into_iter()
+            .map(|prompt| {
+                let prompt_id = prompt.id().value().to_string();
+                let favorite = favorite_ids.contains(&prompt_id);
+                let usage = usage_by_prompt.remove(&prompt_id).unwrap_or_default();
+                (prompt, favorite, usage)
+            })
+            .collect())
+    }
+
     pub fn history(&self, id: PromptId) -> Result<Vec<PromptVersion>, StoreError> {
         let mut statement = self.connection.prepare(
-            "SELECT version_id, version_number, content_json, actor, created_at
+            "SELECT version_id, version_number, content_json, metadata_json, actor, created_at
              FROM prompt_versions WHERE prompt_id = ?1 ORDER BY version_number ASC",
         )?;
         let rows = statement.query_map([id.value().to_string()], |row| {
@@ -216,18 +260,22 @@ impl PromptRepository {
                 row.get::<_, u32>(1)?,
                 row.get::<_, String>(2)?,
                 row.get::<_, String>(3)?,
-                row.get::<_, i64>(4)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, i64>(5)?,
             ))
         })?;
         rows.map(|row| {
-            let (version_id, number, content, actor, created_at) = row?;
+            let (version_id, number, content, metadata, actor, created_at) = row?;
             let version_id = PromptVersionId::from_uuid(Uuid::parse_str(&version_id)?);
             let content: PromptContent = serde_json::from_str(&content)?;
+            let metadata: PromptMetadataSnapshot = serde_json::from_str(&metadata)?;
             let actor: Actor = serde_json::from_value(serde_json::Value::String(actor))?;
             let created_at = OffsetDateTime::from_unix_timestamp(created_at)
                 .map_err(|error| StoreError::Clock(error.to_string()))?;
-            PromptVersion::from_snapshot(version_id, number, content, actor, created_at)
-                .map_err(|error| StoreError::Domain(error.to_string()))
+            PromptVersion::from_snapshot_with_metadata(
+                version_id, number, content, metadata, actor, created_at,
+            )
+            .map_err(|error| StoreError::Domain(error.to_string()))
         })
         .collect()
     }
@@ -539,9 +587,9 @@ fn insert_version(
     let content = version.content();
     transaction.execute(
         "INSERT INTO prompt_versions(
-            prompt_id, version_number, version_id, title, body, description,
-            content_json, actor, created_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                prompt_id, version_number, version_id, title, body, description,
+            content_json, metadata_json, actor, created_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             prompt_id,
             version.number(),
@@ -550,6 +598,7 @@ fn insert_version(
             content.body(),
             content.description(),
             serde_json::to_string(content)?,
+            serde_json::to_string(version.metadata())?,
             wire_value(&version.actor())?,
             version.created_at().unix_timestamp(),
         ],
@@ -650,19 +699,26 @@ fn usage_stats_for(
 }
 
 fn prompt_usage_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PromptUsageStats> {
+    prompt_usage_from_row_with_offset(row, 0)
+}
+
+fn prompt_usage_from_row_with_offset(
+    row: &rusqlite::Row<'_>,
+    offset: usize,
+) -> rusqlite::Result<PromptUsageStats> {
     let last_used_at = row
-        .get::<_, Option<i64>>(1)?
+        .get::<_, Option<i64>>(offset + 1)?
         .map(OffsetDateTime::from_unix_timestamp)
         .transpose()
         .map_err(|error| {
             rusqlite::Error::FromSqlConversionFailure(
-                1,
+                offset + 1,
                 rusqlite::types::Type::Integer,
                 Box::new(error),
             )
         })?;
     Ok(PromptUsageStats {
-        use_count: row.get(0)?,
+        use_count: row.get(offset)?,
         last_used_at,
     })
 }

@@ -56,6 +56,8 @@ export function AppShell() {
   const [isEditorOpen, setEditorOpen] = useState(false);
   const [selectedPrompt, setSelectedPrompt] = useState<PromptListItem | null>(null);
   const [history, setHistory] = useState<PromptHistoryItem[] | null>(null);
+  const [historyLoadError, setHistoryLoadError] = useState(false);
+  const [historyReloadKey, setHistoryReloadKey] = useState(0);
   const [libraryKey, setLibraryKey] = useState(0);
   const [bootstrapStatus, setBootstrapStatus] = useState<BootstrapStatus>({ state: "ready", code: null, safeMessage: null, backupName: null });
   const commandTriggerRef = useRef<HTMLButtonElement>(null);
@@ -104,12 +106,36 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
-    if (!selectedPrompt) {
+    const promptId = selectedPrompt?.id;
+    if (!promptId) {
       setHistory(null);
+      setHistoryLoadError(false);
       return;
     }
-    void desktopCommands.promptHistory(selectedPrompt.id).then(setHistory).catch(() => setHistory([]));
-  }, [selectedPrompt]);
+    setHistory(null);
+    setHistoryLoadError(false);
+    let active = true;
+    void desktopCommands.promptHistory(promptId)
+      .then((nextHistory) => {
+        if (!active) return;
+        // A prompt without any version is not a usable detail record. Treat
+        // this as a recoverable load failure instead of offering copy/edit
+        // actions that would operate on an empty body.
+        if (nextHistory.length === 0) {
+          setHistory([]);
+          setHistoryLoadError(true);
+          return;
+        }
+        setHistory(nextHistory);
+      })
+      .catch(() => {
+        if (active) {
+          setHistory([]);
+          setHistoryLoadError(true);
+        }
+      });
+    return () => { active = false; };
+  }, [selectedPrompt?.id, historyReloadKey]);
 
   useEffect(() => {
     void desktopCommands.getBootstrapStatus()
@@ -120,8 +146,11 @@ export function AppShell() {
   if (bootstrapStatus.state === "recovery") {
     return <RecoveryScreen
       exportDiagnostics={desktopCommands.exportBootstrapDiagnostics}
+      listRecoveryBackups={desktopCommands.listRecoveryBackups}
       onRecovered={() => { setBootstrapStatus({ state: "ready", code: null, safeMessage: null, backupName: null }); }}
+      previewRecoveryBackup={desktopCommands.previewRecoveryBackup}
       retry={desktopCommands.retryDatabaseBootstrap}
+      restoreRecoveryBackup={desktopCommands.restoreRecoveryBackup}
       status={bootstrapStatus}
     />;
   }
@@ -187,13 +216,22 @@ export function AppShell() {
                     </div>
                   </div>
                   <section aria-label="提示词主操作" className="prompt-detail-actions">
-                    {history ? <PromptContentActions body={promptContent.body} metadataExport={metadataExport} onUsed={() => { void desktopCommands.recordPromptUse(selectedPrompt.id); }} title={selectedPrompt.title} /> : <p>正在准备提示词操作…</p>}
+                    {historyLoadError ? <p role="alert">无法加载提示词正文。<button onClick={() => setHistoryReloadKey((key) => key + 1)} type="button">重试加载提示词</button></p> : history ? <PromptContentActions
+                      body={promptContent.body}
+                      metadataExport={metadataExport}
+                      onUsed={async () => {
+                        const usage = await desktopCommands.recordPromptUse(selectedPrompt.id);
+                        setSelectedPrompt((current) => current ? { ...current, useCount: usage.useCount, lastUsedAt: usage.lastUsedAt } : current);
+                        setLibraryKey((key) => key + 1);
+                      }}
+                      title={selectedPrompt.title}
+                    /> : <p>正在准备提示词操作…</p>}
                   </section>
                 </header>
                 <div className="prompt-detail-main">
                   <article aria-label="提示词正文" className="prompt-detail-body surface-card">
                     <h3>提示词正文</h3>
-                    {history ? <pre>{promptContent.body}</pre> : <p>正在加载提示词正文…</p>}
+                    {historyLoadError ? <p>无法加载提示词正文，请使用上方“重试加载提示词”。</p> : history ? <pre>{promptContent.body}</pre> : <p>正在加载提示词正文…</p>}
                   </article>
                   <div className="prompt-detail-aside">
                   <aside aria-label="提示词信息" className="prompt-detail-info surface-card">
@@ -207,22 +245,102 @@ export function AppShell() {
                     <DetailInfoRow icon={TagIcon} label="标签"><span className="detail-tags">{selectedPrompt.tags.length ? selectedPrompt.tags.map((tag) => <span className="detail-tag" key={tag}>{tag}</span>) : "未记录"}</span></DetailInfoRow>
                     {displayedSources.length ? <details className="prompt-sources"><summary>完整来源</summary><ul>{displayedSources.map((source) => <li key={`${source.kind}-${source.name}-${source.collectedAt}`}>{source.name} · {source.location ?? "无位置记录"} · <time dateTime={source.collectedAt}>{source.collectedAt}</time></li>)}</ul></details> : null}
                     <PromptMetadataEditor
+                      initial={{
+                        tool: selectedPrompt.applicableTools?.[0],
+                        model: selectedPrompt.applicableModels?.[0],
+                        compatibilityStatus: selectedPrompt.compatibilityStatuses?.[0] ?? "unknown",
+                        effectiveness: selectedPrompt.effectiveness as "unverified" | "effective" | "ineffective" | "needs_retest",
+                        rating: selectedPrompt.rating ?? null,
+                      }}
                       promptId={selectedPrompt.id}
-                      saveCompatibility={desktopCommands.recordPromptCompatibility}
-                      saveValidation={desktopCommands.recordPromptValidation}
+                      saveMetadata={async (id, metadata) => {
+                        await desktopCommands.recordPromptMetadata(id, metadata);
+                        try {
+                          const updated = await desktopCommands.getPrompt(id);
+                          if (updated) setSelectedPrompt(updated);
+                        } catch {
+                          // The metadata write already succeeded; avoid asking the user
+                          // to submit it again just because the detail refresh failed.
+                        }
+                        try {
+                          const refreshedHistory = await desktopCommands.promptHistory(id);
+                          if (refreshedHistory.length === 0) {
+                            setHistory([]);
+                            setHistoryLoadError(true);
+                          } else {
+                            setHistory(refreshedHistory);
+                            setHistoryLoadError(false);
+                          }
+                        } catch {
+                          // Keep the current history visible if the refresh is temporarily unavailable.
+                        }
+                        setLibraryKey((key) => key + 1);
+                      }}
                     />
                   </aside>
                   <section aria-label="更多操作" className="prompt-detail-more surface-card">
-                  {history ? <PromptHistory
+                  {history && !historyLoadError ? <PromptHistory
                     history={history}
-                    restoreVersion={(versionNumber) => desktopCommands.restorePromptVersion(
-                      selectedPrompt.id,
-                      versionNumber,
-                    )}
+                    restoreVersion={async (versionNumber) => {
+                      const promptId = selectedPrompt.id;
+                      await desktopCommands.restorePromptVersion(promptId, versionNumber);
+                      // A successful restore must not be reported as failed merely because
+                      // refreshing the detail view is temporarily unavailable. The next
+                      // library reload will still pick up the new current version.
+                      try {
+                        const refreshedHistory = await desktopCommands.promptHistory(promptId);
+                        if (refreshedHistory.length === 0) {
+                          setHistory([]);
+                          setHistoryLoadError(true);
+                        } else {
+                          setHistory(refreshedHistory);
+                          setHistoryLoadError(false);
+                        }
+                      } catch {
+                        // Keep the detail open; the list refresh below will make the
+                        // persisted version visible when the user returns.
+                      }
+                      setLibraryKey((key) => key + 1);
+                    }}
                   /> : null}
+                  <details className="prompt-editor-disclosure">
+                    <summary>编辑提示词正文</summary>
+                    {history && !historyLoadError ? (
+                      <PromptEditor
+                        initial={{
+                          title: selectedPrompt.title,
+                          body: promptContent.body,
+                          description: selectedPrompt.description ?? null,
+                          category: selectedPrompt.category,
+                          tags: selectedPrompt.tags,
+                          variables: selectedPrompt.variables ?? [],
+                        }}
+                        onSaved={async () => {
+                          const updated = await desktopCommands.getPrompt(selectedPrompt.id);
+                          if (updated) setSelectedPrompt(updated);
+                          try {
+                            const refreshedHistory = await desktopCommands.promptHistory(selectedPrompt.id);
+                            if (refreshedHistory.length === 0) {
+                              setHistory([]);
+                              setHistoryLoadError(true);
+                            } else {
+                              setHistory(refreshedHistory);
+                              setHistoryLoadError(false);
+                            }
+                          } catch {
+                            // The content write already succeeded; the next detail refresh can retry history.
+                          }
+                          setLibraryKey((key) => key + 1);
+                        }}
+                        saveDraft={(draft) => desktopCommands.revisePrompt(selectedPrompt.id, draft)}
+                        showPreviewActions={false}
+                        submitLabel="保存修订"
+                      />
+                    ) : historyLoadError ? <p>无法加载提示词编辑器，请先使用上方“重试加载提示词”。</p> : <p>正在加载提示词正文…</p>}
+                  </details>
                   <details className="prompt-ai-disclosure">
                     <summary><SparklesIcon aria-hidden="true" /> AI 优化</summary>
-                    {history ? <AiOptimizationReview
+                    {history && !historyLoadError ? <AiOptimizationReview
                       body={promptContent.body}
                       cancel={desktopCommands.cancelAiGeneration}
                       promptId={selectedPrompt.id}
@@ -235,7 +353,7 @@ export function AppShell() {
                         }) as { current_version?: { content?: { body?: string } } };
                         return { body: result.current_version?.content?.body };
                       }}
-                    /> : <p>正在加载 AI 优化…</p>}
+                    /> : historyLoadError ? <p>无法加载提示词正文，暂时不能进行 AI 优化。</p> : <p>正在加载 AI 优化…</p>}
                   </details>
                   <PromptLifecycleActions
                     archive={() => desktopCommands.archivePrompt(selectedPrompt.id)}
@@ -271,7 +389,17 @@ export function AppShell() {
               />
             )
           ) : activeRoute === "search" ? (
-            <PromptSearch searchPrompts={desktopCommands.searchPrompts} />
+            <PromptSearch
+              onSelectPrompt={async (id) => {
+                const prompt = await desktopCommands.getPrompt(id);
+                if (prompt) {
+                  setActiveRoute("library");
+                  setEditorOpen(false);
+                  setSelectedPrompt(prompt);
+                }
+              }}
+              searchPrompts={desktopCommands.searchPrompts}
+            />
           ) : activeRoute === "skills" ? (
             <SkillLibrary
               collectSkillFolder={desktopCommands.collectSkillFolder}
@@ -331,6 +459,7 @@ export function AppShell() {
           setSelectedPrompt(prompt);
           setEditorOpen(false);
         }}
+        searchPrompts={desktopCommands.searchPrompts}
       /> : null}
     </div>
   );

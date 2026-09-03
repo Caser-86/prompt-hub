@@ -8,7 +8,7 @@
 - [ ] 保存构建生成的 `target/release/build-info.json`，核对版本、通道、Git commit 与迁移清单 SHA-256。
 - [ ] 在干净检出运行 `pnpm install --frozen-lockfile`。
 - [ ] 运行 lint、类型检查、前端/端到端测试、Rust fmt/Clippy/workspace 测试。
-- [ ] 运行 `pnpm --filter @prompt-hub/desktop exec tauri build` 并记录生成的 NSIS/MSI 文件与 SHA-256。
+- [ ] 运行 `pnpm --filter @prompt-hub/desktop exec tauri build`，再运行 `pnpm hash:bundles`，记录生成的 NSIS/MSI 文件与 SHA-256。
 - [ ] 使用 [search-baseline.md](search-baseline.md) 的 release 基准命令记录当前性能。
 
 ## 安全与恢复

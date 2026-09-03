@@ -230,6 +230,82 @@ fn returns_immutable_version_history_in_ascending_order() {
 }
 
 #[test]
+fn persists_metadata_snapshots_with_each_version() {
+    let database = Database::open_in_memory().unwrap();
+    let mut repository = database.into_repository();
+    let mut prompt = prompt("元数据第一版");
+    repository.save(&prompt, AuditAction::Created).unwrap();
+
+    prompt
+        .record_validation(
+            prompt_domain::ValidationRecord::new(
+                EffectivenessStatus::Effective,
+                Some(5),
+                Some("可复用".to_owned()),
+                time::macros::datetime!(2026-07-15 00:01 UTC),
+            )
+            .unwrap(),
+            Actor::User,
+            time::macros::datetime!(2026-07-15 00:01 UTC),
+        )
+        .unwrap();
+    prompt
+        .revise_metadata(Actor::User, time::macros::datetime!(2026-07-15 00:01 UTC))
+        .unwrap();
+    repository.save(&prompt, AuditAction::Revised).unwrap();
+
+    let history = repository.history(prompt.id()).unwrap();
+    assert_eq!(history.len(), 2);
+    assert_eq!(
+        history[0].metadata().effectiveness(),
+        EffectivenessStatus::Unverified
+    );
+    assert_eq!(
+        history[1].metadata().effectiveness(),
+        EffectivenessStatus::Effective
+    );
+    assert_eq!(history[1].metadata().validations()[0].rating, Some(5));
+}
+
+#[test]
+fn rehydrates_legacy_prompt_json_without_a_metadata_field() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("legacy-prompt-json.db");
+    let database = Database::open(&path).unwrap();
+    let mut repository = database.into_repository();
+    let prompt = prompt("旧格式正文");
+    repository.save(&prompt, AuditAction::Created).unwrap();
+    drop(repository);
+
+    let connection = Connection::open(&path).unwrap();
+    let mut entity: serde_json::Value = connection
+        .query_row(
+            "SELECT entity_json FROM prompts WHERE id = ?1",
+            [prompt.id().value().to_string()],
+            |row| row.get::<_, String>(0),
+        )
+        .map(|json| serde_json::from_str(&json).unwrap())
+        .unwrap();
+    entity["current_version"]
+        .as_object_mut()
+        .unwrap()
+        .remove("metadata");
+    connection
+        .execute(
+            "UPDATE prompts SET entity_json = ?2 WHERE id = ?1",
+            rusqlite::params![prompt.id().value().to_string(), entity.to_string()],
+        )
+        .unwrap();
+    drop(connection);
+
+    let database = Database::open(&path).unwrap();
+    let repository = database.into_repository();
+    let loaded = repository.get(prompt.id()).unwrap().unwrap();
+    assert_eq!(loaded.current_version().content().body(), "旧格式正文");
+    assert_eq!(loaded.current_version().metadata().sources().len(), 1);
+}
+
+#[test]
 fn persists_favorite_state_without_mutating_prompt_versions() {
     let database = Database::open_in_memory().unwrap();
     let mut repository = database.into_repository();
@@ -310,4 +386,38 @@ fn records_prompt_usage_and_merges_legacy_counts_without_decreasing_them() {
     let retained = repository.merge_legacy_usage(prompt.id(), 3).unwrap();
     assert_eq!(retained.use_count(), 9);
     assert_eq!(retained.last_used_at(), Some(first_use));
+}
+
+#[test]
+fn lists_prompt_metadata_in_bulk_without_losing_favorite_or_usage_state() {
+    let database = Database::open_in_memory().unwrap();
+    let mut repository = database.into_repository();
+    let favorite = prompt("批量收藏");
+    let used = prompt("批量使用");
+    repository.save(&favorite, AuditAction::Created).unwrap();
+    repository.save(&used, AuditAction::Created).unwrap();
+    repository
+        .set_favorite(favorite.id(), true, datetime!(2026-08-29 08:00 UTC))
+        .unwrap();
+    repository
+        .record_use(used.id(), datetime!(2026-08-29 09:00 UTC))
+        .unwrap();
+
+    let metadata = repository.list_with_metadata().unwrap();
+    let favorite_item = metadata
+        .iter()
+        .find(|(item, _, _)| item.id() == favorite.id())
+        .unwrap();
+    let used_item = metadata
+        .iter()
+        .find(|(item, _, _)| item.id() == used.id())
+        .unwrap();
+    assert!(favorite_item.1);
+    assert_eq!(favorite_item.2.use_count(), 0);
+    assert!(!used_item.1);
+    assert_eq!(used_item.2.use_count(), 1);
+    assert_eq!(
+        used_item.2.last_used_at(),
+        Some(datetime!(2026-08-29 09:00 UTC))
+    );
 }

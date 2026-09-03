@@ -1,5 +1,5 @@
 use prompt_hub_desktop_lib::commands::{
-    ManualCompatibility, ManualPromptDraft, ManualValidation, PromptService,
+    ManualCompatibility, ManualPromptDraft, ManualPromptMetadata, ManualValidation, PromptService,
 };
 use prompt_store::{Database, SearchQuery};
 use time::macros::datetime;
@@ -389,6 +389,232 @@ fn service_records_tool_model_compatibility_and_effectiveness_metadata() {
         validated.last_validated_at(),
         Some(datetime!(2026-07-15 00:02 UTC))
     );
+}
+
+#[test]
+fn service_records_metadata_in_one_revision_and_rejects_orphan_models() {
+    let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
+    let created = service
+        .create_manual_draft(
+            ManualPromptDraft {
+                title: "原子元数据".to_owned(),
+                body: "正文".to_owned(),
+                description: None,
+                category: Some("开发".to_owned()),
+                tags: vec![],
+                variables: vec![],
+            },
+            datetime!(2026-07-15 00:00 UTC),
+        )
+        .unwrap();
+
+    let updated = service
+        .record_metadata(
+            created.id(),
+            ManualPromptMetadata {
+                tool: Some("Codex".to_owned()),
+                model: Some("gpt-5".to_owned()),
+                compatibility_status: prompt_domain::CompatibilityStatus::Confirmed,
+                effectiveness: prompt_domain::EffectivenessStatus::Effective,
+                rating: Some(5),
+                notes: Some("一次保存".to_owned()),
+            },
+            datetime!(2026-07-15 00:01 UTC),
+        )
+        .unwrap();
+    assert_eq!(updated.compatibilities().len(), 1);
+    assert_eq!(updated.validations().len(), 1);
+    assert_eq!(updated.current_version().number(), 2);
+
+    let changed = service
+        .record_metadata(
+            created.id(),
+            ManualPromptMetadata {
+                tool: Some("Claude".to_owned()),
+                model: Some("Sonnet".to_owned()),
+                compatibility_status: prompt_domain::CompatibilityStatus::Unknown,
+                effectiveness: prompt_domain::EffectivenessStatus::Effective,
+                rating: Some(4),
+                notes: None,
+            },
+            datetime!(2026-07-15 00:01 UTC),
+        )
+        .unwrap();
+    assert_eq!(changed.compatibilities().len(), 1);
+    assert_eq!(changed.compatibilities()[0].tool(), "Claude");
+    assert_eq!(changed.compatibilities()[0].model(), Some("Sonnet"));
+
+    let rejected = service.record_metadata(
+        created.id(),
+        ManualPromptMetadata {
+            tool: None,
+            model: Some("gpt-5".to_owned()),
+            compatibility_status: prompt_domain::CompatibilityStatus::Confirmed,
+            effectiveness: prompt_domain::EffectivenessStatus::Ineffective,
+            rating: Some(1),
+            notes: None,
+        },
+        datetime!(2026-07-15 00:02 UTC),
+    );
+    assert!(rejected.is_err());
+    let persisted = service.list().unwrap().into_iter().next().unwrap();
+    assert_eq!(
+        persisted.effectiveness(),
+        prompt_domain::EffectivenessStatus::Effective
+    );
+    assert_eq!(persisted.validations().len(), 2);
+    assert_eq!(
+        persisted
+            .validations()
+            .last()
+            .and_then(|entry| entry.rating),
+        Some(4)
+    );
+
+    let cleared = service
+        .record_metadata(
+            created.id(),
+            ManualPromptMetadata {
+                tool: None,
+                model: None,
+                compatibility_status: prompt_domain::CompatibilityStatus::Unknown,
+                effectiveness: prompt_domain::EffectivenessStatus::Effective,
+                rating: Some(5),
+                notes: None,
+            },
+            datetime!(2026-07-15 00:03 UTC),
+        )
+        .unwrap();
+    assert!(cleared.compatibilities().is_empty());
+}
+
+#[test]
+fn metadata_edits_do_not_drop_other_compatibilities() {
+    let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
+    let created = service
+        .create_manual_draft(
+            ManualPromptDraft {
+                title: "多工具提示词".to_owned(),
+                body: "正文".to_owned(),
+                description: None,
+                category: Some("开发".to_owned()),
+                tags: vec![],
+                variables: vec![],
+            },
+            datetime!(2026-07-15 00:00 UTC),
+        )
+        .unwrap();
+    service
+        .record_compatibility(
+            created.id(),
+            ManualCompatibility {
+                tool: "Codex".to_owned(),
+                model: Some("gpt-5".to_owned()),
+                status: prompt_domain::CompatibilityStatus::Confirmed,
+                notes: None,
+            },
+            datetime!(2026-07-15 00:01 UTC),
+        )
+        .unwrap();
+    service
+        .record_compatibility(
+            created.id(),
+            ManualCompatibility {
+                tool: "Claude".to_owned(),
+                model: Some("Sonnet".to_owned()),
+                status: prompt_domain::CompatibilityStatus::Unknown,
+                notes: None,
+            },
+            datetime!(2026-07-15 00:02 UTC),
+        )
+        .unwrap();
+
+    let updated = service
+        .record_metadata(
+            created.id(),
+            ManualPromptMetadata {
+                tool: Some("Gemini".to_owned()),
+                model: Some("2.5 Pro".to_owned()),
+                compatibility_status: prompt_domain::CompatibilityStatus::Unknown,
+                effectiveness: prompt_domain::EffectivenessStatus::Effective,
+                rating: Some(4),
+                notes: None,
+            },
+            datetime!(2026-07-15 00:03 UTC),
+        )
+        .unwrap();
+
+    let tools = updated
+        .compatibilities()
+        .iter()
+        .map(|entry| entry.tool())
+        .collect::<Vec<_>>();
+    assert_eq!(tools, vec!["Codex", "Claude", "Gemini"]);
+}
+
+#[test]
+fn restoring_a_metadata_version_restores_its_effectiveness_and_compatibility_snapshot() {
+    let service = PromptService::new(Database::open_in_memory().unwrap().into_repository());
+    let created = service
+        .create_manual_draft(
+            ManualPromptDraft {
+                title: "可恢复元数据".to_owned(),
+                body: "正文".to_owned(),
+                description: None,
+                category: Some("开发".to_owned()),
+                tags: vec![],
+                variables: vec![],
+            },
+            datetime!(2026-07-15 00:00 UTC),
+        )
+        .unwrap();
+    let first = service
+        .record_metadata(
+            created.id(),
+            ManualPromptMetadata {
+                tool: Some("Codex".to_owned()),
+                model: Some("gpt-5".to_owned()),
+                compatibility_status: prompt_domain::CompatibilityStatus::Confirmed,
+                effectiveness: prompt_domain::EffectivenessStatus::Effective,
+                rating: Some(5),
+                notes: Some("第一组证据".to_owned()),
+            },
+            datetime!(2026-07-15 00:01 UTC),
+        )
+        .unwrap();
+    let changed = service
+        .record_metadata(
+            created.id(),
+            ManualPromptMetadata {
+                tool: Some("Claude".to_owned()),
+                model: Some("Sonnet".to_owned()),
+                compatibility_status: prompt_domain::CompatibilityStatus::Unknown,
+                effectiveness: prompt_domain::EffectivenessStatus::Ineffective,
+                rating: Some(1),
+                notes: None,
+            },
+            datetime!(2026-07-15 00:02 UTC),
+        )
+        .unwrap();
+
+    let restored = service
+        .restore_version(
+            created.id(),
+            first.current_version().number(),
+            datetime!(2026-07-15 00:03 UTC),
+        )
+        .unwrap();
+
+    assert_eq!(
+        changed.effectiveness(),
+        prompt_domain::EffectivenessStatus::Ineffective
+    );
+    assert_eq!(
+        restored.effectiveness(),
+        prompt_domain::EffectivenessStatus::Effective
+    );
+    assert_eq!(restored.compatibilities()[0].tool(), "Codex");
+    assert_eq!(restored.current_version().number(), 4);
 }
 
 #[test]

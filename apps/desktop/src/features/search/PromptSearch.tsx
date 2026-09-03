@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { PromptSearchFilters, PromptSearchPage, PromptSearchSort } from "@prompt-hub/contracts";
+import "./search.css";
 
 type PromptSearchProps = {
   searchPrompts: (
@@ -10,9 +11,10 @@ type PromptSearchProps = {
     filters?: PromptSearchFilters,
     sort?: PromptSearchSort,
   ) => Promise<PromptSearchPage>;
+  onSelectPrompt?: (id: string) => void | Promise<void>;
 };
 
-export function PromptSearch({ searchPrompts }: PromptSearchProps) {
+export function PromptSearch({ onSelectPrompt, searchPrompts }: PromptSearchProps) {
   const savedView = readSavedView();
   const [query, setQuery] = useState(savedView.query);
   const [page, setPage] = useState<PromptSearchPage | null>(null);
@@ -35,7 +37,7 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
 
   useEffect(() => {
     const trimmedQuery = query.trim();
-    const requestGeneration = generation.current;
+    const requestGeneration = ++generation.current;
     const filters: PromptSearchFilters = {
       ...(effectiveness ? { effectiveness: effectiveness as PromptSearchFilters["effectiveness"] } : {}),
       ...(minimumRating ? { minimumRating: Number(minimumRating) } : {}),
@@ -49,7 +51,8 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
       ...(updatedBefore ? { updatedBefore: `${updatedBefore}T23:59:59Z` } : {}),
       ...(favoritesOnly ? { favorite: true } : {}),
     };
-    if (!trimmedQuery) {
+    const hasFilters = Object.keys(filters).length > 0;
+    if (!trimmedQuery && !hasFilters) {
       setPage(null);
       setLoading(false);
       setError(false);
@@ -58,12 +61,15 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
     setLoading(true);
     setError(false);
     const timeout = window.setTimeout(() => {
-      const hasFilters = Object.keys(filters).length > 0;
       void (sort === "relevance"
         ? (hasFilters ? searchPrompts(trimmedQuery, 20, offset, filters) : searchPrompts(trimmedQuery, 20, offset))
         : searchPrompts(trimmedQuery, 20, offset, hasFilters ? filters : undefined, sort))
         .then((result) => {
           if (generation.current === requestGeneration) {
+            if (result.hits.length === 0 && result.total > 0 && offset >= result.total) {
+              setOffset(Math.floor((result.total - 1) / 20) * 20);
+              return;
+            }
             setPage(result);
           }
         })
@@ -83,6 +89,13 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
 
   const resetPage = () => setOffset(0);
   const saveView = () => window.localStorage.setItem("prompt-hub.search-view", JSON.stringify({ query, effectiveness, minimumRating, status, sourceKind, category, tagText, tool, model, updatedAfter, updatedBefore, favoritesOnly, sort }));
+  const selectPrompt = async (id: string) => {
+    try {
+      await onSelectPrompt?.(id);
+    } catch {
+      setError(true);
+    }
+  };
 
   return (
     <section aria-labelledby="search-title">
@@ -96,7 +109,6 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
           搜索提示词
           <input
             onChange={(event) => {
-              generation.current += 1;
               setQuery(event.target.value);
               resetPage();
             }}
@@ -158,10 +170,10 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
         <ol aria-label="搜索结果" className="search-results">
           {page.hits.map((hit) => (
             <li key={hit.id}>
-              <h2>{hit.title}</h2>
+              <h2><button aria-label={`打开提示词：${hit.title}`} className="search-result-title" onClick={() => { void selectPrompt(hit.id); }} type="button">{hit.title}</button></h2>
               <p>{hit.snippet}</p>
-              <p>{hit.effectiveness} · {hit.rating ?? "未评分"}</p>
-              <time dateTime={hit.updatedAt}>{hit.updatedAt}</time>
+              <p>{hit.sourceNames?.length ? `来源：${hit.sourceNames.join("、")} · ` : ""}{hit.applicableTools?.length ? `工具：${hit.applicableTools.join("、")} · ` : ""}{hit.applicableModels?.length ? `模型：${hit.applicableModels.join("、")} · ` : ""}{effectivenessLabel(hit.effectiveness)} · {hit.rating ?? "未评分"}</p>
+              <time dateTime={hit.updatedAt}>{formatSearchUpdatedAt(hit.updatedAt)}</time>
             </li>
           ))}
         </ol>
@@ -173,6 +185,15 @@ export function PromptSearch({ searchPrompts }: PromptSearchProps) {
       </nav> : null}
     </section>
   );
+}
+
+function effectivenessLabel(status: string) {
+  return { unverified: "未验证", effective: "有效", ineffective: "失效", needs_retest: "待复测" }[status] ?? "未知";
+}
+
+function formatSearchUpdatedAt(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "更新时间未知" : `更新于 ${date.toLocaleString("zh-CN", { hour12: false })}`;
 }
 
 type SavedSearchView = {
@@ -188,9 +209,33 @@ function readSavedView(): SavedSearchView {
     if (typeof value !== "object" || value === null) return defaults;
     const view = value as Record<string, unknown>;
     const text = (key: keyof SavedSearchView) => typeof view[key] === "string" ? view[key] : defaults[key] as string;
+    const oneOf = <T extends string>(key: keyof SavedSearchView, allowed: readonly T[]): string => {
+      const candidate = view[key];
+      return typeof candidate === "string" && allowed.includes(candidate as T) ? candidate : defaults[key] as string;
+    };
+    const date = (key: "updatedAfter" | "updatedBefore") => {
+      const candidate = view[key];
+      return typeof candidate === "string" && isValidDateInput(candidate) ? candidate : defaults[key];
+    };
     const sort = view.sort === "updated_at" || view.sort === "rating" || view.sort === "relevance" ? view.sort : defaults.sort;
-    return { query: text("query"), effectiveness: text("effectiveness"), minimumRating: text("minimumRating"), status: text("status"), sourceKind: text("sourceKind"), category: text("category"), tagText: text("tagText"), tool: text("tool"), model: text("model"), updatedAfter: text("updatedAfter"), updatedBefore: text("updatedBefore"), favoritesOnly: view.favoritesOnly === true, sort };
+    return {
+      query: text("query"),
+      effectiveness: oneOf("effectiveness", ["", "unverified", "effective", "ineffective", "needs_retest"] as const),
+      minimumRating: oneOf("minimumRating", ["", "1", "2", "3", "4", "5"] as const),
+      status: oneOf("status", ["", "inbox", "published", "archived", "deleted"] as const),
+      sourceKind: oneOf("sourceKind", ["", "manual", "file_import", "web_url", "ai_generated", "mcp"] as const),
+      category: text("category"), tagText: text("tagText"), tool: text("tool"), model: text("model"),
+      updatedAfter: date("updatedAfter"), updatedBefore: date("updatedBefore"),
+      favoritesOnly: view.favoritesOnly === true, sort,
+    };
   } catch {
     return defaults;
   }
+}
+
+function isValidDateInput(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return false;
+  return date.toISOString().slice(0, 10) === value;
 }

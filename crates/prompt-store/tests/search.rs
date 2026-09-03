@@ -139,6 +139,18 @@ fn pagination_is_deterministic_and_reports_the_full_total() {
 }
 
 #[test]
+fn out_of_range_pages_keep_the_full_total_for_recovery() {
+    let repository = seed();
+
+    let page = repository
+        .search(SearchQuery::new("").with_page(1, 99))
+        .unwrap();
+
+    assert!(page.hits.is_empty());
+    assert_eq!(page.total, 3);
+}
+
+#[test]
 fn supports_explicit_updated_at_and_rating_sorts() {
     let repository = seed();
 

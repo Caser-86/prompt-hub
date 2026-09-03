@@ -9,6 +9,13 @@ describe("RecoveryScreen", () => {
       state: "ready", code: null, safeMessage: null, backupName: null,
     });
     const exportDiagnostics = vi.fn().mockResolvedValue('{"state":"recovery"}');
+    const listRecoveryBackups = vi.fn().mockResolvedValue([{
+      path: "C:/data/prompt-hub.v8.pre-migration.200.bak", byteLen: 123, schemaVersion: 8,
+    }]);
+    const previewRecoveryBackup = vi.fn().mockResolvedValue({
+      targetExists: true, backupSchemaVersion: 8, backupByteLen: 123, promptCount: 4,
+    });
+    const restoreRecoveryBackup = vi.fn().mockResolvedValue(undefined);
 
     render(<RecoveryScreen
       status={{
@@ -19,6 +26,9 @@ describe("RecoveryScreen", () => {
       }}
       retry={retry}
       exportDiagnostics={exportDiagnostics}
+      listRecoveryBackups={listRecoveryBackups}
+      previewRecoveryBackup={previewRecoveryBackup}
+      restoreRecoveryBackup={restoreRecoveryBackup}
       onRecovered={vi.fn()}
     />);
 
@@ -30,5 +40,11 @@ describe("RecoveryScreen", () => {
     await waitFor(() => expect(retry).toHaveBeenCalledOnce());
     fireEvent.click(screen.getByRole("button", { name: "导出诊断摘要" }));
     await waitFor(() => expect(exportDiagnostics).toHaveBeenCalledOnce());
+
+    await waitFor(() => expect(listRecoveryBackups).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole("button", { name: "检查恢复备份" }));
+    await waitFor(() => expect(previewRecoveryBackup).toHaveBeenCalledWith("C:/data/prompt-hub.v8.pre-migration.200.bak"));
+    fireEvent.click(screen.getByRole("button", { name: "恢复此备份" }));
+    await waitFor(() => expect(restoreRecoveryBackup).toHaveBeenCalledWith("C:/data/prompt-hub.v8.pre-migration.200.bak"));
   });
 });

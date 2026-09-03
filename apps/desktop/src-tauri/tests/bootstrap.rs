@@ -67,3 +67,25 @@ fn an_empty_data_directory_is_treated_as_unavailable() {
         Some("data_directory_unavailable")
     );
 }
+
+#[test]
+fn migration_failure_reports_the_newest_preserved_backup_name() {
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(
+        directory.path().join("prompt-hub.v7.pre-migration.100.bak"),
+        b"old",
+    )
+    .unwrap();
+    std::fs::write(
+        directory.path().join("prompt-hub.v8.pre-migration.200.bak"),
+        b"new",
+    )
+    .unwrap();
+
+    let failure = prompt_hub_desktop_lib::bootstrap::migration_failure_for(directory.path());
+
+    assert_eq!(
+        failure.backup_name.as_deref(),
+        Some("prompt-hub.v8.pre-migration.200.bak")
+    );
+}

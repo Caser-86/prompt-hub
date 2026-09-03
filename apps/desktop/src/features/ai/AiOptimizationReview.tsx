@@ -8,7 +8,9 @@ export function AiOptimizationReview({ body, cancel, optimize, promptId }: { bod
   const [cancelled, setCancelled] = useState(false);
   const cancelledTasks = useRef(new Set<string>());
   async function submit(event: React.FormEvent) {
-    event.preventDefault(); setFailed(false); setCancelled(false);
+    event.preventDefault();
+    if (activeTaskId !== null) return;
+    setFailed(false); setCancelled(false);
     const taskId = crypto.randomUUID();
     setActiveTaskId(taskId);
     try {
@@ -31,7 +33,7 @@ export function AiOptimizationReview({ body, cancel, optimize, promptId }: { bod
   }
   return <form aria-label="AI 优化" onSubmit={submit}>
     <h3>AI 优化</h3><label>优化指令<textarea onChange={(event) => setInstruction(event.target.value)} required value={instruction} /></label>
-    <button type="submit">生成优化草稿</button>
+    <button aria-busy={activeTaskId !== null} disabled={activeTaskId !== null} type="submit">生成优化草稿</button>
     {activeTaskId !== null && cancel !== undefined ? <button onClick={() => { void cancelOptimization(); }} type="button">取消优化</button> : null}
     {failed ? <p role="alert">无法生成优化草稿，请检查配置后重试。</p> : null}
     {cancelled ? <p role="status">优化已取消，已保留当前指令。</p> : null}

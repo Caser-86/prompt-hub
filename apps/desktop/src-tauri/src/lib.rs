@@ -25,6 +25,9 @@ pub fn run() {
             commands::get_bootstrap_status,
             commands::retry_database_bootstrap,
             commands::export_bootstrap_diagnostics,
+            commands::list_recovery_backups,
+            commands::preview_recovery_backup,
+            commands::restore_recovery_backup,
             commands::get_application_status,
             commands::get_diagnostics_status,
             commands::get_redacted_diagnostic_events,
@@ -35,6 +38,7 @@ pub fn run() {
             commands::preview_backup_restore,
             commands::restore_backup,
             commands::list_prompts,
+            commands::get_prompt,
             commands::record_prompt_use,
             commands::migrate_legacy_prompt_usage,
             commands::collect_skill_folder,
@@ -68,7 +72,8 @@ pub fn run() {
             commands::recover_prompt,
             commands::set_prompt_favorite,
             commands::record_prompt_compatibility,
-            commands::record_prompt_validation
+            commands::record_prompt_validation,
+            commands::record_prompt_metadata
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|error| eprintln!("Prompt Hub desktop event loop stopped: {error}"));
