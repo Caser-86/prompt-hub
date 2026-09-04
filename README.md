@@ -2,8 +2,14 @@
 
 本地优先、可离线使用的 Windows 桌面提示词资产库。它帮助你收集、审核、搜索、复用和维护提示词，并为每条提示词保留来源、时间、适用工具/模型和有效性记录。
 
+## English overview
+
+Prompt Hub is a local-first Windows desktop workspace for collecting, reviewing, searching, and reusing prompts and Codex Skills. Core workflows work offline, while provenance, compatibility, usage, and effectiveness metadata stay attached to each asset. Codex/MCP and AI integrations are bounded by inbox-only writes and explicit review steps.
+
 > 当前版本：`0.1.10`<br>
 > 数据默认只保存在本机；没有 AI 密钥时，创建、搜索、导入、备份等核心功能仍可使用。
+
+> **Project status:** Private, self-use candidate package. The current build is intended for local use; code signing, public release automation, and a hosted update service are not included.
 
 ## 能做什么
 
