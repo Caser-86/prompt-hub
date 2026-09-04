@@ -11,6 +11,20 @@ Prompt Hub is a local-first Windows desktop workspace for collecting, reviewing,
 
 > **Project status:** Private, self-use candidate package. The current build is intended for local use; code signing, public release automation, and a hosted update service are not included.
 
+## 界面预览 / Screenshots
+
+提示词库以高密度列表展示标题、来源、验证状态和更新时间，收藏项使用醒目的五角星标识；顶部搜索框和“高级筛选”用于快速定位大量资产。
+
+The prompt library keeps the prompt title and operational metadata visible at a glance, with compact rows that scale to larger collections.
+
+![提示词库 / Prompt library](docs/screenshots/prompt-library.png)
+
+提示词详情页将正文放在主区域，右侧集中展示来源、适用工具/模型、有效性、标签、版本历史和 AI 优化等辅助操作。
+
+The detail view keeps the prompt body primary while grouping provenance, compatibility, effectiveness, history, and actions in a secondary panel.
+
+![提示词详情 / Prompt detail](docs/screenshots/prompt-detail.png)
+
 ## 能做什么
 
 - **提示词库**：创建、编辑、分类、标签、收藏、复制与导出 Markdown。

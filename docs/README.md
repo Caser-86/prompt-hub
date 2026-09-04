@@ -8,6 +8,11 @@
 - [导入格式](import-formats.md)：本地文件、文件夹和公开网页导入的支持范围与限制。
 - [Codex MCP 设置](mcp-setup.md)：安装 sidecar、配置 STDIO MCP 和排查连接问题。
 
+## 界面预览
+
+- [提示词库截图](screenshots/prompt-library.png)：高密度列表、来源/验证状态、更新时间和收藏标识。
+- [提示词详情截图](screenshots/prompt-detail.png)：正文优先布局与右侧元数据、历史和操作面板。
+
 ## 产品与设计
 
 - [正式产品规格](prompt-hub-product-spec.md)：目标、范围、数据模型、安全边界和验收标准；这是唯一的产品需求基线。
